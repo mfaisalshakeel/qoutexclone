@@ -1,0 +1,43 @@
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-quotex}
+      MYSQL_USER: ${MYSQL_USER:-quotex}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-quotex}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+    command: --default-authentication-plugin=mysql_native_password
+    volumes:
+      - db-data:/var/lib/mysql
+    ports:
+      - '${MYSQL_PORT:-3306}:3306'
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-p${MYSQL_ROOT_PASSWORD:-rootpassword}']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: mysql://${MYSQL_USER:-quotex}:${MYSQL_PASSWORD:-quotex}@db:3306/${MYSQL_DATABASE:-quotex}
+      JWT_SECRET: ${JWT_SECRET:-please-change-this-secret}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-please-change-this-too}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      FEED_PROVIDER: ${FEED_PROVIDER:-simulated}
+      MOCK_CHAIN_WATCHER: ${MOCK_CHAIN_WATCHER:-true}
+      AUTO_APPROVE_WITHDRAWALS: ${AUTO_APPROVE_WITHDRAWALS:-false}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@quotexclone.dev}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin123!}
+    ports:
+      - '${APP_PORT:-4000}:4000'
+
+volumes:
+  db-data:
