@@ -1,0 +1,249 @@
+import { useEffect, useState } from 'react';
+import { ApiError, api } from '../lib/api';
+import { dateTime, money, shortHash } from '../lib/format';
+import { toast } from '../store/toast';
+import { useAuth } from '../store/auth';
+import type { PaymentMethod, Withdrawal, WithdrawalQuote } from '../lib/types';
+
+interface Props {
+  methods: PaymentMethod[];
+  withdrawals: Withdrawal[];
+  onChanged: () => void;
+}
+
+const STATUS_TONE: Record<Withdrawal['status'], string> = {
+  PENDING: 'bg-amber-400/10 text-amber-300',
+  APPROVED: 'bg-accent-soft text-accent',
+  PROCESSING: 'bg-accent-soft text-accent',
+  COMPLETED: 'bg-up-soft text-up',
+  REJECTED: 'bg-down-soft text-down',
+  CANCELLED: 'bg-ink-600 text-slate-400',
+};
+
+export function WithdrawPanel({ methods, withdrawals, onChanged }: Props) {
+  const { user, refreshUser } = useAuth();
+  const [index, setIndex] = useState(0);
+  const [address, setAddress] = useState('');
+  const [amount, setAmount] = useState(50);
+  const [quote, setQuote] = useState<WithdrawalQuote | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const method = methods[index];
+  const available = user?.realBalance ?? 0;
+
+  // live fee quote, debounced so typing does not hammer the API
+  useEffect(() => {
+    if (!method || !(amount > 0)) {
+      setQuote(null);
+      return;
+    }
+    const id = window.setTimeout(() => {
+      api
+        .get<{ quote: WithdrawalQuote }>(
+          `/wallet/withdrawals/quote?currency=${method.currency}&network=${method.network}&amount=${amount}`,
+        )
+        .then(({ quote: q }) => setQuote(q))
+        .catch(() => setQuote(null));
+    }, 250);
+    return () => window.clearTimeout(id);
+  }, [method, amount]);
+
+  if (!method) return <div className="card h-40 animate-pulse" />;
+
+  const cents = Math.round(amount * 100);
+  const belowMin = quote ? cents < quote.minAmount : false;
+  const overBalance = cents > available;
+  const noNet = quote ? quote.netAmount <= 0 : false;
+  const blocked = belowMin || overBalance || noNet || !address.trim();
+
+  const submit = async () => {
+    setError('');
+    setBusy(true);
+    try {
+      await api.post('/wallet/withdrawals', {
+        currency: method.currency,
+        network: method.network,
+        address: address.trim(),
+        amount,
+      });
+      setAddress('');
+      onChanged();
+      await refreshUser();
+      toast.success('Withdrawal requested', 'You will be notified once it is processed');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not submit the withdrawal');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancel = async (id: string) => {
+    try {
+      await api.post(`/wallet/withdrawals/${id}/cancel`);
+      onChanged();
+      await refreshUser();
+      toast.info('Withdrawal cancelled', 'Funds returned to your balance');
+    } catch (err) {
+      toast.error('Could not cancel', err instanceof ApiError ? err.message : undefined);
+    }
+  };
+
+  const pending = withdrawals.filter((w) => ['PENDING', 'APPROVED', 'PROCESSING'].includes(w.status));
+
+  return (
+    <div className="space-y-5">
+      <div className="card flex items-center justify-between p-4">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-slate-400">Available to withdraw</p>
+          <p className="tabular text-xl font-bold">{money(available)}</p>
+        </div>
+        {(user?.lockedBalance ?? 0) > 0 && (
+          <p className="text-right text-xs text-slate-400">
+            {money(user!.lockedBalance)}
+            <span className="block">on hold</span>
+          </p>
+        )}
+      </div>
+
+      <div>
+        <p className="label">Withdraw to</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {methods.map((m, i) => (
+            <button
+              key={`${m.currency}-${m.network}`}
+              onClick={() => setIndex(i)}
+              className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${
+                i === index ? 'border-accent bg-accent-soft' : 'border-ink-600 bg-ink-800 hover:border-ink-500'
+              }`}
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-600 text-[10px] font-bold">
+                {m.currency}
+              </span>
+              <span>
+                <span className="block text-sm font-semibold">{m.currency}</span>
+                <span className="block text-[11px] text-slate-400">{m.label}</span>
+              </span>
+              <span className="ml-auto text-right text-[11px] text-slate-500">
+                min ${m.minWithdrawUsd}
+                <span className="block">fee ${m.networkFeeUsd}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="label" htmlFor="withdraw-address">
+          {method.label} address
+        </label>
+        <input
+          id="withdraw-address"
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          spellCheck={false}
+          className="field font-mono !text-xs"
+          placeholder={method.network === 'TRC20' ? 'T…' : method.network === 'ERC20' ? '0x…' : 'bc1…'}
+        />
+        <p className="mt-1.5 text-[11px] text-slate-500">
+          Double-check the network. Coins sent to an address on another network cannot be recovered.
+        </p>
+      </div>
+
+      <div>
+        <label className="label" htmlFor="withdraw-amount">
+          Amount (USD)
+        </label>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+          <input
+            id="withdraw-amount"
+            type="number"
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(Number(e.target.value))}
+            className="field tabular !pl-7 text-lg font-semibold"
+          />
+          <button
+            onClick={() => setAmount(Math.floor(available) / 100)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-ink-600 px-2 py-1 text-[11px] font-semibold text-slate-300"
+          >
+            MAX
+          </button>
+        </div>
+      </div>
+
+      {quote && (
+        <dl className="card space-y-2 p-4 text-sm">
+          <Row label="You withdraw" value={money(quote.amount)} />
+          <Row label={`Fee (network + ${method.currency})`} value={`− ${money(quote.fee)}`} />
+          <div className="h-px bg-ink-600" />
+          <Row
+            label="You receive"
+            value={`${quote.cryptoAmount} ${quote.currency}`}
+            hint={`≈ ${money(Math.max(quote.netAmount, 0))} at $${quote.rate.toLocaleString()}`}
+            strong
+          />
+        </dl>
+      )}
+
+      {(belowMin || overBalance || noNet) && (
+        <p className="rounded-lg bg-down-soft px-3 py-2 text-xs text-down">
+          {overBalance
+            ? `You can withdraw up to ${money(available)}`
+            : noNet
+              ? 'Amount does not cover the network fee'
+              : `Minimum withdrawal on ${method.label} is ${money(quote?.minAmount ?? 0)}`}
+        </p>
+      )}
+      {error && <p className="rounded-lg bg-down-soft px-3 py-2 text-xs text-down">{error}</p>}
+
+      <button onClick={() => void submit()} disabled={blocked || busy} className="btn-primary w-full !py-3">
+        {busy ? 'Submitting…' : 'Request withdrawal'}
+      </button>
+
+      {pending.length > 0 && (
+        <div>
+          <p className="label">In progress</p>
+          <ul className="space-y-2">
+            {pending.map((w) => (
+              <li key={w.id} className="card flex items-center gap-3 p-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">
+                    {money(w.amount)} → {w.cryptoAmount} {w.currency}
+                  </span>
+                  <span className="block truncate font-mono text-[11px] text-slate-500">{w.address}</span>
+                  <span className="block text-[11px] text-slate-500">{dateTime(w.createdAt)}</span>
+                </span>
+                <span className={`chip ${STATUS_TONE[w.status]}`}>{w.status.toLowerCase()}</span>
+                {w.status === 'PENDING' && (
+                  <button onClick={() => void cancel(w.id)} className="btn-ghost !px-2.5 !py-1.5 text-[11px]">
+                    Cancel
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {withdrawals.some((w) => w.txHash) && (
+        <p className="text-[11px] text-slate-500">
+          Last payout transaction: <span className="font-mono">{shortHash(withdrawals.find((w) => w.txHash)?.txHash, 10)}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Row({ label, value, hint, strong }: { label: string; value: string; hint?: string; strong?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="text-xs text-slate-400">{label}</dt>
+      <dd className="text-right">
+        <span className={`tabular block ${strong ? 'text-base font-bold' : 'text-sm text-slate-200'}`}>{value}</span>
+        {hint && <span className="block text-[11px] text-slate-500">{hint}</span>}
+      </dd>
+    </div>
+  );
+}

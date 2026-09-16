@@ -8,13 +8,14 @@ import { requireAuth } from '../middleware/auth.js';
 import { applyLedger } from '../services/wallet.js';
 import { tradingStats } from '../services/trading.js';
 
+// mounted at /api/me — every route here needs a signed-in user
 const router = Router();
 router.use(requireAuth);
 
 const DEMO_START = 1000000; // $10,000.00
 
 router.get(
-  '/me',
+  '/',
   wrap(async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
     if (!user) throw notFound('Account not found');
@@ -23,7 +24,7 @@ router.get(
 );
 
 router.patch(
-  '/me',
+  '/',
   wrap(async (req, res) => {
     const body = z
       .object({ name: z.string().min(2).max(60).optional(), country: z.string().max(60).optional() })
@@ -34,7 +35,7 @@ router.patch(
 );
 
 router.post(
-  '/me/password',
+  '/password',
   wrap(async (req, res) => {
     const body = z
       .object({ currentPassword: z.string().min(1), newPassword: z.string().min(8).max(128) })
@@ -55,7 +56,7 @@ router.post(
 );
 
 router.post(
-  '/me/account',
+  '/account',
   wrap(async (req, res) => {
     const body = z.object({ accountType: z.enum(['DEMO', 'REAL']) }).parse(req.body);
     const user = await prisma.user.update({
@@ -67,7 +68,7 @@ router.post(
 );
 
 router.post(
-  '/me/demo/reset',
+  '/demo/reset',
   wrap(async (req, res) => {
     const user = await prisma.$transaction(async (tx) => {
       const current = await tx.user.findUnique({ where: { id: req.user!.id }, select: { demoBalance: true } });
@@ -89,7 +90,7 @@ router.post(
 );
 
 router.get(
-  '/me/stats',
+  '/stats',
   wrap(async (req, res) => {
     const accountType = (req.query.accountType === 'REAL' ? 'REAL' : 'DEMO') as 'DEMO' | 'REAL';
     res.json({ stats: await tradingStats(req.user!.id, accountType) });

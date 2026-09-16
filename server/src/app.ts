@@ -49,7 +49,7 @@ export function createApp() {
   });
 
   app.use('/api/auth', authRoutes);
-  app.use('/api', userRoutes);
+  app.use('/api/me', userRoutes);
   app.use('/api/market', marketRoutes);
   app.use('/api/trades', tradeRoutes);
   app.use('/api/wallet', walletRoutes);
