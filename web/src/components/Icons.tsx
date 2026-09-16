@@ -59,6 +59,14 @@ export const IconArrowDown = ({ className = base }: Props) => (
   </svg>
 );
 
+export const IconCup = ({ className = base }: Props) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
+    <path d="M7 4h10v5a5 5 0 0 1-10 0V4z" strokeLinejoin="round" />
+    <path d="M7 6H4.5v1.5A3.5 3.5 0 0 0 8 11M17 6h2.5v1.5A3.5 3.5 0 0 1 16 11" strokeLinecap="round" />
+    <path d="M12 14v3M9 20h6M10 17h4l.5 3h-5z" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 export const IconLogo = ({ className = 'h-7 w-7' }: Props) => (
   <svg viewBox="0 0 32 32" fill="none" className={className}>
     <rect width="32" height="32" rx="9" fill="#3d7bff" />

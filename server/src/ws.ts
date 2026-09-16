@@ -5,10 +5,13 @@ import { verifyAccessToken } from './lib/jwt.js';
 import { tradeEvents } from './services/trading.js';
 import { depositEvents } from './services/deposits.js';
 import { withdrawalEvents } from './services/withdrawals.js';
+import { supportEvents } from './services/support.js';
+import { tournamentEvents } from './services/tournaments.js';
 import { publicDeposit, publicTrade, publicWithdrawal } from './lib/serialize.js';
 
 interface ClientState {
   userId?: string;
+  isAdmin?: boolean;
   symbol?: string;
   timeframe: string;
   alive: boolean;
@@ -37,11 +40,21 @@ export function attachWebsocket(server: Server) {
     for (const socket of sockets) send(socket, payload);
   };
 
-  const bindUser = (socket: WebSocket, state: ClientState, userId: string) => {
+  const bindUser = (socket: WebSocket, state: ClientState, userId: string, role?: string) => {
     if (state.userId && state.userId !== userId) byUser.get(state.userId)?.delete(socket);
     state.userId = userId;
+    state.isAdmin = role === 'ADMIN';
     if (!byUser.has(userId)) byUser.set(userId, new Set());
     byUser.get(userId)!.add(socket);
+  };
+
+  /** Support desk fan-out: every signed-in administrator's sockets. */
+  const toAdmins = (payload: unknown) => {
+    for (const [socket, state] of clients) if (state.isAdmin) send(socket, payload);
+  };
+
+  const toEveryone = (payload: unknown) => {
+    for (const socket of clients.keys()) send(socket, payload);
   };
 
   wss.on('connection', (socket, req) => {
@@ -53,7 +66,8 @@ export function attachWebsocket(server: Server) {
     const queryToken = url.searchParams.get('token');
     if (queryToken) {
       try {
-        bindUser(socket, state, verifyAccessToken(queryToken).sub);
+        const payload = verifyAccessToken(queryToken);
+        bindUser(socket, state, payload.sub, payload.role);
       } catch {
         /* stay anonymous */
       }
@@ -75,7 +89,8 @@ export function attachWebsocket(server: Server) {
       switch (msg.type) {
         case 'auth': {
           try {
-            bindUser(socket, state, verifyAccessToken(String(msg.token)).sub);
+            const payload = verifyAccessToken(String(msg.token));
+            bindUser(socket, state, payload.sub, payload.role);
             send(socket, { type: 'auth', ok: true });
           } catch {
             send(socket, { type: 'auth', ok: false });
@@ -154,6 +169,19 @@ export function attachWebsocket(server: Server) {
   });
   withdrawalEvents.on('updated', (withdrawal) => {
     if (withdrawal) toUser(withdrawal.userId, { type: 'withdrawal:updated', withdrawal: publicWithdrawal(withdrawal) });
+  });
+
+  supportEvents.on('message', ({ message, userId, subject }) => {
+    // the trader sees replies instantly; the desk sees every incoming message
+    toUser(userId, { type: 'support:message', message });
+    if (!message.fromSupport) toAdmins({ type: 'support:incoming', message, userId, subject });
+  });
+  supportEvents.on('ticket', (ticket) => {
+    toAdmins({ type: 'support:ticket', ticket });
+  });
+
+  tournamentEvents.on('updated', (tournament) => {
+    if (tournament) toEveryone({ type: 'tournament:updated', tournament });
   });
 
   return {

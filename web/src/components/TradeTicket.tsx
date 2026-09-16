@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { duration as fmtDuration, money } from '../lib/format';
 import { useAuth, activeBalance } from '../store/auth';
+import { useTradingAccount } from '../store/tradingAccount';
 import { useMarket } from '../store/market';
 import { toast } from '../store/toast';
 import type { Asset, Trade } from '../lib/types';
@@ -17,6 +18,7 @@ const QUICK_AMOUNTS = [10, 25, 50, 100, 250, 500];
 /** Stake + expiry + direction: the order ticket that places a binary option. */
 export function TradeTicket({ asset, onPlaced }: Props) {
   const { user, patchBalance } = useAuth();
+  const { tournamentId, tournamentName, tournamentBalance, setBalance } = useTradingAccount();
   const durations = useMarket((s) => s.durations);
   const [amount, setAmount] = useState(10);
   const [durationSec, setDurationSec] = useState(60);
@@ -30,7 +32,7 @@ export function TradeTicket({ asset, onPlaced }: Props) {
     return <div className="card h-full animate-pulse bg-ink-800/60" />;
   }
 
-  const balance = activeBalance(user);
+  const balance = tournamentId ? tournamentBalance ?? 0 : activeBalance(user);
   const stake = Math.round(amount * 100);
   const profit = Math.floor((stake * asset.payoutPct) / 100);
   const tooSmall = stake < asset.minStake;
@@ -42,17 +44,24 @@ export function TradeTicket({ asset, onPlaced }: Props) {
     if (blocked || busy) return;
     setBusy(direction);
     try {
-      const data = await api.post<{ trade: Trade; balances: { demoBalance: number; realBalance: number } }>('/trades', {
+      const data = await api.post<{
+        trade: Trade;
+        balances: { demoBalance: number; realBalance: number };
+        tournamentBalance: number | null;
+      }>('/trades', {
         symbol: asset.symbol,
         direction,
         amount,
         durationSec,
-        accountType: user.activeAccount,
+        accountType: tournamentId ? 'TOURNAMENT' : user.activeAccount,
+        ...(tournamentId ? { tournamentId } : {}),
       });
-      patchBalance(
-        user.activeAccount,
-        user.activeAccount === 'DEMO' ? data.balances.demoBalance : data.balances.realBalance,
-      );
+      if (tournamentId && data.tournamentBalance != null) setBalance(data.tournamentBalance);
+      else
+        patchBalance(
+          user.activeAccount,
+          user.activeAccount === 'DEMO' ? data.balances.demoBalance : data.balances.realBalance,
+        );
       onPlaced(data.trade);
       toast.info(
         `${direction === 'UP' ? 'Higher' : 'Lower'} · ${asset.symbol}`,
@@ -165,7 +174,11 @@ export function TradeTicket({ asset, onPlaced }: Props) {
         </button>
       </div>
       <p className="text-center text-[10px] text-slate-500">
-        {user.activeAccount === 'DEMO' ? 'Practice funds — no real money at risk' : 'Live account'}
+        {tournamentId
+          ? `${tournamentName ?? 'Tournament'} chips — prizes pay out in real money`
+          : user.activeAccount === 'DEMO'
+            ? 'Practice funds — no real money at risk'
+            : 'Live account'}
       </p>
     </div>
   );

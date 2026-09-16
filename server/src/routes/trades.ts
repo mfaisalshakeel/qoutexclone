@@ -16,7 +16,8 @@ const placeSchema = z.object({
   // stake arrives in dollars from the UI and is stored in cents
   amount: z.number().positive().max(100000),
   durationSec: z.number().int().refine((d) => (DURATIONS as readonly number[]).includes(d), 'Unsupported expiry'),
-  accountType: z.enum(['DEMO', 'REAL']),
+  accountType: z.enum(['DEMO', 'REAL', 'TOURNAMENT']),
+  tournamentId: z.string().optional(),
 });
 
 router.post(
@@ -31,12 +32,16 @@ router.post(
       stake: Math.round(body.amount * 100),
       durationSec: body.durationSec,
       accountType: body.accountType,
+      tournamentId: body.tournamentId,
     });
     const user = await prisma.user.findUnique({
       where: { id: req.user!.id },
       select: { demoBalance: true, realBalance: true },
     });
-    res.status(201).json({ trade: publicTrade(trade), balances: user });
+    const entry = trade.entryId
+      ? await prisma.tournamentEntry.findUnique({ where: { id: trade.entryId }, select: { balance: true } })
+      : null;
+    res.status(201).json({ trade: publicTrade(trade), balances: user, tournamentBalance: entry?.balance ?? null });
   }),
 );
 
@@ -46,7 +51,7 @@ router.get(
     const query = z
       .object({
         status: z.enum(['OPEN', 'CLOSED']).optional(),
-        accountType: z.enum(['DEMO', 'REAL']).optional(),
+        accountType: z.enum(['DEMO', 'REAL', 'TOURNAMENT']).optional(),
         limit: z.coerce.number().int().min(1).max(200).default(50),
       })
       .parse(req.query);

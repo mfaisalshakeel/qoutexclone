@@ -10,6 +10,8 @@ import { approveWithdrawal, rejectWithdrawal } from '../services/withdrawals.js'
 import { marketFeed } from '../engine/feed.js';
 import { listKycSubmissions, reviewKyc } from '../services/kyc.js';
 import { PROMO_KINDS, describe } from '../services/promos.js';
+import { finishTournament, leaderboard, startTournament } from '../services/tournaments.js';
+import { listAllTickets, postMessage, readTicket, setTicketStatus } from '../services/support.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -21,7 +23,19 @@ async function audit(actorId: string, action: string, targetType: string, target
 router.get(
   '/overview',
   wrap(async (_req, res) => {
-    const [users, openTrades, pendingDeposits, pendingWithdrawals, deposits, withdrawals, tradeAgg, pendingKyc, bonuses] = await Promise.all([
+    const [
+      users,
+      openTrades,
+      pendingDeposits,
+      pendingWithdrawals,
+      deposits,
+      withdrawals,
+      tradeAgg,
+      pendingKyc,
+      bonuses,
+      openTickets,
+      liveTournaments,
+    ] = await Promise.all([
       prisma.user.count(),
       prisma.trade.count({ where: { status: 'OPEN' } }),
       prisma.deposit.count({ where: { status: { in: ['AWAITING_PAYMENT', 'CONFIRMING'] } } }),
@@ -34,6 +48,8 @@ router.get(
       }),
       prisma.kycSubmission.count({ where: { status: 'PENDING' } }),
       prisma.promoRedemption.aggregate({ _sum: { amount: true } }),
+      prisma.supportTicket.count({ where: { unreadByAgent: { gt: 0 } } }),
+      prisma.tournament.count({ where: { status: 'RUNNING' } }),
     ]);
     res.json({
       users,
@@ -47,6 +63,8 @@ router.get(
       housePnl: -(tradeAgg._sum.profit ?? 0),
       pendingKyc,
       bonusPaid: bonuses._sum.amount ?? 0,
+      openTickets,
+      liveTournaments,
       feedProvider: marketFeed.provider,
     });
   }),
@@ -277,6 +295,112 @@ router.patch(
     const promo = await prisma.promoCode.update({ where: { id: req.params.id }, data: body });
     await audit(req.user!.id, 'promo.update', 'promo', promo.id, JSON.stringify(body));
     res.json({ promo: { ...promo, description: describe(promo) } });
+  }),
+);
+
+/* ------------------------------- tournaments ------------------------------ */
+
+router.get(
+  '/tournaments',
+  wrap(async (_req, res) => {
+    const tournaments = await prisma.tournament.findMany({
+      orderBy: { startsAt: 'desc' },
+      take: 50,
+      include: { _count: { select: { entries: true } } },
+    });
+    res.json({ tournaments: tournaments.map((t) => ({ ...t, entrants: t._count.entries })) });
+  }),
+);
+
+router.post(
+  '/tournaments',
+  wrap(async (req, res) => {
+    const body = z
+      .object({
+        name: z.string().min(3).max(120),
+        description: z.string().max(500).optional(),
+        entryFee: z.number().int().min(0).default(0),
+        prizePool: z.number().int().min(0).default(0),
+        startingBalance: z.number().int().min(1000).default(100000),
+        maxEntries: z.number().int().min(0).default(0),
+        prizeSplit: z.string().max(60).default('50,30,20'),
+        startsAt: z.string().datetime(),
+        endsAt: z.string().datetime(),
+      })
+      .parse(req.body);
+
+    const startsAt = new Date(body.startsAt);
+    const endsAt = new Date(body.endsAt);
+    if (endsAt <= startsAt) throw badRequest('The tournament must end after it starts', 'bad_window');
+
+    const tournament = await prisma.tournament.create({ data: { ...body, startsAt, endsAt } });
+    await audit(req.user!.id, 'tournament.create', 'tournament', tournament.id, tournament.name);
+    res.status(201).json({ tournament });
+  }),
+);
+
+router.get(
+  '/tournaments/:id/leaderboard',
+  wrap(async (req, res) => {
+    res.json({ leaderboard: await leaderboard(req.params.id, 100) });
+  }),
+);
+
+router.post(
+  '/tournaments/:id/start',
+  wrap(async (req, res) => {
+    const tournament = await startTournament(req.params.id);
+    await audit(req.user!.id, 'tournament.start', 'tournament', tournament.id);
+    res.json({ tournament });
+  }),
+);
+
+router.post(
+  '/tournaments/:id/finish',
+  wrap(async (req, res) => {
+    const tournament = await finishTournament(req.params.id);
+    await audit(req.user!.id, 'tournament.finish', 'tournament', tournament.id);
+    res.json({ tournament });
+  }),
+);
+
+/* --------------------------------- support -------------------------------- */
+
+router.get(
+  '/support',
+  wrap(async (req, res) => {
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    res.json({ tickets: await listAllTickets(status) });
+  }),
+);
+
+router.get(
+  '/support/:id',
+  wrap(async (req, res) => {
+    res.json({ ticket: await readTicket(req.params.id, req.user!.id, true) });
+  }),
+);
+
+router.post(
+  '/support/:id/reply',
+  wrap(async (req, res) => {
+    const body = z.object({ message: z.string().min(1).max(2000) }).parse(req.body);
+    const message = await postMessage({
+      ticketId: req.params.id,
+      senderId: req.user!.id,
+      body: body.message,
+      fromSupport: true,
+    });
+    res.status(201).json({ message });
+  }),
+);
+
+router.post(
+  '/support/:id/status',
+  wrap(async (req, res) => {
+    const body = z.object({ status: z.enum(['OPEN', 'ANSWERED', 'CLOSED']) }).parse(req.body);
+    const ticket = await setTicketStatus(req.params.id, body.status);
+    res.json({ ticket });
   }),
 );
 

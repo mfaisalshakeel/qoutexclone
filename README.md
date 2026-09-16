@@ -15,6 +15,13 @@ are the point.
   <img src="docs/screenshots/mobile-terminal.png" width="22%" alt="Terminal on a phone" />
 </p>
 
+![Back office](docs/screenshots/admin-dashboard.png)
+
+<p align="center">
+  <img src="docs/screenshots/admin-support.png" width="49%" alt="Support desk" />
+  <img src="docs/screenshots/tournaments.png" width="49%" alt="Tournaments" />
+</p>
+
 <p align="center">
   <img src="docs/screenshots/account-kyc-referrals.png" width="78%" alt="Identity verification and partner programme" />
 </p>
@@ -38,6 +45,18 @@ are the point.
   pending, and admin approve/reject with automatic refund
 - Every balance change writes a ledger row — balances are always reconstructable
 
+**Tournaments**
+- Chip-based contests: every entrant gets the same stack, trades it on live
+  prices, and the final leaderboard splits the prize pool in real money
+- Entry fees feed the pot, positions still open at the bell are refunded in
+  chips, and payouts are ranked and credited in one transaction
+- Chips never touch a cash balance — the ledger refuses to move them
+
+**Support desk**
+- In-app chat widget on every page, threaded per question, with unread badges
+- Back-office desk: conversation list, trader context, replies delivered over
+  the socket with no refresh
+
 **Growth and compliance**
 - Promo codes: percentage deposit bonuses or flat credits, with minimums, caps,
   redemption limits and expiry — credited atomically with the deposit
@@ -46,9 +65,13 @@ are the point.
 - Identity verification (KYC): submit, admin review, and an optional gate that
   blocks withdrawals above a threshold until the trader is verified
 
-**Operations**
-- Admin console: withdrawals, deposits, KYC queue, promo codes, users,
-  suspensions, balance adjustments, payout percentages
+**Back office**
+- Dedicated admin shell with a grouped sidebar (Money, Traders, Platform),
+  live queue badges, and a slide-over drawer on phones
+- Dashboard with deposit/withdrawal volume, net flow, house P&L and the
+  queues that need attention
+- Sections: withdrawals, deposits, users, verification, support, tournaments,
+  promo codes, markets, and a full audit log of every administrative action
 - WebSocket push for quotes, candles, settlements and wallet events
 - JWT auth with rotating refresh tokens, single-use password reset, rate
   limiting, Helmet, CSP
@@ -144,6 +167,7 @@ All server settings live in `server/.env` (see `server/.env.example`).
 | `REQUIRE_KYC_FOR_WITHDRAWAL` | `false` | Gate withdrawals behind identity verification |
 | `KYC_WITHDRAWAL_THRESHOLD_USD` | `0` | Verify only above this amount (`0` = always) |
 | `REFERRAL_COMMISSION_PCT` | `5` | Share of a referred trader's deposits paid to the referrer |
+| `MAX_OPEN_TRADES` | `25` | Open positions allowed per trader |
 | `EXPOSE_RESET_TOKEN` | `true` | Returns reset tokens in the API response until a mailer is wired up |
 
 ### Market data
@@ -184,13 +208,18 @@ server/
   src/engine/settlement.ts  expiry sweeper
   src/engine/chain-watcher.ts  deposit confirmation loop (mock by default)
   src/services/             trading, wallet ledger, deposits, withdrawals, custody,
-                            kyc, promos, referrals, password reset
-  src/routes/               auth, account, market, trades, wallet, admin
+                            kyc, promos, referrals, tournaments, support, reset
+  src/routes/               auth, account, market, trades, wallet, tournaments,
+                            support, admin
   src/__tests__/            unit tests + integration suite (real MySQL)
   src/ws.ts                 realtime hub
 web/
-  src/pages/                landing, auth, terminal, wallet, history, account, admin
-  src/components/           chart, ticket, positions, deposit/withdraw, kyc, referrals
+  src/pages/                landing, auth, terminal, tournaments, wallet,
+                            history, account
+  src/pages/admin/          dashboard, money, traders, support, platform
+  src/components/           chart, ticket, positions, deposit/withdraw, kyc,
+                            referrals, support chat
+  src/components/admin/     back-office shell and table primitives
   src/store/                auth, market, toasts
 ```
 
@@ -214,9 +243,9 @@ TEST_DATABASE_URL="mysql://user:pass@127.0.0.1:3306/quotex_test" npm test
 ```
 
 Unit tests cover payout math and rounding, fee quoting per network, promo bonus
-caps, the KYC gate, address validation and derivation for every supported chain,
-the settlement rule (including ties), the indicator math, and the price model over
-long runs.
+caps, tournament prize splits (including the rounding remainder), the KYC gate,
+address validation and derivation for every supported chain, the settlement rule
+(including ties), the indicator math, and the price model over long runs.
 
 The integration suite runs the money paths against MySQL: a confirmed deposit
 credits exactly once under retries, a promo code pays one bonus per trader, a

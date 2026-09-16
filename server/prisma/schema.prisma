@@ -40,6 +40,9 @@ model User {
   refreshTokens     RefreshToken[]
   auditLogs         AuditLog[]           @relation("AuditActor")
   kycSubmissions    KycSubmission[]
+  tournamentEntries TournamentEntry[]
+  supportTickets    SupportTicket[]
+  supportMessages   SupportMessage[]
   resetTokens       PasswordResetToken[]
   promoRedemptions  PromoRedemption[]
   commissionsEarned ReferralCommission[] @relation("CommissionReferrer")
@@ -81,22 +84,25 @@ model Asset {
 }
 
 model Trade {
-  id          String    @id @default(cuid())
-  userId      String
-  assetId     String
-  symbol      String
-  accountType String // DEMO | REAL
-  direction   String // UP | DOWN
-  stake       Int
-  payoutPct   Int
-  entryPrice  Float
-  exitPrice   Float?
-  durationSec Int
-  openedAt    DateTime  @default(now())
-  expiresAt   DateTime
-  settledAt   DateTime?
-  status      String    @default("OPEN") // OPEN | WON | LOST | REFUNDED
-  profit      Int       @default(0) // net result in cents (stake excluded for losses => -stake)
+  id           String    @id @default(cuid())
+  userId       String
+  assetId      String
+  symbol       String
+  accountType  String // DEMO | REAL | TOURNAMENT
+  // set when the position is played with tournament chips
+  entryId      String?
+  tournamentId String?
+  direction    String // UP | DOWN
+  stake        Int
+  payoutPct    Int
+  entryPrice   Float
+  exitPrice    Float?
+  durationSec  Int
+  openedAt     DateTime  @default(now())
+  expiresAt    DateTime
+  settledAt    DateTime?
+  status       String    @default("OPEN") // OPEN | WON | LOST | REFUNDED
+  profit       Int       @default(0) // net result in cents (stake excluded for losses => -stake)
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   asset Asset @relation(fields: [assetId], references: [id])
@@ -289,4 +295,75 @@ model ReferralCommission {
 
   @@unique([depositId])
   @@index([referrerId, createdAt])
+}
+
+model Tournament {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?   @db.Text
+  status          String    @default("SCHEDULED") // SCHEDULED | RUNNING | FINISHED | CANCELLED
+  entryFee        Int       @default(0) // cents, 0 = free entry
+  prizePool       Int       @default(0) // cents, grows with entry fees
+  startingBalance Int       @default(100000) // tournament chips handed to each entrant
+  maxEntries      Int       @default(0) // 0 = unlimited
+  // percentage split for the leaderboard, highest place first: "50,30,20"
+  prizeSplit      String    @default("50,30,20")
+  startsAt        DateTime
+  endsAt          DateTime
+  finishedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  entries TournamentEntry[]
+
+  @@index([status, startsAt])
+}
+
+model TournamentEntry {
+  id              String   @id @default(cuid())
+  tournamentId    String
+  userId          String
+  balance         Int // current tournament chips
+  startingBalance Int
+  trades          Int      @default(0)
+  wins            Int      @default(0)
+  rank            Int?
+  prize           Int      @default(0)
+  joinedAt        DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentId, balance])
+}
+
+model SupportTicket {
+  id            String   @id @default(cuid())
+  userId        String
+  subject       String
+  status        String   @default("OPEN") // OPEN | ANSWERED | CLOSED
+  unreadByUser  Int      @default(0)
+  unreadByAgent Int      @default(0)
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages SupportMessage[]
+
+  @@index([status, lastMessageAt])
+  @@index([userId])
+}
+
+model SupportMessage {
+  id          String   @id @default(cuid())
+  ticketId    String
+  senderId    String
+  fromSupport Boolean  @default(false)
+  body        String   @db.Text
+  createdAt   DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
 }

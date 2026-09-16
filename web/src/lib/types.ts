@@ -17,7 +17,61 @@ export interface User {
   createdAt: string;
 }
 
-export type AccountType = 'DEMO' | 'REAL';
+export type AccountType = 'DEMO' | 'REAL' | 'TOURNAMENT';
+
+export interface Tournament {
+  id: string;
+  name: string;
+  description: string | null;
+  status: 'SCHEDULED' | 'RUNNING' | 'FINISHED' | 'CANCELLED';
+  entryFee: number;
+  prizePool: number;
+  startingBalance: number;
+  maxEntries: number;
+  prizeSplit: number[];
+  startsAt: string;
+  endsAt: string;
+  entrants: number;
+  joined: boolean;
+  myBalance: number | null;
+  myRank: number | null;
+  myPrize: number;
+}
+
+export interface LeaderboardRow {
+  id: string;
+  userId: string;
+  name: string;
+  balance: number;
+  startingBalance: number;
+  profit: number;
+  trades: number;
+  wins: number;
+  place: number;
+  prize: number;
+}
+
+export interface SupportMessage {
+  id: string;
+  ticketId: string;
+  senderId: string;
+  fromSupport: boolean;
+  body: string;
+  createdAt: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  userId: string;
+  subject: string;
+  status: 'OPEN' | 'ANSWERED' | 'CLOSED';
+  unreadByUser: number;
+  unreadByAgent: number;
+  lastMessageAt: string;
+  createdAt: string;
+  messages: SupportMessage[];
+  user?: { email: string; name: string; realBalance: number };
+}
 
 export interface Asset {
   id: string;
@@ -58,6 +112,7 @@ export interface Trade {
   status: 'OPEN' | 'WON' | 'LOST' | 'REFUNDED';
   profit: number;
   potentialProfit: number;
+  tournamentId?: string | null;
 }
 
 export interface Transaction {

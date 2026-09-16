@@ -13,6 +13,8 @@ import marketRoutes from './routes/market.js';
 import tradeRoutes from './routes/trades.js';
 import walletRoutes from './routes/wallet.js';
 import adminRoutes from './routes/admin.js';
+import tournamentRoutes from './routes/tournaments.js';
+import supportRoutes from './routes/support.js';
 import { marketFeed } from './engine/feed.js';
 
 /**
@@ -102,6 +104,8 @@ export function createApp() {
   app.use('/api/market', marketRoutes);
   app.use('/api/trades', tradeRoutes);
   app.use('/api/wallet', walletRoutes);
+  app.use('/api/tournaments', tournamentRoutes);
+  app.use('/api/support', supportRoutes);
   app.use('/api/admin', adminRoutes);
 
   serveWebClient(app);

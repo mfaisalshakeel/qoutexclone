@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { AppError, badRequest } from '../lib/errors.js';
 
-export type AccountType = 'DEMO' | 'REAL';
+export type AccountType = 'DEMO' | 'REAL' | 'TOURNAMENT';
 export type TxClient = Prisma.TransactionClient;
 
 export const TX_TYPES = [
@@ -14,6 +14,8 @@ export const TX_TYPES = [
   'TRADE_REFUND',
   'BONUS',
   'REFERRAL_COMMISSION',
+  'TOURNAMENT_ENTRY',
+  'TOURNAMENT_PRIZE',
   'ADJUSTMENT',
   'DEMO_RESET',
 ] as const;
@@ -29,6 +31,11 @@ export interface LedgerEntry {
 }
 
 function balanceField(accountType: AccountType): 'demoBalance' | 'realBalance' {
+  // tournament chips live on the entry, not on the user — routing them through
+  // the cash ledger would mint real money, so refuse loudly instead
+  if (accountType === 'TOURNAMENT') {
+    throw new AppError(500, 'Tournament balances are not part of the cash ledger', 'invalid_account');
+  }
   return accountType === 'DEMO' ? 'demoBalance' : 'realBalance';
 }
 

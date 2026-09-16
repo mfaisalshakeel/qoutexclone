@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { realtime } from '../lib/ws';
 import { useAuth } from '../store/auth';
+import { useTradingAccount } from '../store/tradingAccount';
 import { useMarket } from '../store/market';
 import { toast } from '../store/toast';
 import { money } from '../lib/format';
@@ -21,7 +22,9 @@ export function useRealtime(): void {
     const offStatus = realtime.on('status', ({ connected }) => setConnected(connected));
 
     const offSettled = realtime.on('trade:settled', ({ trade, balance, accountType }) => {
-      patchBalance(accountType, balance);
+      if (accountType === 'TOURNAMENT') useTradingAccount.getState().setBalance(balance);
+      else patchBalance(accountType, balance);
+
       if (trade.status === 'WON') {
         toast.success(`${trade.symbol} won`, `+${money(trade.profit)} profit credited`);
       } else if (trade.status === 'LOST') {

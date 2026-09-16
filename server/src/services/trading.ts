@@ -5,6 +5,7 @@ import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { winProfit } from '../lib/money.js';
 import { marketFeed } from '../engine/feed.js';
 import { applyLedger, type AccountType } from './wallet.js';
+import { activeEntry, adjustEntryBalance } from './tournaments.js';
 import { env } from '../env.js';
 
 /** Expiries offered on the terminal, in seconds. */
@@ -19,6 +20,8 @@ export interface PlaceTradeInput {
   direction: 'UP' | 'DOWN';
   stake: number; // cents
   durationSec: number;
+  /** required when accountType is TOURNAMENT */
+  tournamentId?: string;
 }
 
 export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
@@ -44,6 +47,14 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
   const entryPrice = marketFeed.getPrice(asset.symbol);
   if (entryPrice == null) throw conflict('No market price available for this asset', 'no_price');
 
+  // tournament positions are staked in chips held by the entry, never cash
+  const entry =
+    input.accountType === 'TOURNAMENT' ? await activeEntry(input.userId, input.tournamentId) : null;
+  if (input.accountType === 'TOURNAMENT') {
+    if (!entry) throw conflict('You are not in a running tournament', 'no_tournament_entry');
+    if (entry.balance < input.stake) throw badRequest('Not enough tournament balance', 'insufficient_funds');
+  }
+
   const openedAt = new Date();
   const expiresAt = new Date(openedAt.getTime() + input.durationSec * 1000);
 
@@ -62,17 +73,24 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
         openedAt,
         expiresAt,
         status: 'OPEN',
+        entryId: entry?.id,
+        tournamentId: entry?.tournamentId,
       },
     });
-    await applyLedger(tx, {
-      userId: input.userId,
-      accountType: input.accountType,
-      type: 'TRADE_STAKE',
-      amount: -input.stake,
-      refType: 'trade',
-      refId: created.id,
-      note: `${input.direction} ${asset.symbol} @ ${entryPrice}`,
-    });
+
+    if (entry) {
+      await adjustEntryBalance(tx, entry.id, -input.stake);
+    } else {
+      await applyLedger(tx, {
+        userId: input.userId,
+        accountType: input.accountType,
+        type: 'TRADE_STAKE',
+        amount: -input.stake,
+        refType: 'trade',
+        refId: created.id,
+        note: `${input.direction} ${asset.symbol} @ ${entryPrice}`,
+      });
+    }
     return created;
   });
 
@@ -147,7 +165,9 @@ export async function settleTrade(tradeId: string): Promise<SettlementResult | n
     if (claimed.count === 0) return null;
 
     let balance: number | null = null;
-    if (credit > 0) {
+    if (trade.entryId) {
+      balance = await adjustEntryBalance(tx, trade.entryId, credit, status);
+    } else if (credit > 0) {
       balance = await applyLedger(tx, {
         userId: trade.userId,
         accountType: trade.accountType as AccountType,
@@ -173,7 +193,10 @@ export async function settleTrade(tradeId: string): Promise<SettlementResult | n
   return result;
 }
 
-export async function listTrades(userId: string, options: { status?: 'OPEN' | 'CLOSED'; accountType?: AccountType; limit?: number }) {
+export async function listTrades(
+  userId: string,
+  options: { status?: 'OPEN' | 'CLOSED'; accountType?: AccountType; limit?: number },
+) {
   const limit = Math.min(options.limit ?? 50, 200);
   const where: Record<string, unknown> = { userId };
   if (options.accountType) where.accountType = options.accountType;

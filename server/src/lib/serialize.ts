@@ -38,6 +38,7 @@ export function publicTrade(trade: Trade) {
     settledAt: trade.settledAt,
     status: trade.status,
     profit: trade.profit,
+    tournamentId: trade.tournamentId,
     potentialProfit: Math.floor((trade.stake * trade.payoutPct) / 100),
   };
 }

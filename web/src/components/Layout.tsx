@@ -4,11 +4,13 @@ import { useAuth } from '../store/auth';
 import { useMarket } from '../store/market';
 import { useRealtime } from '../hooks/useRealtime';
 import { BalanceSwitcher } from './BalanceSwitcher';
+import { SupportChat } from './SupportChat';
 import { Toasts } from './Toasts';
-import { IconChart, IconHistory, IconLogo, IconShield, IconUser, IconWallet } from './Icons';
+import { IconChart, IconCup, IconHistory, IconLogo, IconShield, IconUser, IconWallet } from './Icons';
 
 const NAV = [
   { to: '/trade', label: 'Trade', icon: IconChart },
+  { to: '/tournaments', label: 'Events', icon: IconCup },
   { to: '/wallet', label: 'Wallet', icon: IconWallet },
   { to: '/history', label: 'History', icon: IconHistory },
   { to: '/account', label: 'Account', icon: IconUser },
@@ -116,7 +118,7 @@ export function Layout() {
         <Outlet />
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-ink-700 bg-ink-900/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-ink-700 bg-ink-900/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
         {NAV.map((item) => (
           <NavLink
             key={item.to}
@@ -133,6 +135,7 @@ export function Layout() {
         ))}
       </nav>
 
+      <SupportChat />
       <Toasts />
     </div>
   );

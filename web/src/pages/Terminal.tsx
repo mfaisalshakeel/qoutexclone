@@ -4,6 +4,7 @@ import { realtime } from '../lib/ws';
 import { percent, price } from '../lib/format';
 import { assetOf, useMarket } from '../store/market';
 import { useAuth } from '../store/auth';
+import { useTradingAccount } from '../store/tradingAccount';
 import { AssetPicker } from '../components/AssetPicker';
 import { PriceChart, type ChartType, type IndicatorSettings } from '../components/PriceChart';
 import { Positions } from '../components/Positions';
@@ -29,7 +30,8 @@ export function Terminal() {
 
   const asset = useMemo(() => assetOf(symbol, assets), [symbol, assets]);
   const livePrice = prices[symbol] ?? asset?.price ?? null;
-  const accountType = user?.activeAccount ?? 'DEMO';
+  const tournamentId = useTradingAccount((s) => s.tournamentId);
+  const accountType = tournamentId ? 'TOURNAMENT' : user?.activeAccount ?? 'DEMO';
 
   useEffect(() => {
     if (!loaded) void load();
