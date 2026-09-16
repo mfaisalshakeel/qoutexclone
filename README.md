@@ -8,6 +8,13 @@ React + Vite + Tailwind on the client.
 This is a functional clone, not a pixel copy — the flows, engine and money handling
 are the point.
 
+![Trading terminal](docs/screenshots/terminal.png)
+
+<p align="center">
+  <img src="docs/screenshots/wallet-deposit.png" width="54%" alt="Crypto deposit invoice" />
+  <img src="docs/screenshots/mobile-terminal.png" width="22%" alt="Terminal on a phone" />
+</p>
+
 ## What it does
 
 **Trading**
