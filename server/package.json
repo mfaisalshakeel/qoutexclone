@@ -6,6 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "postinstall": "prisma generate",
     "build": "prisma generate && tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "db:push": "prisma db push",
@@ -14,7 +15,8 @@
     "setup": "prisma generate && prisma migrate deploy && tsx src/seed.ts",
     "seed": "tsx src/seed.ts",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:generate": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

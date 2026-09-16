@@ -88,6 +88,9 @@ fi
 say "Installing dependencies"
 npm install --no-audit --no-fund
 
+say "Generating the database client"
+npm run db:generate --workspace=server
+
 say "Applying the database schema"
 npm run db:migrate --workspace=server || {
   warn "migrate deploy failed — falling back to 'prisma db push'"
