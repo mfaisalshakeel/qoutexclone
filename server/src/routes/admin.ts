@@ -1,13 +1,15 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { notFound, wrap } from '../lib/errors.js';
+import { badRequest, notFound, wrap } from '../lib/errors.js';
 import { publicDeposit, publicUser, publicWithdrawal } from '../lib/serialize.js';
 import { requireAdmin, requireAuth } from '../middleware/auth.js';
 import { applyLedger } from '../services/wallet.js';
 import { completeDeposit, rejectDeposit } from '../services/deposits.js';
 import { approveWithdrawal, rejectWithdrawal } from '../services/withdrawals.js';
 import { marketFeed } from '../engine/feed.js';
+import { listKycSubmissions, reviewKyc } from '../services/kyc.js';
+import { PROMO_KINDS, describe } from '../services/promos.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -19,7 +21,7 @@ async function audit(actorId: string, action: string, targetType: string, target
 router.get(
   '/overview',
   wrap(async (_req, res) => {
-    const [users, openTrades, pendingDeposits, pendingWithdrawals, deposits, withdrawals, tradeAgg] = await Promise.all([
+    const [users, openTrades, pendingDeposits, pendingWithdrawals, deposits, withdrawals, tradeAgg, pendingKyc, bonuses] = await Promise.all([
       prisma.user.count(),
       prisma.trade.count({ where: { status: 'OPEN' } }),
       prisma.deposit.count({ where: { status: { in: ['AWAITING_PAYMENT', 'CONFIRMING'] } } }),
@@ -30,6 +32,8 @@ router.get(
         _sum: { stake: true, profit: true },
         where: { accountType: 'REAL', status: { in: ['WON', 'LOST'] } },
       }),
+      prisma.kycSubmission.count({ where: { status: 'PENDING' } }),
+      prisma.promoRedemption.aggregate({ _sum: { amount: true } }),
     ]);
     res.json({
       users,
@@ -41,6 +45,8 @@ router.get(
       realVolume: tradeAgg._sum.stake ?? 0,
       // house result is the inverse of trader P&L
       housePnl: -(tradeAgg._sum.profit ?? 0),
+      pendingKyc,
+      bonusPaid: bonuses._sum.amount ?? 0,
       feedProvider: marketFeed.provider,
     });
   }),
@@ -193,6 +199,84 @@ router.post(
     const withdrawal = await rejectWithdrawal(req.params.id, req.user!.id, body.note);
     await audit(req.user!.id, 'withdrawal.reject', 'withdrawal', withdrawal.id, body.note);
     res.json({ withdrawal: publicWithdrawal(withdrawal) });
+  }),
+);
+
+/* ---------------------------------- kyc ---------------------------------- */
+
+router.get(
+  '/kyc',
+  wrap(async (req, res) => {
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    res.json({ submissions: await listKycSubmissions(status) });
+  }),
+);
+
+router.post(
+  '/kyc/:id/review',
+  wrap(async (req, res) => {
+    const body = z
+      .object({ decision: z.enum(['APPROVED', 'REJECTED']), note: z.string().max(300).optional() })
+      .parse(req.body);
+    if (body.decision === 'REJECTED' && !body.note) {
+      throw badRequest('A reason is required when rejecting a verification', 'note_required');
+    }
+    const submission = await reviewKyc(req.params.id, req.user!.id, body.decision, body.note);
+    await audit(req.user!.id, 'kyc.review', 'kyc', submission.id, body.decision);
+    res.json({ submission });
+  }),
+);
+
+/* ------------------------------- promo codes ------------------------------ */
+
+router.get(
+  '/promos',
+  wrap(async (_req, res) => {
+    const promos = await prisma.promoCode.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });
+    res.json({ promos: promos.map((promo) => ({ ...promo, description: describe(promo) })) });
+  }),
+);
+
+router.post(
+  '/promos',
+  wrap(async (req, res) => {
+    const body = z
+      .object({
+        code: z.string().min(3).max(32),
+        kind: z.enum(PROMO_KINDS).default('DEPOSIT_BONUS_PCT'),
+        value: z.number().int().positive(),
+        minDeposit: z.number().int().min(0).default(0),
+        maxBonus: z.number().int().min(0).default(0),
+        maxRedemptions: z.number().int().min(0).default(0),
+        expiresAt: z.string().datetime().optional(),
+      })
+      .parse(req.body);
+
+    const code = body.code.trim().toUpperCase();
+    const existing = await prisma.promoCode.findUnique({ where: { code } });
+    if (existing) throw badRequest('That code already exists', 'code_taken');
+
+    const promo = await prisma.promoCode.create({
+      data: { ...body, code, expiresAt: body.expiresAt ? new Date(body.expiresAt) : null },
+    });
+    await audit(req.user!.id, 'promo.create', 'promo', promo.id, code);
+    res.status(201).json({ promo: { ...promo, description: describe(promo) } });
+  }),
+);
+
+router.patch(
+  '/promos/:id',
+  wrap(async (req, res) => {
+    const body = z
+      .object({
+        enabled: z.boolean().optional(),
+        value: z.number().int().positive().optional(),
+        maxRedemptions: z.number().int().min(0).optional(),
+      })
+      .parse(req.body);
+    const promo = await prisma.promoCode.update({ where: { id: req.params.id }, data: body });
+    await audit(req.user!.id, 'promo.update', 'promo', promo.id, JSON.stringify(body));
+    res.json({ promo: { ...promo, description: describe(promo) } });
   }),
 );
 

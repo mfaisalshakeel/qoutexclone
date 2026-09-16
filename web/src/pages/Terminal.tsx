@@ -5,10 +5,16 @@ import { percent, price } from '../lib/format';
 import { assetOf, useMarket } from '../store/market';
 import { useAuth } from '../store/auth';
 import { AssetPicker } from '../components/AssetPicker';
-import { PriceChart } from '../components/PriceChart';
+import { PriceChart, type ChartType, type IndicatorSettings } from '../components/PriceChart';
 import { Positions } from '../components/Positions';
 import { TradeTicket } from '../components/TradeTicket';
 import type { Trade } from '../lib/types';
+
+const STUDIES = [
+  { key: 'sma' as const, label: 'SMA 20', color: '#f6c445' },
+  { key: 'ema' as const, label: 'EMA 50', color: '#3d7bff' },
+  { key: 'bollinger' as const, label: 'Bollinger bands', color: '#7c8aa5' },
+];
 
 export function Terminal() {
   const { assets, prices, symbol, timeframe, timeframes, setTimeframe, load, loaded } = useMarket();
@@ -17,6 +23,9 @@ export function Terminal() {
   const [closedTrades, setClosedTrades] = useState<Trade[]>([]);
   const [mobilePanel, setMobilePanel] = useState<'trade' | 'positions'>('trade');
   const [marketsOpen, setMarketsOpen] = useState(false);
+  const [chartType, setChartType] = useState<ChartType>('candles');
+  const [indicators, setIndicators] = useState<IndicatorSettings>({ sma: false, ema: false, bollinger: false });
+  const [studiesOpen, setStudiesOpen] = useState(false);
 
   const asset = useMemo(() => assetOf(symbol, assets), [symbol, assets]);
   const livePrice = prices[symbol] ?? asset?.price ?? null;
@@ -48,6 +57,7 @@ export function Terminal() {
   }, [accountType]);
 
   const changePct = asset?.changePct ?? 0;
+  const activeStudies = Object.values(indicators).filter(Boolean).length;
 
   return (
     <div className="flex flex-col gap-2 p-2 md:h-[calc(100dvh-3.5rem)] md:flex-row">
@@ -85,24 +95,80 @@ export function Terminal() {
             </span>
           </div>
 
-          <div className="ml-auto hidden gap-1 sm:flex">
-            {timeframes.map((tf) => (
+          <div className="ml-auto flex items-center gap-1">
+            <div className="hidden gap-1 sm:flex">
+              {timeframes.map((tf) => (
+                <button
+                  key={tf}
+                  onClick={() => setTimeframe(tf)}
+                  className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${
+                    timeframe === tf ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {tf}
+                </button>
+              ))}
+            </div>
+
+            <div className="mx-1 hidden h-5 w-px bg-ink-600 sm:block" />
+
+            <div className="flex gap-1">
+              {(['candles', 'line'] as const).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setChartType(type)}
+                  title={type === 'candles' ? 'Candlesticks' : 'Line'}
+                  className={`rounded-md px-2 py-1.5 text-xs font-semibold capitalize transition ${
+                    chartType === type ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {type === 'candles' ? '▦' : '〰'}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative">
               <button
-                key={tf}
-                onClick={() => setTimeframe(tf)}
+                onClick={() => setStudiesOpen((v) => !v)}
                 className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${
-                  timeframe === tf ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                  activeStudies > 0 ? 'bg-accent-soft text-accent' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                {tf}
+                Studies{activeStudies > 0 ? ` (${activeStudies})` : ''}
               </button>
-            ))}
+              {studiesOpen && (
+                <div className="absolute right-0 z-30 mt-2 w-56 animate-fade-up rounded-xl border border-ink-500 bg-ink-800 p-1.5 shadow-2xl">
+                  {STUDIES.map((study) => (
+                    <label
+                      key={study.key}
+                      className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs transition hover:bg-ink-700"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={indicators[study.key]}
+                        onChange={(e) => setIndicators((c) => ({ ...c, [study.key]: e.target.checked }))}
+                        className="h-3.5 w-3.5 accent-[#3d7bff]"
+                      />
+                      <span className="flex-1 text-slate-200">{study.label}</span>
+                      <span className="h-1 w-5 rounded-full" style={{ background: study.color }} />
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
         <div className="card h-[42dvh] min-h-[240px] overflow-hidden md:h-auto md:flex-1">
           {asset && (
-            <PriceChart symbol={symbol} timeframe={timeframe} precision={asset.precision} trades={openTrades} />
+            <PriceChart
+              symbol={symbol}
+              timeframe={timeframe}
+              precision={asset.precision}
+              trades={openTrades}
+              chartType={chartType}
+              indicators={indicators}
+            />
           )}
         </div>
 

@@ -13,6 +13,7 @@ export const TX_TYPES = [
   'TRADE_PAYOUT',
   'TRADE_REFUND',
   'BONUS',
+  'REFERRAL_COMMISSION',
   'ADJUSTMENT',
   'DEMO_RESET',
 ] as const;

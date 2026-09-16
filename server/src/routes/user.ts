@@ -7,6 +7,9 @@ import { publicUser } from '../lib/serialize.js';
 import { requireAuth } from '../middleware/auth.js';
 import { applyLedger } from '../services/wallet.js';
 import { tradingStats } from '../services/trading.js';
+import { DOCUMENT_TYPES, latestKycSubmission, submitKyc } from '../services/kyc.js';
+import { referralSummary } from '../services/referrals.js';
+import { env } from '../env.js';
 
 // mounted at /api/me — every route here needs a signed-in user
 const router = Router();
@@ -94,6 +97,62 @@ router.get(
   wrap(async (req, res) => {
     const accountType = (req.query.accountType === 'REAL' ? 'REAL' : 'DEMO') as 'DEMO' | 'REAL';
     res.json({ stats: await tradingStats(req.user!.id, accountType) });
+  }),
+);
+
+/* --------------------------- identity verification -------------------------- */
+
+router.get(
+  '/kyc',
+  wrap(async (req, res) => {
+    const [user, submission] = await Promise.all([
+      prisma.user.findUnique({ where: { id: req.user!.id }, select: { kycStatus: true, kycReviewedAt: true } }),
+      latestKycSubmission(req.user!.id),
+    ]);
+    res.json({
+      status: user?.kycStatus ?? 'NOT_SUBMITTED',
+      reviewedAt: user?.kycReviewedAt ?? null,
+      required: env.requireKycForWithdrawal,
+      thresholdUsd: env.kycWithdrawalThresholdUsd,
+      submission: submission
+        ? {
+            id: submission.id,
+            status: submission.status,
+            note: submission.note,
+            documentType: submission.documentType,
+            createdAt: submission.createdAt,
+            reviewedAt: submission.reviewedAt,
+          }
+        : null,
+    });
+  }),
+);
+
+router.post(
+  '/kyc',
+  wrap(async (req, res) => {
+    const body = z
+      .object({
+        fullName: z.string().min(3).max(120),
+        dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD'),
+        country: z.string().min(2).max(60),
+        address: z.string().min(5).max(300),
+        documentType: z.enum(DOCUMENT_TYPES),
+        documentNumber: z.string().min(3).max(60),
+        documentRef: z.string().max(300).optional(),
+      })
+      .parse(req.body);
+    const submission = await submitKyc({ userId: req.user!.id, ...body });
+    res.status(201).json({ submission: { id: submission.id, status: submission.status } });
+  }),
+);
+
+/* ------------------------------ partner program ----------------------------- */
+
+router.get(
+  '/referrals',
+  wrap(async (req, res) => {
+    res.json(await referralSummary(req.user!.id));
   }),
 );
 

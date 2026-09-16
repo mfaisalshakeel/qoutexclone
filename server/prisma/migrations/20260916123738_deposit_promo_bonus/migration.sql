@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE `Deposit` ADD COLUMN `bonusAmount` INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN `promoCode` VARCHAR(191) NULL;

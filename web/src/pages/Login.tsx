@@ -60,6 +60,11 @@ export function Login() {
         <button type="submit" disabled={loading} className="btn-primary w-full">
           {loading ? 'Signing in…' : 'Sign in'}
         </button>
+        <p className="text-center">
+          <Link to="/forgot-password" className="text-xs text-slate-400 hover:text-accent">
+            Forgot your password?
+          </Link>
+        </p>
       </form>
       <p className="mt-5 text-center text-sm text-slate-400">
         New here?{' '}

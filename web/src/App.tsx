@@ -6,6 +6,7 @@ import { Account } from './pages/Account';
 import { Admin } from './pages/Admin';
 import { History } from './pages/History';
 import { Landing } from './pages/Landing';
+import { ForgotPassword, ResetPassword } from './pages/ForgotPassword';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Terminal } from './pages/Terminal';
@@ -25,6 +26,8 @@ export default function App() {
         <Route path="/" element={ready && user ? <Navigate to="/trade" replace /> : <Landing />} />
         <Route path="/login" element={ready && user ? <Navigate to="/trade" replace /> : <Login />} />
         <Route path="/register" element={ready && user ? <Navigate to="/trade" replace /> : <Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         <Route
           element={

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../store/auth';
 import { AuthShell } from './Login';
@@ -7,7 +7,14 @@ import { AuthShell } from './Login';
 export function Register() {
   const { register, loading } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', password: '', country: '' });
+  const [params] = useSearchParams();
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    country: '',
+    referralCode: (params.get('ref') ?? '').toUpperCase(),
+  });
   const [error, setError] = useState('');
 
   const update = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement>) =>
@@ -22,6 +29,7 @@ export function Register() {
         email: form.email,
         password: form.password,
         country: form.country || undefined,
+        referralCode: form.referralCode || undefined,
       });
       navigate('/trade', { replace: true });
     } catch (err) {
@@ -64,6 +72,18 @@ export function Register() {
             Country <span className="normal-case text-slate-500">(optional)</span>
           </label>
           <input id="country" value={form.country} onChange={update('country')} className="field" placeholder="Pakistan" />
+        </div>
+        <div>
+          <label className="label" htmlFor="referralCode">
+            Referral code <span className="normal-case text-slate-500">(optional)</span>
+          </label>
+          <input
+            id="referralCode"
+            value={form.referralCode}
+            onChange={update('referralCode')}
+            className="field font-mono !text-xs uppercase"
+            placeholder="A1B2C3D4"
+          />
         </div>
         {error && <p className="rounded-lg bg-down-soft px-3 py-2 text-sm text-down">{error}</p>}
         <button type="submit" disabled={loading} className="btn-primary w-full">

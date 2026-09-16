@@ -16,6 +16,8 @@ export function publicUser(user: User) {
     totalDeposited: user.totalDeposited,
     totalWithdrawn: user.totalWithdrawn,
     referralCode: user.referralCode,
+    referralEarnings: user.referralEarnings,
+    kycStatus: user.kycStatus,
     createdAt: user.createdAt,
   };
 }
@@ -65,6 +67,8 @@ export function publicDeposit(deposit: Deposit) {
     cryptoAmount: deposit.cryptoAmount,
     rate: deposit.rate,
     creditedAmount: deposit.creditedAmount,
+    promoCode: deposit.promoCode,
+    bonusAmount: deposit.bonusAmount,
     txHash: deposit.txHash,
     explorerUrl: deposit.txHash && spec ? `${spec.explorerTx}${deposit.txHash}` : null,
     confirmations: deposit.confirmations,

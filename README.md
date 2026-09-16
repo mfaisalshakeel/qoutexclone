@@ -20,6 +20,7 @@ are the point.
 **Trading**
 - Fixed-payout UP/DOWN options on 10 crypto markets, payouts 78–87%
 - Expiries from 30 seconds to 1 hour
+- Candlestick or line chart with SMA, EMA and Bollinger band studies
 - Settlement is priced from the tick at the exact expiry instant and is idempotent —
   a restart mid-flight can never pay a position twice
 - A tie (exit exactly at the strike) refunds the stake
@@ -33,10 +34,20 @@ are the point.
   pending, and admin approve/reject with automatic refund
 - Every balance change writes a ledger row — balances are always reconstructable
 
+**Growth and compliance**
+- Promo codes: percentage deposit bonuses or flat credits, with minimums, caps,
+  redemption limits and expiry — credited atomically with the deposit
+- Partner programme: invite links, and a configurable share of every referred
+  deposit paid to the referrer automatically
+- Identity verification (KYC): submit, admin review, and an optional gate that
+  blocks withdrawals above a threshold until the trader is verified
+
 **Operations**
-- Admin console: approvals, users, suspensions, balance adjustments, payout percentages
+- Admin console: withdrawals, deposits, KYC queue, promo codes, users,
+  suspensions, balance adjustments, payout percentages
 - WebSocket push for quotes, candles, settlements and wallet events
-- JWT auth with rotating refresh tokens, rate limiting, Helmet, CSP
+- JWT auth with rotating refresh tokens, single-use password reset, rate
+  limiting, Helmet, CSP
 
 ## Install
 
@@ -126,6 +137,10 @@ All server settings live in `server/.env` (see `server/.env.example`).
 | `AUTO_APPROVE_WITHDRAWALS` | `false` | Skip manual payout review |
 | `WITHDRAW_FEE_PCT` / `WITHDRAW_FLAT_FEE_USD` | `1` / `1` | Fee model on top of the network fee |
 | `MIN_DEPOSIT_USD` / `MIN_WITHDRAW_USD` | `10` / `20` | Global floors; each network can be stricter |
+| `REQUIRE_KYC_FOR_WITHDRAWAL` | `false` | Gate withdrawals behind identity verification |
+| `KYC_WITHDRAWAL_THRESHOLD_USD` | `0` | Verify only above this amount (`0` = always) |
+| `REFERRAL_COMMISSION_PCT` | `5` | Share of a referred trader's deposits paid to the referrer |
+| `EXPOSE_RESET_TOKEN` | `true` | Returns reset tokens in the API response until a mailer is wired up |
 
 ### Market data
 
@@ -138,7 +153,7 @@ automatically** if the socket cannot be reached, so the terminal never goes dark
 
 ### Going live with real crypto
 
-Two things stand between this and real funds, and both are deliberately isolated:
+Three things stand between this and real funds, and each is deliberately isolated:
 
 1. **`MOCK_CHAIN_WATCHER=true`** auto-confirms pending deposits on a timer so the flow
    can be demonstrated end to end. Set it to `false`. Then drive
@@ -149,6 +164,12 @@ Two things stand between this and real funds, and both are deliberately isolated
    addresses and fake transaction hashes. Implement the `CustodyProvider` interface
    against your custody service (node, exchange sub-account, Fireblocks/BitGo/Tatum…)
    and export it as `custody`. Nothing else in the codebase talks to a wallet.
+3. **`EXPOSE_RESET_TOKEN=true`** hands password reset tokens back through the API
+   because no mailer is configured. Set it to `false` and send the link from
+   `requestReset()` in `server/src/services/password-reset.ts`.
+
+Identity documents are never stored in this database: a KYC submission keeps the
+declared details plus a `documentRef` pointing at whatever document store you use.
 
 ## Layout
 
@@ -158,12 +179,14 @@ server/
   src/engine/feed.ts        market data (simulated | exchange stream)
   src/engine/settlement.ts  expiry sweeper
   src/engine/chain-watcher.ts  deposit confirmation loop (mock by default)
-  src/services/             trading, wallet ledger, deposits, withdrawals, custody
+  src/services/             trading, wallet ledger, deposits, withdrawals, custody,
+                            kyc, promos, referrals, password reset
   src/routes/               auth, account, market, trades, wallet, admin
+  src/__tests__/            unit tests + integration suite (real MySQL)
   src/ws.ts                 realtime hub
 web/
   src/pages/                landing, auth, terminal, wallet, history, account, admin
-  src/components/           chart, ticket, positions, deposit/withdraw panels
+  src/components/           chart, ticket, positions, deposit/withdraw, kyc, referrals
   src/store/                auth, market, toasts
 ```
 
@@ -178,12 +201,25 @@ transaction.
 ## Testing
 
 ```bash
-npm test
+npm test          # unit tests, server and web
+
+# also run the integration suite against a real database
+mysql -e "CREATE DATABASE quotex_test"
+DATABASE_URL="mysql://user:pass@127.0.0.1:3306/quotex_test" npx prisma migrate deploy --schema server/prisma/schema.prisma
+TEST_DATABASE_URL="mysql://user:pass@127.0.0.1:3306/quotex_test" npm test
 ```
 
-Covers payout math and rounding, fee quoting per network, address validation and
-derivation for every supported chain, the settlement rule (including ties), and the
-price model's behaviour over long runs.
+Unit tests cover payout math and rounding, fee quoting per network, promo bonus
+caps, the KYC gate, address validation and derivation for every supported chain,
+the settlement rule (including ties), the indicator math, and the price model over
+long runs.
+
+The integration suite runs the money paths against MySQL: a confirmed deposit
+credits exactly once under retries, a promo code pays one bonus per trader, a
+referred deposit pays its commission once, withdrawal holds block spending and
+refund on rejection, and two concurrent settlements of the same position pay only
+once. GitHub Actions (`.github/workflows/ci.yml`) runs all of it plus the Docker
+build on every push.
 
 ## Risk and legal notice
 

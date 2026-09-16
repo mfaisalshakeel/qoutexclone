@@ -11,13 +11,24 @@ import {
 } from 'lightweight-charts';
 import { api } from '../lib/api';
 import { realtime } from '../lib/ws';
+import { bollinger, ema, sma } from '../lib/indicators';
 import type { Candle, Trade } from '../lib/types';
+
+export type ChartType = 'candles' | 'line';
+
+export interface IndicatorSettings {
+  sma: boolean;
+  ema: boolean;
+  bollinger: boolean;
+}
 
 interface Props {
   symbol: string;
   timeframe: string;
   precision: number;
   trades: Trade[];
+  chartType: ChartType;
+  indicators: IndicatorSettings;
 }
 
 const THEME = {
@@ -26,18 +37,33 @@ const THEME = {
   text: '#7c8aa5',
   up: '#12b886',
   down: '#f0455e',
+  sma: '#f6c445',
+  ema: '#3d7bff',
+  band: '#7c8aa5',
 };
+
+const SMA_PERIOD = 20;
+const EMA_PERIOD = 50;
 
 /**
  * Candlestick terminal chart. History arrives over REST, live updates over the
- * socket, and every open position is drawn as a strike line plus an expiry
+ * socket, and every open position is drawn as a strike line plus an entry
  * marker so the trader can see exactly what has to happen to win.
  */
-export function PriceChart({ symbol, timeframe, precision, trades }: Props) {
+export function PriceChart({ symbol, timeframe, precision, trades, chartType, indicators }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const areaRef = useRef<ISeriesApi<'Area'> | null>(null);
+  const smaRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const emaRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const bandRefs = useRef<ISeriesApi<'Line'>[]>([]);
   const linesRef = useRef<IPriceLine[]>([]);
+  const dataRef = useRef<Candle[]>([]);
+  // live candle updates fire from a long-lived subscription, so the overlay
+  // painter reads the current settings from a ref rather than a stale closure
+  const settingsRef = useRef(indicators);
+  settingsRef.current = indicators;
 
   // chart instance — created once
   useEffect(() => {
@@ -50,10 +76,7 @@ export function PriceChart({ symbol, timeframe, precision, trades }: Props) {
         textColor: THEME.text,
         fontFamily: 'Inter, system-ui, sans-serif',
       },
-      grid: {
-        vertLines: { color: THEME.grid },
-        horzLines: { color: THEME.grid },
-      },
+      grid: { vertLines: { color: THEME.grid }, horzLines: { color: THEME.grid } },
       crosshair: {
         mode: CrosshairMode.Normal,
         vertLine: { color: '#3a4763', labelBackgroundColor: '#273149' },
@@ -65,36 +88,78 @@ export function PriceChart({ symbol, timeframe, precision, trades }: Props) {
       autoSize: true,
     });
 
-    const series = chart.addCandlestickSeries({
+    const priceFormat = { type: 'price' as const, precision, minMove: 1 / 10 ** precision };
+    candleRef.current = chart.addCandlestickSeries({
       upColor: THEME.up,
       downColor: THEME.down,
       borderUpColor: THEME.up,
       borderDownColor: THEME.down,
       wickUpColor: THEME.up,
       wickDownColor: THEME.down,
-      priceFormat: { type: 'price', precision, minMove: 1 / 10 ** precision },
+      priceFormat,
     });
+    areaRef.current = chart.addAreaSeries({
+      lineColor: THEME.ema,
+      topColor: 'rgba(61,123,255,0.28)',
+      bottomColor: 'rgba(61,123,255,0.02)',
+      lineWidth: 2,
+      priceFormat,
+      visible: false,
+    });
+    smaRef.current = chart.addLineSeries({ color: THEME.sma, lineWidth: 1, priceLineVisible: false, visible: false });
+    emaRef.current = chart.addLineSeries({ color: THEME.ema, lineWidth: 1, priceLineVisible: false, visible: false });
+    bandRefs.current = [0, 1].map(() =>
+      chart.addLineSeries({
+        color: THEME.band,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dotted,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        visible: false,
+      }),
+    );
 
     chartRef.current = chart;
-    seriesRef.current = series;
-
     return () => {
       chart.remove();
       chartRef.current = null;
-      seriesRef.current = null;
+      candleRef.current = null;
+      areaRef.current = null;
+      smaRef.current = null;
+      emaRef.current = null;
+      bandRefs.current = [];
       linesRef.current = [];
     };
-    // precision belongs to the symbol; the reload effect below re-applies it
+    // precision rides with the symbol; the reload effect re-applies it
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** Recomputes every overlay from the candles currently held. */
+  const paintOverlays = () => {
+    const candles = dataRef.current;
+    const active = settingsRef.current;
+    const toLine = (points: { time: number; value: number }[]) =>
+      points.map((p) => ({ time: p.time as UTCTimestamp, value: p.value }));
+
+    smaRef.current?.setData(active.sma ? toLine(sma(candles, SMA_PERIOD)) : []);
+    emaRef.current?.setData(active.ema ? toLine(ema(candles, EMA_PERIOD)) : []);
+    if (active.bollinger) {
+      const bands = bollinger(candles);
+      bandRefs.current[0]?.setData(toLine(bands.upper));
+      bandRefs.current[1]?.setData(toLine(bands.lower));
+    } else {
+      for (const band of bandRefs.current) band.setData([]);
+    }
+  };
+
   // history + live updates for the selected market
   useEffect(() => {
-    const series = seriesRef.current;
-    if (!series) return;
+    if (!candleRef.current) return;
     let cancelled = false;
 
-    series.applyOptions({ priceFormat: { type: 'price', precision, minMove: 1 / 10 ** precision } });
+    const priceFormat = { type: 'price' as const, precision, minMove: 1 / 10 ** precision };
+    candleRef.current.applyOptions({ priceFormat });
+    areaRef.current?.applyOptions({ priceFormat });
 
     const toBar = (candle: Candle) => ({
       time: candle.time as UTCTimestamp,
@@ -104,11 +169,18 @@ export function PriceChart({ symbol, timeframe, precision, trades }: Props) {
       close: candle.close,
     });
 
+    const setAll = (candles: Candle[]) => {
+      dataRef.current = candles;
+      candleRef.current?.setData(candles.map(toBar));
+      areaRef.current?.setData(candles.map((c) => ({ time: c.time as UTCTimestamp, value: c.close })));
+      paintOverlays();
+    };
+
     api
       .get<{ candles: Candle[] }>(`/market/candles/${symbol}?timeframe=${timeframe}&limit=300`)
       .then(({ candles }) => {
-        if (cancelled || !seriesRef.current) return;
-        seriesRef.current.setData(candles.map(toBar));
+        if (cancelled) return;
+        setAll(candles);
         chartRef.current?.timeScale().scrollToRealTime();
       })
       .catch(() => undefined);
@@ -117,11 +189,17 @@ export function PriceChart({ symbol, timeframe, precision, trades }: Props) {
 
     const offSnapshot = realtime.on('candles', (payload) => {
       if (cancelled || payload.symbol !== symbol || payload.timeframe !== timeframe) return;
-      seriesRef.current?.setData(payload.candles.map(toBar));
+      setAll(payload.candles);
     });
     const offCandle = realtime.on('candle', (payload) => {
       if (cancelled || payload.symbol !== symbol || payload.timeframe !== timeframe) return;
-      seriesRef.current?.update(toBar(payload.candle));
+      const candles = dataRef.current;
+      const last = candles[candles.length - 1];
+      if (last && last.time === payload.candle.time) candles[candles.length - 1] = payload.candle;
+      else candles.push(payload.candle);
+      candleRef.current?.update(toBar(payload.candle));
+      areaRef.current?.update({ time: payload.candle.time as UTCTimestamp, value: payload.candle.close });
+      paintOverlays();
     });
 
     return () => {
@@ -129,11 +207,24 @@ export function PriceChart({ symbol, timeframe, precision, trades }: Props) {
       offSnapshot();
       offCandle();
     };
+    // paintOverlays reads the latest settings through the indicators effect below
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, timeframe, precision]);
 
-  // strike lines and expiry markers for the open positions on this market
+  // chart type and indicator toggles
   useEffect(() => {
-    const series = seriesRef.current;
+    candleRef.current?.applyOptions({ visible: chartType === 'candles' });
+    areaRef.current?.applyOptions({ visible: chartType === 'line' });
+    smaRef.current?.applyOptions({ visible: indicators.sma });
+    emaRef.current?.applyOptions({ visible: indicators.ema });
+    for (const band of bandRefs.current) band.applyOptions({ visible: indicators.bollinger });
+    paintOverlays();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartType, indicators.sma, indicators.ema, indicators.bollinger]);
+
+  // strike lines and entry markers for open positions on this market
+  useEffect(() => {
+    const series = candleRef.current;
     if (!series) return;
 
     for (const line of linesRef.current) series.removePriceLine(line);
@@ -155,7 +246,7 @@ export function PriceChart({ symbol, timeframe, precision, trades }: Props) {
 
     series.setMarkers(
       mine.map((trade) => ({
-        time: (Math.floor(new Date(trade.openedAt).getTime() / 1000) as UTCTimestamp),
+        time: Math.floor(new Date(trade.openedAt).getTime() / 1000) as UTCTimestamp,
         position: trade.direction === 'UP' ? ('belowBar' as const) : ('aboveBar' as const),
         color: trade.direction === 'UP' ? THEME.up : THEME.down,
         shape: trade.direction === 'UP' ? ('arrowUp' as const) : ('arrowDown' as const),

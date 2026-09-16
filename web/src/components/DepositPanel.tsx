@@ -28,6 +28,9 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
   const [amount, setAmount] = useState(100);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [promoCode, setPromoCode] = useState('');
+  const [promo, setPromo] = useState<{ bonus: number; description: string } | null>(null);
+  const [promoError, setPromoError] = useState('');
   const [, tick] = useState(0);
 
   const method = methods[index];
@@ -43,6 +46,25 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
 
   if (!method) return <div className="card h-40 animate-pulse" />;
 
+  const checkPromo = async () => {
+    const code = promoCode.trim();
+    if (!code) {
+      setPromo(null);
+      setPromoError('');
+      return;
+    }
+    try {
+      const { promo: found } = await api.get<{ promo: { bonus: number; description: string } }>(
+        `/wallet/promo?code=${encodeURIComponent(code)}&amount=${amount}`,
+      );
+      setPromo(found);
+      setPromoError('');
+    } catch (err) {
+      setPromo(null);
+      setPromoError(err instanceof ApiError ? err.message : 'That code is not valid');
+    }
+  };
+
   const cryptoEstimate = amount > 0 && method.rate > 0 ? (amount / method.rate).toFixed(method.decimals) : '0';
   const belowMin = amount < method.minDepositUsd;
 
@@ -54,6 +76,7 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
         currency: method.currency,
         network: method.network,
         amount,
+        ...(promo && promoCode.trim() ? { promoCode: promoCode.trim() } : {}),
       });
       onChanged();
       toast.info('Deposit address ready', `Send exactly the amount shown to complete the deposit`);
@@ -88,6 +111,9 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
               <p className="text-xs text-slate-500">
                 {pending.networkLabel} · rate locked at ${pending.rate.toLocaleString()} /{pending.currency}
               </p>
+              {pending.promoCode && (
+                <p className="mt-1 text-xs text-up">Promo {pending.promoCode} applies when this deposit confirms</p>
+              )}
             </div>
             <span className="chip bg-accent-soft text-accent">
               {pending.status === 'CONFIRMING'
@@ -228,6 +254,35 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
           </span>{' '}
           · credited as {money(Math.round(amount * 100))}
         </p>
+      </div>
+
+      <div>
+        <label className="label" htmlFor="promo-code">
+          Promo code <span className="normal-case text-slate-500">(optional)</span>
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            id="promo-code"
+            value={promoCode}
+            onChange={(e) => {
+              setPromoCode(e.target.value.toUpperCase());
+              setPromo(null);
+              setPromoError('');
+            }}
+            onBlur={() => void checkPromo()}
+            className="field font-mono !text-xs uppercase"
+            placeholder="WELCOME30"
+          />
+          <button onClick={() => void checkPromo()} className="btn-ghost shrink-0 text-xs">
+            Apply
+          </button>
+        </div>
+        {promo && (
+          <p className="mt-1.5 rounded-lg bg-up-soft px-3 py-2 text-xs text-up">
+            {promo.description} — {money(promo.bonus)} bonus on this deposit
+          </p>
+        )}
+        {promoError && <p className="mt-1.5 text-xs text-down">{promoError}</p>}
       </div>
 
       {belowMin && (

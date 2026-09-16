@@ -8,6 +8,8 @@ import { findNetwork, mockTxHash } from '../lib/crypto-networks.js';
 import { custody } from './custody.js';
 import { usdRate } from './rates.js';
 import { applyLedger } from './wallet.js';
+import { previewPromo, redeemPromo } from './promos.js';
+import { payReferralCommission } from './referrals.js';
 
 export const depositEvents = new EventEmitter();
 
@@ -29,6 +31,7 @@ export interface CreateDepositInput {
   currency: string;
   network: string;
   usdAmount: number; // dollars the user intends to send
+  promoCode?: string;
 }
 
 /**
@@ -54,6 +57,10 @@ export async function createDeposit(input: CreateDepositInput): Promise<Deposit>
   const rate = usdRate(input.currency);
   const cents = usdToCents(input.usdAmount);
 
+  // validated now so a bad code fails at checkout, not silently at credit time
+  const promoCode = input.promoCode?.trim().toUpperCase() || undefined;
+  if (promoCode) await previewPromo(promoCode, input.userId, cents);
+
   const deposit = await prisma.deposit.create({
     data: {
       userId: input.userId,
@@ -63,6 +70,7 @@ export async function createDeposit(input: CreateDepositInput): Promise<Deposit>
       cryptoAmount: centsToCrypto(cents, rate, spec.decimals),
       rate,
       requiredConf: spec.confirmations,
+      promoCode,
       status: 'AWAITING_PAYMENT',
       expiresAt: new Date(Date.now() + env.depositWindowMinutes * 60 * 1000),
       adminNote: memo ? `memo:${memo}` : null,
@@ -136,6 +144,24 @@ export async function completeDeposit(
       note: `${amount} ${deposit.currency} (${deposit.network})`,
     });
     await tx.user.update({ where: { id: deposit.userId }, data: { totalDeposited: { increment: credited } } });
+
+    // bonus and partner commission ride on the same transaction as the credit
+    const bonus = deposit.promoCode
+      ? await redeemPromo(tx, {
+          code: deposit.promoCode,
+          userId: deposit.userId,
+          depositId: deposit.id,
+          depositCents: credited,
+        })
+      : 0;
+    if (bonus > 0) await tx.deposit.update({ where: { id: depositId }, data: { bonusAmount: bonus } });
+
+    await payReferralCommission(tx, {
+      referredId: deposit.userId,
+      depositId: deposit.id,
+      depositCents: credited,
+    });
+
     return tx.deposit.findUnique({ where: { id: depositId } });
   });
 

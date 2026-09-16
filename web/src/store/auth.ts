@@ -9,7 +9,7 @@ interface AuthState {
   loading: boolean;
   bootstrap: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
-  register: (input: { email: string; password: string; name: string; country?: string }) => Promise<void>;
+  register: (input: { email: string; password: string; name: string; country?: string; referralCode?: string }) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   setAccount: (accountType: AccountType) => Promise<void>;

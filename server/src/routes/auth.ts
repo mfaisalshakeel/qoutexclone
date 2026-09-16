@@ -8,6 +8,7 @@ import { badRequest, unauthorized, wrap } from '../lib/errors.js';
 import { createRefreshToken, hashRefreshToken, signAccessToken } from '../lib/jwt.js';
 import { publicUser } from '../lib/serialize.js';
 import { requireAuth } from '../middleware/auth.js';
+import { completeReset, requestReset } from '../services/password-reset.js';
 
 const router = Router();
 
@@ -123,6 +124,33 @@ router.post(
         data: { revokedAt: new Date() },
       });
     }
+    res.json({ ok: true });
+  }),
+);
+
+router.post(
+  '/forgot-password',
+  authLimiter,
+  wrap(async (req, res) => {
+    const body = z.object({ email: z.string().email() }).parse(req.body);
+    const result = await requestReset(body.email);
+    // identical answer whether or not the address is registered
+    res.json({
+      ok: true,
+      message: 'If that email is registered, a reset link is on its way.',
+      ...(result?.token ? { token: result.token, expiresAt: result.expiresAt } : {}),
+    });
+  }),
+);
+
+router.post(
+  '/reset-password',
+  authLimiter,
+  wrap(async (req, res) => {
+    const body = z
+      .object({ token: z.string().min(10), password: z.string().min(8).max(128) })
+      .parse(req.body);
+    await completeReset(body.token, body.password);
     res.json({ ok: true });
   }),
 );

@@ -15,6 +15,7 @@ import {
   quoteWithdrawal,
 } from '../services/withdrawals.js';
 import { usdRate } from '../services/rates.js';
+import { previewPromo } from '../services/promos.js';
 import { mockTxHash } from '../lib/crypto-networks.js';
 
 const router = Router();
@@ -84,6 +85,7 @@ router.post(
         currency: z.string().min(2).max(10),
         network: z.string().min(3).max(12),
         amount: z.number().positive().max(1000000),
+        promoCode: z.string().max(32).optional(),
       })
       .parse(req.body);
     const deposit = await createDeposit({
@@ -91,6 +93,7 @@ router.post(
       currency: body.currency.toUpperCase(),
       network: body.network.toUpperCase(),
       usdAmount: body.amount,
+      promoCode: body.promoCode,
     });
     res.status(201).json({ deposit: publicDeposit(deposit) });
   }),
@@ -116,6 +119,16 @@ router.post(
     if (!deposit || deposit.userId !== req.user!.id) throw notFound('Deposit not found');
     const updated = await markSeen(deposit.id, mockTxHash(deposit.network, deposit.id));
     res.json({ deposit: publicDeposit(updated) });
+  }),
+);
+
+router.get(
+  '/promo',
+  wrap(async (req, res) => {
+    const query = z
+      .object({ code: z.string().min(2).max(32), amount: z.coerce.number().positive() })
+      .parse(req.query);
+    res.json({ promo: await previewPromo(query.code, req.user!.id, Math.round(query.amount * 100)) });
   }),
 );
 

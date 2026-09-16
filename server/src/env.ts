@@ -42,6 +42,19 @@ export const env = {
   mockChainWatcher: bool(process.env.MOCK_CHAIN_WATCHER, true),
   mockChainConfirmMs: num(process.env.MOCK_CHAIN_CONFIRM_MS, 20000),
   autoApproveWithdrawals: bool(process.env.AUTO_APPROVE_WITHDRAWALS, false),
+
+  // compliance
+  requireKycForWithdrawal: bool(process.env.REQUIRE_KYC_FOR_WITHDRAWAL, false),
+  kycWithdrawalThresholdUsd: num(process.env.KYC_WITHDRAWAL_THRESHOLD_USD, 0),
+
+  // partner programme: share of a referred trader's deposits paid to the referrer
+  referralCommissionPct: num(process.env.REFERRAL_COMMISSION_PCT, 5),
+
+  // password reset
+  resetTokenMinutes: num(process.env.RESET_TOKEN_MINUTES, 30),
+  // with no mailer wired up the reset link is returned by the API so the flow
+  // stays usable; turn this off the moment real email delivery is configured
+  exposeResetToken: bool(process.env.EXPOSE_RESET_TOKEN, true),
 } as const;
 
 export type Env = typeof env;

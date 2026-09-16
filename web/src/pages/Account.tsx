@@ -3,7 +3,8 @@ import { ApiError, api } from '../lib/api';
 import { dateTime, money } from '../lib/format';
 import { useAuth } from '../store/auth';
 import { toast } from '../store/toast';
-import { CopyButton } from '../components/Copy';
+import { KycPanel } from '../components/KycPanel';
+import { ReferralPanel } from '../components/ReferralPanel';
 
 export function Account() {
   const { user, refreshUser, logout } = useAuth();
@@ -64,6 +65,10 @@ export function Account() {
           <Stat label="Withdrawn" value={money(user.totalWithdrawn)} />
         </div>
       </div>
+
+      <KycPanel />
+
+      <ReferralPanel />
 
       <form onSubmit={saveProfile} className="card space-y-4 p-5">
         <h2 className="text-sm font-semibold">Profile</h2>
@@ -133,15 +138,6 @@ export function Account() {
           Change password
         </button>
       </form>
-
-      <div className="card space-y-3 p-5">
-        <h2 className="text-sm font-semibold">Referral code</h2>
-        <div className="flex items-center gap-2">
-          <code className="flex-1 rounded-lg bg-ink-700 px-3 py-2.5 font-mono text-sm">{user.referralCode}</code>
-          <CopyButton value={user.referralCode} />
-        </div>
-        <p className="text-xs text-slate-500">New traders can enter this code when they register.</p>
-      </div>
 
       <button onClick={() => void logout()} className="btn-ghost w-full !text-down">
         Sign out

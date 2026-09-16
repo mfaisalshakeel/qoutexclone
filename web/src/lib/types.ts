@@ -12,6 +12,8 @@ export interface User {
   totalDeposited: number;
   totalWithdrawn: number;
   referralCode: string;
+  referralEarnings: number;
+  kycStatus: 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
   createdAt: string;
 }
 
@@ -91,6 +93,8 @@ export interface Deposit {
   cryptoAmount: string;
   rate: number;
   creditedAmount: number;
+  promoCode: string | null;
+  bonusAmount: number;
   txHash: string | null;
   explorerUrl: string | null;
   confirmations: number;

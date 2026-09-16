@@ -8,6 +8,7 @@ import { findNetwork, isValidAddress } from '../lib/crypto-networks.js';
 import { custody } from './custody.js';
 import { usdRate } from './rates.js';
 import { holdFunds, releaseHold, settleHold } from './wallet.js';
+import { kycBlocksWithdrawal } from './kyc.js';
 
 export const withdrawalEvents = new EventEmitter();
 
@@ -71,10 +72,13 @@ export async function createWithdrawal(input: CreateWithdrawalInput): Promise<Wi
 
   const user = await prisma.user.findUnique({
     where: { id: input.userId },
-    select: { realBalance: true, status: true, totalDeposited: true },
+    select: { realBalance: true, status: true, totalDeposited: true, kycStatus: true },
   });
   if (!user) throw notFound('Account not found');
   if (user.status !== 'ACTIVE') throw forbidden('Your account is suspended');
+  if (kycBlocksWithdrawal(user.kycStatus, input.amountCents)) {
+    throw forbidden('Identity verification is required before withdrawing this amount');
+  }
   if (user.realBalance < input.amountCents) throw badRequest('Insufficient balance', 'insufficient_funds');
 
   const pending = await prisma.withdrawal.count({
