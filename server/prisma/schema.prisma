@@ -1,0 +1,200 @@
+// Quotex-style binary options platform — data model
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  passwordHash      String
+  name              String
+  country           String?
+  role              String   @default("USER") // USER | ADMIN
+  status            String   @default("ACTIVE") // ACTIVE | SUSPENDED
+  // money is stored in integer minor units (cents) to avoid float drift
+  demoBalance       Int      @default(1000000) // $10,000.00 demo
+  realBalance       Int      @default(0)
+  lockedBalance     Int      @default(0) // funds held by pending withdrawals
+  totalDeposited    Int      @default(0)
+  totalWithdrawn    Int      @default(0)
+  activeAccount     String   @default("DEMO") // DEMO | REAL
+  referralCode      String   @unique
+  referredById      String?
+  lastLoginAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  trades            Trade[]
+  transactions      Transaction[]
+  deposits          Deposit[]
+  withdrawals       Withdrawal[]
+  addresses         DepositAddress[]
+  refreshTokens     RefreshToken[]
+  auditLogs         AuditLog[]      @relation("AuditActor")
+
+  @@index([referredById])
+}
+
+model RefreshToken {
+  id         String   @id @default(cuid())
+  userId     String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Asset {
+  id           String   @id @default(cuid())
+  symbol       String   @unique // BTCUSD
+  name         String
+  base         String   // BTC
+  quote        String   // USD
+  feedSymbol   String   // BTCUSDT (exchange symbol when a live feed is enabled)
+  payoutPct    Int      @default(85) // profit % on a winning trade
+  minStake     Int      @default(100)     // $1.00
+  maxStake     Int      @default(500000)  // $5,000.00
+  precision    Int      @default(2)
+  basePrice    Float    @default(100)
+  volatility   Float    @default(0.0009)
+  enabled      Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  trades       Trade[]
+}
+
+model Trade {
+  id           String   @id @default(cuid())
+  userId       String
+  assetId      String
+  symbol       String
+  accountType  String   // DEMO | REAL
+  direction    String   // UP | DOWN
+  stake        Int
+  payoutPct    Int
+  entryPrice   Float
+  exitPrice    Float?
+  durationSec  Int
+  openedAt     DateTime @default(now())
+  expiresAt    DateTime
+  settledAt    DateTime?
+  status       String   @default("OPEN") // OPEN | WON | LOST | REFUNDED
+  profit       Int      @default(0) // net result in cents (stake excluded for losses => -stake)
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset        Asset    @relation(fields: [assetId], references: [id])
+
+  @@index([userId, status])
+  @@index([status, expiresAt])
+}
+
+model Transaction {
+  id            String   @id @default(cuid())
+  userId        String
+  accountType   String   // DEMO | REAL
+  type          String   // DEPOSIT | WITHDRAWAL_HOLD | WITHDRAWAL | WITHDRAWAL_REFUND | TRADE_STAKE | TRADE_PAYOUT | TRADE_REFUND | BONUS | ADJUSTMENT | DEMO_RESET
+  amount        Int      // signed, in cents
+  balanceAfter  Int
+  refType       String?
+  refId         String?
+  note          String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model DepositAddress {
+  id         String   @id @default(cuid())
+  userId     String
+  currency   String   // BTC | ETH | USDT
+  network    String   // BITCOIN | ERC20 | TRC20
+  address    String
+  memo       String?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, currency, network])
+  @@index([address])
+}
+
+model Deposit {
+  id              String   @id @default(cuid())
+  userId          String
+  currency        String
+  network         String
+  address         String
+  cryptoAmount    String   @default("0") // decimal string, chain precision
+  rate            Float    @default(0)   // USD per unit at credit time
+  creditedAmount  Int      @default(0)   // cents credited to the real balance
+  txHash          String?
+  confirmations   Int      @default(0)
+  requiredConf    Int      @default(2)
+  status          String   @default("AWAITING_PAYMENT") // AWAITING_PAYMENT | CONFIRMING | COMPLETED | REJECTED | EXPIRED
+  adminNote       String?  @db.Text
+  expiresAt       DateTime
+  confirmedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([txHash])
+}
+
+model Withdrawal {
+  id            String   @id @default(cuid())
+  userId        String
+  currency      String
+  network       String
+  address       String
+  amount        Int      // gross USD cents debited from the balance
+  fee           Int      @default(0)
+  netAmount     Int      // amount - fee, converted to crypto
+  rate          Float    // USD per unit at request time
+  cryptoAmount  String
+  status        String   @default("PENDING") // PENDING | APPROVED | PROCESSING | COMPLETED | REJECTED | CANCELLED
+  txHash        String?
+  adminNote     String?  @db.Text
+  processedById String?
+  processedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  targetType String?
+  targetId   String?
+  detail     String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([createdAt])
+}
+
+model Setting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+}

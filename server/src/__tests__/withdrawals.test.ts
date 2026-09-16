@@ -1,0 +1,41 @@
+import { describe, expect, it } from 'vitest';
+import { quoteWithdrawal } from '../services/withdrawals.js';
+import { env } from '../env.js';
+
+describe('withdrawal quotes', () => {
+  it('charges the flat network fee plus the platform percentage', () => {
+    const quote = quoteWithdrawal('USDT', 'TRC20', 10000); // $100
+    // TRC-20 network fee $1 + platform flat $1 + 1% of $100
+    expect(quote.fee).toBe(300);
+    expect(quote.netAmount).toBe(9700);
+    expect(quote.cryptoAmount).toBe('97.000000');
+  });
+
+  it('scales the percentage part with the amount', () => {
+    const small = quoteWithdrawal('USDT', 'TRC20', 5000);
+    const large = quoteWithdrawal('USDT', 'TRC20', 100000);
+    expect(large.fee - small.fee).toBe(Math.round(((100000 - 5000) * env.withdrawFeePct) / 100));
+  });
+
+  it('applies each network its own minimum and fee', () => {
+    const btc = quoteWithdrawal('BTC', 'BITCOIN', 10000);
+    const trc = quoteWithdrawal('USDT', 'TRC20', 10000);
+    expect(btc.fee).toBeGreaterThan(trc.fee);
+    expect(btc.minAmount).toBe(3000); // $30 minimum on Bitcoin
+    expect(trc.minAmount).toBe(Math.max(1000, env.minWithdrawUsd * 100));
+  });
+
+  it('converts the net amount at the live rate with network precision', () => {
+    const quote = quoteWithdrawal('BTC', 'BITCOIN', 100000);
+    expect(quote.cryptoAmount.split('.')[1]).toHaveLength(8);
+    expect(Number(quote.cryptoAmount) * quote.rate * 100).toBeCloseTo(quote.netAmount, 0);
+  });
+
+  it('reports a non-positive net when the amount cannot cover the fee', () => {
+    expect(quoteWithdrawal('BTC', 'BITCOIN', 100).netAmount).toBeLessThanOrEqual(0);
+  });
+
+  it('refuses an unsupported currency/network pair', () => {
+    expect(() => quoteWithdrawal('USDT', 'BITCOIN', 10000)).toThrow(/Unsupported/);
+  });
+});

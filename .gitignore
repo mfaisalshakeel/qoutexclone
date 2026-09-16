@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+.DS_Store
+coverage/
+.vite/
+server/prisma/dev.db*
