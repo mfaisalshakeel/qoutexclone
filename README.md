@@ -15,6 +15,10 @@ are the point.
   <img src="docs/screenshots/mobile-terminal.png" width="22%" alt="Terminal on a phone" />
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/account-kyc-referrals.png" width="78%" alt="Identity verification and partner programme" />
+</p>
+
 ## What it does
 
 **Trading**
