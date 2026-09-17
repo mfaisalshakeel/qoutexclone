@@ -90,11 +90,7 @@ function addMinutes(at: Date, minutes: number): Date {
  * The search walks forward a fortnight at most, which is enough to clear any
  * realistic run of consecutive holidays while staying bounded.
  */
-export function sessionState(
-  windows: Window[],
-  holidays: Set<string>,
-  at: Date = new Date(),
-): SessionState {
+export function sessionState(windows: Window[], holidays: Set<string>, at: Date = new Date()): SessionState {
   const ranges = weekRanges(windows);
   if (ranges.length === 0) return alwaysOpen();
 

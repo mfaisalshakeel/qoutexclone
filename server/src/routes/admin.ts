@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
@@ -15,6 +16,7 @@ import { listAllTickets, postMessage, readTicket, setTicketStatus } from '../ser
 import { SETTINGS, settings } from '../services/settings.js';
 import { marketHours } from '../services/market-hours.js';
 import { describeWindows } from '../lib/sessions.js';
+import { DEFAULT_OTC_PARAMS, initialState, nextTick, resolveParams } from '../engine/otc.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -420,6 +422,118 @@ router.post(
   }),
 );
 
+/* ------------------------------- otc engine ------------------------------- */
+
+const otcConfigSchema = z
+  .object({
+    baseVolatility: z.number().min(0.00001).max(0.05),
+    garchAlpha: z.number().min(0).max(0.9),
+    garchBeta: z.number().min(0).max(0.99),
+    trendShare: z.number().min(0).max(1),
+    regimeMinMinutes: z.number().min(0.5).max(240),
+    regimeMaxMinutes: z.number().min(0.5).max(480),
+    trendStrength: z.number().min(0).max(3),
+    meanReversion: z.number().min(0).max(0.2),
+    anchorDriftPerHour: z.number().min(0).max(0.5),
+    spikeProbability: z.number().min(0).max(0.05),
+    spikeSigmaMultiple: z.number().min(1).max(12),
+    maxTickMove: z.number().min(0.0002).max(0.05),
+    tickMs: z.number().int().min(50).max(10000),
+    followSpot: z.boolean(),
+  })
+  .partial();
+
+router.get(
+  '/otc/:symbol',
+  wrap(async (req, res) => {
+    const symbol = req.params.symbol.toUpperCase();
+    const asset = await prisma.asset.findUnique({ where: { symbol } });
+    if (!asset) throw notFound('Market not found');
+
+    res.json({
+      symbol,
+      pair: asset.pair,
+      isOtc: asset.isOtc,
+      defaults: DEFAULT_OTC_PARAMS,
+      overrides: asset.otcConfig ?? {},
+      effective: marketFeed.paramsFor(symbol) ?? resolveParams({ baseVolatility: asset.volatility }),
+    });
+  }),
+);
+
+/**
+ * Renders a candle preview from the engine without touching the live feed, so
+ * an operator can see what a parameter change does before saving it.
+ */
+router.post(
+  '/otc/:symbol/preview',
+  wrap(async (req, res) => {
+    const symbol = req.params.symbol.toUpperCase();
+    const asset = await prisma.asset.findUnique({ where: { symbol } });
+    if (!asset) throw notFound('Market not found');
+
+    const body = z
+      .object({
+        overrides: otcConfigSchema.optional(),
+        candles: z.number().int().min(20).max(300).default(120),
+      })
+      .parse(req.body ?? {});
+
+    const params = resolveParams({
+      baseVolatility: asset.volatility,
+      ...((asset.otcConfig as Record<string, number> | null) ?? {}),
+      ...(body.overrides ?? {}),
+    });
+
+    // one preview candle per 60 engine seconds, from a fresh seeded state
+    const ticksPerCandle = Math.max(1, Math.round(60_000 / params.tickMs));
+    let state = initialState(`${symbol}:preview`, asset.basePrice, params);
+    const candles: { time: number; open: number; high: number; low: number; close: number }[] = [];
+    const startedAt = Math.floor(Date.now() / 1000) - body.candles * 60;
+
+    for (let index = 0; index < body.candles; index += 1) {
+      const open = state.price;
+      let high = open;
+      let low = open;
+      for (let tick = 0; tick < ticksPerCandle; tick += 1) {
+        state = nextTick({ state, params, precision: asset.precision });
+        high = Math.max(high, state.price);
+        low = Math.min(low, state.price);
+      }
+      candles.push({ time: startedAt + index * 60, open, high, low, close: state.price });
+    }
+
+    res.json({ symbol, params, candles });
+  }),
+);
+
+router.put(
+  '/otc/:symbol',
+  wrap(async (req, res) => {
+    const symbol = req.params.symbol.toUpperCase();
+    const body = z.object({ overrides: otcConfigSchema.nullable() }).parse(req.body);
+
+    const asset = await prisma.asset.findUnique({ where: { symbol } });
+    if (!asset) throw notFound('Market not found');
+    if (body.overrides && body.overrides.regimeMaxMinutes && body.overrides.regimeMinMinutes) {
+      if (body.overrides.regimeMaxMinutes < body.overrides.regimeMinMinutes) {
+        throw badRequest('The longest regime must not be shorter than the shortest', 'invalid_regime');
+      }
+    }
+
+    // Prisma needs the explicit JsonNull sentinel to clear a nullable Json column
+    await prisma.asset.update({
+      where: { symbol },
+      data: { otcConfig: body.overrides ?? Prisma.DbNull },
+    });
+    // the running feed picks the change up immediately
+    marketFeed.applyConfig(symbol, body.overrides ?? null);
+    await audit(req.user!.id, 'otc.config', 'asset', asset.id, JSON.stringify(body.overrides ?? {}));
+
+    res.json({ symbol, overrides: body.overrides ?? {}, effective: marketFeed.paramsFor(symbol) });
+  }),
+);
+
 /* ------------------------------- schedules -------------------------------- */
 
 const windowSchema = z.object({
@@ -480,7 +594,10 @@ router.post(
   '/schedules/:id/holidays',
   wrap(async (req, res) => {
     const body = z
-      .object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD'), name: z.string().min(2).max(80) })
+      .object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD'),
+        name: z.string().min(2).max(80),
+      })
       .parse(req.body);
     const schedule = await prisma.tradingSchedule.findUnique({ where: { id: req.params.id } });
     if (!schedule) throw notFound('Schedule not found');

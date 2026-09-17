@@ -14,6 +14,7 @@ import {
   AdminSchedules,
   AdminTournaments,
 } from './pages/admin/Platform';
+import { AdminOtcEngine } from './pages/admin/OtcEngine';
 import { AdminSettings } from './pages/admin/Settings';
 import { AdminSupport } from './pages/admin/Support';
 import { AdminKyc, AdminUsers } from './pages/admin/Traders';
@@ -77,6 +78,7 @@ export default function App() {
             <Route path="promos" element={<AdminPromos />} />
             <Route path="assets" element={<AdminAssets />} />
             <Route path="schedules" element={<AdminSchedules />} />
+            <Route path="price-engine" element={<AdminOtcEngine />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="audit" element={<AdminAudit />} />
           </Route>

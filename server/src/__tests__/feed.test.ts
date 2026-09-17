@@ -9,6 +9,20 @@ function feedWithHistory() {
   return feed;
 }
 
+/**
+ * Markets tick on their own interval, so a test has to move the clock as well
+ * as call the loop. This drives `ticks` steps of `stepMs` each.
+ */
+function advance(feed: MarketFeed, ticks: number, stepMs = 250) {
+  let now = Date.now();
+  feed.setClock(() => now);
+  for (let i = 0; i < ticks; i += 1) {
+    now += stepMs;
+    (feed as unknown as { onInterval: () => void }).onInterval();
+  }
+  return now;
+}
+
 describe('market feed', () => {
   it('back-fills history for every timeframe', () => {
     const feed = feedWithHistory();
@@ -33,7 +47,7 @@ describe('market feed', () => {
 
   it('stays near the base price over a long simulated run', () => {
     const feed = feedWithHistory();
-    for (let i = 0; i < 5000; i += 1) feed['onInterval']();
+    advance(feed, 5000);
     const price = feed.getPrice('TESTUSD')!;
     expect(price).toBeGreaterThan(spec.basePrice * 0.5);
     expect(price).toBeLessThan(spec.basePrice * 2);
@@ -42,17 +56,17 @@ describe('market feed', () => {
   it('keeps 30 second moves within a realistic band', () => {
     const feed = feedWithHistory();
     const start = feed.getPrice('TESTUSD')!;
-    for (let i = 0; i < 120; i += 1) feed['onInterval']();
+    advance(feed, 120);
     const move = Math.abs(feed.getPrice('TESTUSD')! - start) / start;
     expect(move).toBeLessThan(0.02);
   });
 
   it('prices an expiry from the tick at or before that instant', () => {
     const feed = feedWithHistory();
-    feed['onInterval']();
+    advance(feed, 1);
     const firstTs = Date.now();
     const first = feed.getPrice('TESTUSD');
-    for (let i = 0; i < 20; i += 1) feed['onInterval']();
+    advance(feed, 20);
     expect(feed.priceAt('TESTUSD', firstTs)).toBeDefined();
     expect(feed.priceAt('TESTUSD', firstTs - 60_000)).toBe(feed.priceAt('TESTUSD', firstTs - 60_000));
     expect(typeof first).toBe('number');
@@ -71,13 +85,13 @@ describe('session gating', () => {
     feed.setSessionResolver(() => false);
 
     const before = feed.getPrice('TESTUSD');
-    for (let i = 0; i < 50; i += 1) feed['onInterval']();
+    advance(feed, 50);
     expect(feed.getPrice('TESTUSD')).toBe(before);
     expect(feed.isLive('TESTUSD')).toBe(false);
 
     // reopening resumes the walk from the frozen price
     feed.setSessionResolver(() => true);
-    for (let i = 0; i < 50; i += 1) feed['onInterval']();
+    advance(feed, 50);
     expect(feed.getPrice('TESTUSD')).not.toBe(before);
     expect(feed.isLive('TESTUSD')).toBe(true);
   });

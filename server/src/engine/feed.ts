@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { env } from '../env.js';
 import { log } from '../lib/logger.js';
+import { initialState, nextTick, resolveParams, type OtcParams, type OtcState } from './otc.js';
 
 export interface Tick {
   symbol: string;
@@ -23,6 +24,12 @@ export interface AssetSpec {
   basePrice: number;
   volatility: number;
   precision: number;
+  /** Broker-priced market: the engine owns its price entirely. */
+  isOtc?: boolean;
+  /** Per-market engine overrides, straight from `Asset.otcConfig`. */
+  otcConfig?: Partial<OtcParams> | null;
+  /** The matching real market, whose price the anchor may follow. */
+  spotSymbol?: string | null;
 }
 
 export const TIMEFRAMES: Record<string, number> = {
@@ -33,18 +40,14 @@ export const TIMEFRAMES: Record<string, number> = {
 };
 
 const HISTORY_CANDLES = 400;
-const SQRT3 = Math.sqrt(3);
-const DRIFT_DECAY = 0.92; // how long a micro-trend persists
-const DRIFT_GAIN = 0.12; // how strongly a shock feeds the trend
-const MEAN_REVERSION = 0.0015; // pull back toward the asset's base price
 
 /**
- * Per-tick standard deviation. `volatility` on an asset is expressed per
- * minute, which is how a trader thinks about it; ticks arrive far more often,
- * so it is scaled by the square root of the tick share of a minute.
+ * Per-tick standard deviation. `baseVolatility` is per minute, which is how a
+ * trader thinks about it; ticks arrive far more often, so it is scaled by the
+ * square root of the tick's share of a minute.
  */
-function tickSigma(spec: AssetSpec): number {
-  return spec.volatility * Math.sqrt(env.feedTickMs / 60000);
+function tickSigma(params: { baseVolatility: number; tickMs: number }): number {
+  return params.baseVolatility * Math.sqrt(params.tickMs / 60000);
 }
 /**
  * Ticks are only kept long enough to price an expiry at its exact instant,
@@ -82,8 +85,10 @@ function round(value: number, precision: number): number {
 interface SymbolState {
   spec: AssetSpec;
   price: number;
-  drift: number;
-  rand: () => number;
+  /** The broker price process for this market. */
+  engine: OtcState;
+  params: OtcParams;
+  lastTickAt: number;
   ticks: Tick[];
   candles: Map<string, Candle[]>;
 }
@@ -108,10 +113,21 @@ export class MarketFeed extends EventEmitter {
    * stands until it reopens. OTC and crypto have no session and always tick.
    */
   private isTradeable: (symbol: string) => boolean = () => true;
+  /**
+   * Wall clock, injectable so tests can drive time deterministically. Markets
+   * tick on their own interval, so the engine must measure real elapsed time
+   * rather than assume one step per call.
+   */
+  private now: () => number = () => Date.now();
 
   /** Wired at boot to the market-hours service. */
   setSessionResolver(resolver: (symbol: string) => boolean): void {
     this.isTradeable = resolver;
+  }
+
+  /** Test seam: replaces the wall clock. */
+  setClock(clock: () => number): void {
+    this.now = clock;
   }
 
   get provider(): string {
@@ -125,12 +141,19 @@ export class MarketFeed extends EventEmitter {
   load(assets: AssetSpec[]): void {
     for (const spec of assets) {
       if (this.states.has(spec.symbol)) continue;
-      const rand = mulberry32(hashSeed(spec.symbol));
+      // the asset's own volatility is the engine default unless overridden
+      const params = resolveParams({
+        baseVolatility: spec.volatility,
+        tickMs: env.feedTickMs,
+        followSpot: Boolean(spec.spotSymbol),
+        ...(spec.otcConfig ?? {}),
+      });
       const state: SymbolState = {
         spec,
         price: spec.basePrice,
-        drift: 0,
-        rand,
+        engine: initialState(spec.symbol, spec.basePrice, params),
+        params,
+        lastTickAt: this.now(),
         ticks: [],
         candles: new Map(),
       };
@@ -139,9 +162,53 @@ export class MarketFeed extends EventEmitter {
     }
   }
 
-  /** Back-fills candle history ending at the current price. */
+  /** Restores persisted engine state so a restart continues the same path. */
+  resume(states: OtcState[]): void {
+    for (const persisted of states) {
+      const state = this.states.get(persisted.symbol);
+      if (!state) continue;
+      state.engine = persisted;
+      state.price = persisted.price;
+      state.lastTickAt = this.now();
+      // history is regenerated around the resumed price, not the seed price
+      state.candles.clear();
+      this.seedHistory(state);
+    }
+    if (states.length) log.feed.info({ markets: states.length }, 'resumed broker price state');
+  }
+
+  /** Snapshot for persistence. */
+  snapshot(): OtcState[] {
+    return [...this.states.values()].map((state) => state.engine);
+  }
+
+  /** Engine parameters in force for a market, for the admin preview. */
+  paramsFor(symbol: string): OtcParams | null {
+    return this.states.get(symbol)?.params ?? null;
+  }
+
+  /** Applies an operator's parameter change without a restart. */
+  applyConfig(symbol: string, overrides: Partial<OtcParams> | null): void {
+    const state = this.states.get(symbol);
+    if (!state) return;
+    state.spec = { ...state.spec, otcConfig: overrides };
+    state.params = resolveParams({
+      baseVolatility: state.spec.volatility,
+      tickMs: env.feedTickMs,
+      followSpot: Boolean(state.spec.spotSymbol),
+      ...(overrides ?? {}),
+    });
+  }
+
+  /**
+   * Back-fills candle history ending at the current price, walking backwards so
+   * the newest candle closes exactly where the live price is. It uses its own
+   * seeded generator (derived from the symbol) rather than the live engine
+   * state, which must not be consumed by drawing history.
+   */
   private seedHistory(state: SymbolState): void {
-    const now = Math.floor(Date.now() / 1000);
+    const now = Math.floor(this.now() / 1000);
+    const random = mulberry32(hashSeed(`${state.spec.symbol}:history`));
     for (const [tf, seconds] of Object.entries(TIMEFRAMES)) {
       const candles: Candle[] = [];
       let close = state.price;
@@ -149,10 +216,10 @@ export class MarketFeed extends EventEmitter {
         const time = (Math.floor(now / seconds) - i) * seconds;
         // history has to breathe at the same scale the live ticks do, so a
         // candle's range is the tick sigma scaled by the ticks it contains
-        const vol = tickSigma(state.spec) * Math.sqrt((seconds * 1000) / env.feedTickMs);
-        const open = close * (1 + (state.rand() - 0.5) * vol * 2);
-        const high = Math.max(open, close) * (1 + state.rand() * vol);
-        const low = Math.min(open, close) * (1 - state.rand() * vol);
+        const vol = tickSigma(state.params) * Math.sqrt((seconds * 1000) / state.params.tickMs);
+        const open = close * (1 + (random() - 0.5) * vol * 2);
+        const high = Math.max(open, close) * (1 + random() * vol);
+        const low = Math.min(open, close) * (1 - random() * vol);
         candles.push({
           time,
           open: round(open, state.spec.precision),
@@ -187,22 +254,27 @@ export class MarketFeed extends EventEmitter {
   private onInterval(): void {
     // When a live socket is driving prices the simulator stays out of the way.
     if (this.liveConnected) return;
-    const now = Date.now();
+    const now = this.now();
     for (const state of this.states.values()) {
       if (!this.isTradeable(state.spec.symbol)) continue; // market closed: price is frozen
-      this.publish(state, this.nextSimulatedPrice(state), now);
+      this.stepMarket(state, now);
     }
   }
 
-  private nextSimulatedPrice(state: SymbolState): number {
-    const sigma = tickSigma(state.spec);
-    // Random shock plus a short-lived trend, pulled back toward the base price
-    // so a long-running process never drifts into nonsense territory.
-    const shock = (state.rand() - 0.5) * 2 * sigma * SQRT3; // uniform with std = sigma
-    state.drift = state.drift * DRIFT_DECAY + shock * DRIFT_GAIN;
-    const pull = ((state.spec.basePrice - state.price) / state.spec.basePrice) * MEAN_REVERSION;
-    const next = state.price * (1 + shock + state.drift + pull);
-    return Math.max(next, state.spec.basePrice * 0.2);
+  /** One engine step for one market, honouring its own tick rate. */
+  private stepMarket(state: SymbolState, now: number): void {
+    const elapsed = now - state.lastTickAt;
+    if (elapsed + 1 < state.params.tickMs) return; // this market ticks more slowly
+    state.lastTickAt = now;
+
+    state.engine = nextTick({
+      state: state.engine,
+      params: state.params,
+      elapsedMs: elapsed,
+      spotPrice: state.spec.spotSymbol ? this.getPrice(state.spec.spotSymbol) : null,
+      precision: state.spec.precision,
+    });
+    this.publish(state, state.engine.price, now);
   }
 
   private async connectLive(): Promise<void> {
@@ -225,7 +297,7 @@ export class MarketFeed extends EventEmitter {
           const data = msg.data ?? msg;
           const state = byFeed.get(String(data.s ?? '').toUpperCase());
           const price = Number(data.p);
-          if (state && Number.isFinite(price)) this.publish(state, price, data.T ?? Date.now());
+          if (state && Number.isFinite(price)) this.publish(state, price, data.T ?? this.now());
         } catch {
           /* ignore malformed frame */
         }
@@ -247,6 +319,9 @@ export class MarketFeed extends EventEmitter {
   private publish(state: SymbolState, rawPrice: number, ts: number): void {
     const price = round(rawPrice, state.spec.precision);
     state.price = price;
+    // keep the engine anchored to reality so a fallback continues smoothly
+    if (state.engine.price !== price)
+      state.engine = { ...state.engine, price, anchor: state.engine.anchor || price };
     state.ticks.push({ symbol: state.spec.symbol, price, ts });
     if (state.ticks.length > TICK_BUFFER) state.ticks.splice(0, state.ticks.length - TICK_BUFFER);
     this.updateCandles(state, price, ts);
@@ -290,7 +365,7 @@ export class MarketFeed extends EventEmitter {
       const tick = state.ticks[state.ticks.length - 1];
       if (tick && tick.ts > newest) newest = tick.ts;
     }
-    return newest ? Date.now() - newest : null;
+    return newest ? this.now() - newest : null;
   }
 
   getPrices(): Record<string, number> {

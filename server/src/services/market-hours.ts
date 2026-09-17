@@ -1,7 +1,13 @@
 import { EventEmitter } from 'node:events';
 import { prisma } from '../lib/prisma.js';
 import { log } from '../lib/logger.js';
-import { alwaysOpen, describeWindows, sessionState, type SessionState, type Window } from '../lib/sessions.js';
+import {
+  alwaysOpen,
+  describeWindows,
+  sessionState,
+  type SessionState,
+  type Window,
+} from '../lib/sessions.js';
 
 export const scheduleEvents = new EventEmitter();
 
@@ -87,6 +93,9 @@ export const marketHours = new MarketHours();
  */
 export async function otcAlternative(symbol: string): Promise<string | null> {
   if (symbol.endsWith('_OTC')) return null;
-  const twin = await prisma.asset.findUnique({ where: { symbol: `${symbol}_OTC` }, select: { symbol: true, enabled: true } });
+  const twin = await prisma.asset.findUnique({
+    where: { symbol: `${symbol}_OTC` },
+    select: { symbol: true, enabled: true },
+  });
   return twin?.enabled ? twin.symbol : null;
 }

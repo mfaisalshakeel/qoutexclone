@@ -43,6 +43,7 @@ const SECTIONS: { label: string; items: { to: string; label: string; badge?: key
       { to: '/admin/promos', label: 'Promo codes' },
       { to: '/admin/assets', label: 'Markets' },
       { to: '/admin/schedules', label: 'Sessions' },
+      { to: '/admin/price-engine', label: 'Price engine' },
       { to: '/admin/settings', label: 'Settings' },
       { to: '/admin/audit', label: 'Audit log' },
     ],

@@ -9,6 +9,8 @@ import { chainWatcher } from './engine/chain-watcher.js';
 import { attachWebsocket } from './ws.js';
 import { settings } from './services/settings.js';
 import { marketHours } from './services/market-hours.js';
+import { StatePersister, loadStates } from './services/otc-state.js';
+import type { OtcParams } from './engine/otc.js';
 
 /** How long a shutdown may take before in-flight work is abandoned. */
 const SHUTDOWN_GRACE_MS = 15_000;
@@ -23,6 +25,7 @@ async function main() {
     log.boot.warn('no assets found — run `npm run seed --workspace=server` to load the default markets');
   }
 
+  const symbols = new Set(assets.map((asset) => asset.symbol));
   marketFeed.load(
     assets.map((asset) => ({
       symbol: asset.symbol,
@@ -30,14 +33,27 @@ async function main() {
       basePrice: asset.basePrice,
       volatility: asset.volatility,
       precision: asset.precision,
+      isOtc: asset.isOtc,
+      otcConfig: (asset.otcConfig as Partial<OtcParams> | null) ?? null,
+      // an OTC market may track its spot twin while that market is open
+      spotSymbol:
+        asset.isOtc && symbols.has(asset.symbol.replace('_OTC', ''))
+          ? asset.symbol.replace('_OTC', '')
+          : null,
     })),
   );
+
+  // continue each market's price path from where the last process left it
+  marketFeed.resume(await loadStates([...symbols]));
   // a closed exchange stops printing prices; OTC and crypto never close
   const sessionByAsset = new Map(assets.map((asset) => [asset.symbol, asset.scheduleId]));
   marketFeed.setSessionResolver((symbol) => marketHours.stateFor(sessionByAsset.get(symbol) ?? null).isOpen);
   marketFeed.start();
   settlementEngine.start();
   chainWatcher.start();
+
+  const persister = new StatePersister(() => marketFeed.snapshot());
+  persister.start();
 
   const app = createApp();
   const server = http.createServer(app);
@@ -76,6 +92,8 @@ async function main() {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       // the settlement loop finishes its current pass before stopping
       await settlementEngine.drain();
+      // persist prices last, so the snapshot is the final one
+      await persister.flush();
       chainWatcher.stop();
       marketFeed.stop();
       ws.close();

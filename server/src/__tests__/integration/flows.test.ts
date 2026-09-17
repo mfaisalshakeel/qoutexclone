@@ -295,3 +295,109 @@ suite('runtime settings', () => {
     await prisma.setting.deleteMany({ where: { key: 'wallet.removedKey' } });
   });
 });
+
+/**
+ * The hard invariant: a trader's positions must never influence a quote.
+ * This drives the real feed against two very different database states and
+ * asserts the printed paths are identical.
+ */
+suite('price independence from positions', () => {
+  let prisma: (typeof import('../../lib/prisma.js'))['prisma'];
+  let MarketFeedClass: (typeof import('../../engine/feed.js'))['MarketFeed'];
+  const created: { users: string[]; assets: string[] } = { users: [], assets: [] };
+
+  beforeAll(async () => {
+    prisma = (await import('../../lib/prisma.js')).prisma;
+    MarketFeedClass = (await import('../../engine/feed.js')).MarketFeed;
+  });
+
+  afterAll(async () => {
+    await prisma.trade.deleteMany({ where: { userId: { in: created.users } } });
+    await prisma.user.deleteMany({ where: { id: { in: created.users } } });
+    await prisma.asset.deleteMany({ where: { id: { in: created.assets } } });
+  });
+
+  const spec = {
+    symbol: 'INDEPUSD_OTC',
+    feedSymbol: 'INDEPUSD_OTC',
+    basePrice: 100,
+    volatility: 0.0015,
+    precision: 4,
+    isOtc: true,
+    otcConfig: null,
+    spotSymbol: null,
+  };
+
+  const walk = (ticks: number) => {
+    const feed = new MarketFeedClass();
+    // a fixed clock start makes the path reproducible across runs
+    let now = 1_750_000_000_000;
+    feed.setClock(() => now);
+    feed.load([spec]);
+    const prices: number[] = [];
+    for (let i = 0; i < ticks; i += 1) {
+      now += 250;
+      (feed as unknown as { onInterval: () => void }).onInterval();
+      prices.push(feed.getPrice(spec.symbol)!);
+    }
+    return prices;
+  };
+
+  it('prints the same path with no positions and with heavy one-sided exposure', async () => {
+    const quiet = walk(400);
+
+    // now flood the database with one-sided open positions on this market
+    const asset = await prisma.asset.create({
+      data: {
+        symbol: spec.symbol,
+        name: 'Independence Test',
+        pair: 'INDEP/USD',
+        assetClass: 'CURRENCY',
+        base: 'INDEP',
+        quote: 'USD',
+        feedSymbol: spec.feedSymbol,
+        isOtc: true,
+        basePrice: spec.basePrice,
+        volatility: spec.volatility,
+        precision: spec.precision,
+        pipSize: 0.0001,
+        payoutPct: 85,
+      },
+    });
+    created.assets.push(asset.id);
+
+    const whale = await prisma.user.create({
+      data: {
+        email: `whale-${Date.now()}@test.dev`,
+        name: 'Whale',
+        passwordHash: 'x',
+        referralCode: Math.random().toString(36).slice(2, 10).toUpperCase(),
+        demoBalance: 100_000_000,
+      },
+    });
+    created.users.push(whale.id);
+
+    await prisma.trade.createMany({
+      data: Array.from({ length: 50 }, () => ({
+        userId: whale.id,
+        assetId: asset.id,
+        symbol: spec.symbol,
+        accountType: 'DEMO',
+        direction: 'UP' as const,
+        stake: 500_000,
+        payoutPct: 85,
+        entryPrice: spec.basePrice,
+        durationSec: 3600,
+        expiresAt: new Date(Date.now() + 3_600_000),
+        status: 'OPEN',
+      })),
+    });
+
+    const exposed = walk(400);
+    expect(exposed).toEqual(quiet);
+
+    // and the house being deep in the red changes nothing either
+    await prisma.trade.updateMany({ where: { assetId: asset.id }, data: { direction: 'DOWN' } });
+    expect(walk(400)).toEqual(quiet);
+  });
+});

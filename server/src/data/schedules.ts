@@ -95,7 +95,11 @@ export const SCHEDULES: ScheduleSeed[] = [
 ];
 
 /** Which calendar a market trades on. OTC and crypto stay on no schedule. */
-export function scheduleKeyFor(market: { assetClass: AssetClass; isOtc: boolean; symbol: string }): string | null {
+export function scheduleKeyFor(market: {
+  assetClass: AssetClass;
+  isOtc: boolean;
+  symbol: string;
+}): string | null {
   if (market.isOtc) return null;
   switch (market.assetClass) {
     case 'CURRENCY':

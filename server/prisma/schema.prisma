@@ -92,6 +92,10 @@ model Asset {
   // null means always open, which is how OTC and crypto markets trade
   scheduleId String?
 
+  /// Per-market overrides for the broker price engine (see engine/otc.ts).
+  /// Null uses the defaults derived from `volatility`.
+  otcConfig Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -429,4 +433,21 @@ model MarketHoliday {
 
   @@unique([scheduleId, date])
   @@index([date])
+}
+
+/// The price engine's whole state per market, so a restart continues the same
+/// path instead of re-seeding and printing a gap.
+model OtcMarketState {
+  symbol          String   @id
+  price           Float
+  anchor          Float
+  variance        Float
+  lastShock       Float    @default(0)
+  regime          String   @default("RANGE")
+  regimeTicksLeft Int      @default(0)
+  trendDirection  Int      @default(1)
+  /// mulberry32 state is a uint32, which does not fit a signed INT
+  rng             Int      @db.UnsignedInt
+  ticks           Int      @default(0)
+  updatedAt       DateTime @updatedAt
 }
