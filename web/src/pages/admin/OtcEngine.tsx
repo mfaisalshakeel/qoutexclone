@@ -68,14 +68,14 @@ const FIELDS: Field[] = [
   {
     key: 'trendStrength',
     label: 'Trend strength',
-    help: 'Drift while trending, as a multiple of tick sigma.',
+    help: "How far a trend travels, as a multiple of its own duration's move.",
     step: 0.05,
   },
   {
     key: 'meanReversion',
     label: 'Mean reversion',
-    help: 'Pull back toward the anchor each tick.',
-    step: 0.0005,
+    help: 'Share of the gap to the anchor closed per minute.',
+    step: 0.005,
   },
   {
     key: 'anchorDriftPerHour',

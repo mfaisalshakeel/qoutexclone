@@ -401,3 +401,235 @@ suite('price independence from positions', () => {
     expect(walk(400)).toEqual(quiet);
   });
 });
+
+/** Candle history is durable, pages backwards and prunes itself. */
+suite('candle history', () => {
+  let prisma: (typeof import('../../lib/prisma.js'))['prisma'];
+  let store: (typeof import('../../services/candles.js'))['candleStore'];
+  const symbol = `HISTUSD_${Date.now()}`;
+
+  beforeAll(async () => {
+    prisma = (await import('../../lib/prisma.js')).prisma;
+    store = (await import('../../services/candles.js')).candleStore;
+    store.register(symbol, { basePrice: 100, volatility: 0.0012, precision: 4 });
+  });
+
+  afterAll(async () => {
+    await prisma.candle.deleteMany({ where: { symbol } });
+    store._reset();
+  });
+
+  it('generates a market history once, then serves it from storage', async () => {
+    const first = await store.history(symbol, '1m', { limit: 200 });
+    expect(first).toHaveLength(200);
+
+    // ascending, one bucket apart, with sane OHLC
+    for (let i = 1; i < first.length; i += 1) {
+      expect(first[i].time - first[i - 1].time).toBe(60);
+      expect(first[i].high).toBeGreaterThanOrEqual(Math.max(first[i].open, first[i].close));
+      expect(first[i].low).toBeLessThanOrEqual(Math.min(first[i].open, first[i].close));
+    }
+
+    const stored = await prisma.candle.count({ where: { symbol, timeframe: '1m' } });
+    expect(stored).toBeGreaterThanOrEqual(200);
+
+    // a second call returns the same series rather than regenerating it
+    const again = await store.history(symbol, '1m', { limit: 200 });
+    expect(again).toEqual(first);
+  });
+
+  it('pages backwards for infinite scroll without overlapping', async () => {
+    const recent = await store.history(symbol, '1m', { limit: 50 });
+    const older = await store.history(symbol, '1m', { before: recent[0].time, limit: 50 });
+
+    expect(older).toHaveLength(50);
+    expect(older[older.length - 1].time).toBeLessThan(recent[0].time);
+    const times = new Set([...older, ...recent].map((candle) => candle.time));
+    expect(times.size).toBe(100);
+  });
+
+  it('keeps separate series per timeframe', async () => {
+    const minute = await store.history(symbol, '1m', { limit: 30 });
+    const fiveMinute = await store.history(symbol, '5m', { limit: 30 });
+    expect(fiveMinute[1].time - fiveMinute[0].time).toBe(300);
+    expect(fiveMinute.map((candle) => candle.close)).not.toEqual(minute.map((candle) => candle.close));
+  });
+
+  it('upserts a re-flushed bucket instead of duplicating it', async () => {
+    const [candle] = await store.history(symbol, '1m', { limit: 1 });
+    store.record(symbol, '1m', { ...candle, close: candle.close + 1, high: candle.high + 1 });
+    await store.flush();
+
+    const rows = await prisma.candle.findMany({ where: { symbol, timeframe: '1m', time: candle.time } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].close).toBeCloseTo(candle.close + 1, 6);
+  });
+
+  it('prunes candles past their retention', async () => {
+    const ancient = Math.floor(Date.now() / 1000) - 40 * 86400; // far beyond 5s retention
+    store.record(symbol, '5s', { time: ancient, open: 1, high: 1, low: 1, close: 1 });
+    await store.flush();
+    expect(await prisma.candle.count({ where: { symbol, timeframe: '5s', time: ancient } })).toBe(1);
+
+    await store.prune();
+    expect(await prisma.candle.count({ where: { symbol, timeframe: '5s', time: ancient } })).toBe(0);
+    // and the recent history survives
+    expect(await prisma.candle.count({ where: { symbol, timeframe: '1m' } })).toBeGreaterThan(0);
+  });
+
+  it('persists the bucket that is still open, so a restart has no hole', async () => {
+    const bucket = Math.floor(Date.now() / 1000 / 60) * 60;
+    const open = { time: bucket, open: 100, high: 101, low: 99.5, close: 100.5 };
+    // the feed only hands over a candle when it closes; the store picks the
+    // open one up from the live source on every flush
+    store.setLiveSource(() => [{ symbol, timeframe: '1m', candle: open }]);
+    await store.flush();
+    store.setLiveSource(() => []);
+
+    const stored = await prisma.candle.findFirst({ where: { symbol, timeframe: '1m', time: bucket } });
+    expect(stored?.open).toBeCloseTo(100, 6);
+    expect(stored?.high).toBeCloseTo(101, 6);
+
+    // and the next process can find it to carry on from
+    const adopted = await store.openBuckets([symbol]);
+    const minute = adopted.find((row) => row.timeframe === '1m');
+    expect(minute?.candle.time).toBe(bucket);
+    expect(minute?.candle.open).toBeCloseTo(100, 6);
+  });
+
+  it('returns nothing for an unknown timeframe rather than throwing', async () => {
+    expect(await store.history(symbol, '7m', { limit: 10 })).toEqual([]);
+  });
+});
+
+/** Paging must keep going until retention runs out, not stop at the seed page. */
+suite('deep candle paging', () => {
+  let prisma: (typeof import('../../lib/prisma.js'))['prisma'];
+  let store: (typeof import('../../services/candles.js'))['candleStore'];
+  const symbol = `DEEPUSD_${Date.now()}`;
+
+  beforeAll(async () => {
+    prisma = (await import('../../lib/prisma.js')).prisma;
+    store = (await import('../../services/candles.js')).candleStore;
+    store.register(symbol, { basePrice: 50, volatility: 0.0012, precision: 3 });
+  });
+
+  afterAll(async () => {
+    await prisma.candle.deleteMany({ where: { symbol } });
+    store._reset();
+  });
+
+  it('pages several windows back, each joining the last seamlessly', async () => {
+    const page = await store.history(symbol, '1m', { limit: 100 });
+    expect(page).toHaveLength(100);
+
+    const seen: number[] = page.map((candle) => candle.time);
+    let cursor = page[0].time;
+
+    for (let index = 0; index < 5; index += 1) {
+      const older = await store.history(symbol, '1m', { before: cursor, limit: 100 });
+      expect(older.length, `page ${index + 2} came back short`).toBe(100);
+
+      // contiguous with the previous page, and no duplicated buckets
+      expect(older[older.length - 1].time).toBe(cursor - 60);
+      for (const candle of older) expect(seen).not.toContain(candle.time);
+      seen.push(...older.map((candle) => candle.time));
+
+      cursor = older[0].time;
+    }
+
+    expect(seen).toHaveLength(600);
+
+    // the join is seamless: no page starts with an impossible gap
+    const all = await prisma.candle.findMany({
+      where: { symbol, timeframe: '1m' },
+      orderBy: { time: 'asc' },
+    });
+    for (let index = 1; index < all.length; index += 1) {
+      const jump = Math.abs(all[index].open - all[index - 1].close) / all[index - 1].close;
+      expect(jump, `gap at ${all[index].time}`).toBeLessThan(0.05);
+    }
+  });
+
+  it('stops at the retention boundary instead of generating forever', async () => {
+    // 5s candles are kept for six hours, so paging back a day must run out
+    let cursor: number | undefined = undefined;
+    let pages = 0;
+    for (; pages < 60; pages += 1) {
+      const page: Awaited<ReturnType<typeof store.history>> = await store.history(symbol, '5s', {
+        before: cursor,
+        limit: 100,
+      });
+      if (page.length === 0) break;
+      cursor = page[0].time;
+    }
+    expect(pages).toBeLessThan(60);
+  });
+});
+
+/** Generated history must stay in a believable band, however far back you page. */
+suite('history level stability', () => {
+  let prisma: (typeof import('../../lib/prisma.js'))['prisma'];
+  let store: (typeof import('../../services/candles.js'))['candleStore'];
+  const symbol = `BANDUSD_${Date.now()}`;
+  const basePrice = 190;
+
+  beforeAll(async () => {
+    prisma = (await import('../../lib/prisma.js')).prisma;
+    store = (await import('../../services/candles.js')).candleStore;
+    store.register(symbol, { basePrice, volatility: 0.0009, precision: 2 });
+  });
+
+  afterAll(async () => {
+    await prisma.candle.deleteMany({ where: { symbol } });
+    store._reset();
+  });
+
+  it('keeps ten pages of generated history near the market price', async () => {
+    let page = await store.history(symbol, '1m', { limit: 100 });
+    let cursor = page[0].time;
+
+    for (let index = 0; index < 10; index += 1) {
+      page = await store.history(symbol, '1m', { before: cursor, limit: 100 });
+      if (page.length === 0) break;
+      cursor = page[0].time;
+    }
+
+    const all = await prisma.candle.findMany({
+      where: { symbol, timeframe: '1m' },
+      orderBy: { time: 'asc' },
+    });
+    const lows = Math.min(...all.map((candle) => candle.low));
+    const highs = Math.max(...all.map((candle) => candle.high));
+
+    // eleven pages is ~18 hours of one-minute candles; a market this quiet
+    // cannot have been 10% away from its own price this morning
+    expect(lows).toBeGreaterThan(basePrice * 0.9);
+    expect(highs).toBeLessThan(basePrice * 1.1);
+
+    // and every page still joins its neighbour exactly, as a tape does
+    for (let index = 1; index < all.length; index += 1) {
+      expect(all[index].open, `gap at ${all[index].time}`).toBeCloseTo(all[index - 1].close, 6);
+    }
+  });
+
+  it('ends generated history on the price the market is trading at', async () => {
+    const live = `LIVEUSD_${Date.now()}`;
+    store.register(live, {
+      basePrice: 100,
+      volatility: 0.0009,
+      precision: 2,
+      // the market has moved a long way from where it was seeded
+      priceNow: () => 137.5,
+    });
+
+    const page = await store.history(live, '1m', { limit: 120 });
+    expect(page[page.length - 1].close).toBeCloseTo(137.5, 2);
+    // and the rest of the history sits around that price, not around the seed
+    const closes = page.map((candle) => candle.close);
+    expect(Math.min(...closes)).toBeGreaterThan(137.5 * 0.97);
+    expect(Math.max(...closes)).toBeLessThan(137.5 * 1.03);
+
+    await prisma.candle.deleteMany({ where: { symbol: live } });
+  });
+});

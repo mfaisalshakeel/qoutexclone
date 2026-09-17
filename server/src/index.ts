@@ -10,6 +10,7 @@ import { attachWebsocket } from './ws.js';
 import { settings } from './services/settings.js';
 import { marketHours } from './services/market-hours.js';
 import { StatePersister, loadStates } from './services/otc-state.js';
+import { candleStore } from './services/candles.js';
 import type { OtcParams } from './engine/otc.js';
 
 /** How long a shutdown may take before in-flight work is abandoned. */
@@ -46,6 +47,26 @@ async function main() {
 
   // continue each market's price path from where the last process left it
   marketFeed.resume(await loadStates([...symbols]));
+
+  // the store owns durable history; the feed hands it every closed candle
+  for (const asset of assets) {
+    candleStore.register(asset.symbol, {
+      basePrice: asset.basePrice,
+      volatility: asset.volatility,
+      precision: asset.precision,
+      otcConfig: (asset.otcConfig as Partial<OtcParams> | null) ?? null,
+      // generated history is pinned to the price the market trades at now
+      priceNow: () => marketFeed.getPrice(asset.symbol),
+    });
+  }
+  marketFeed.on('candleClosed', ({ symbol, timeframe, candle }) =>
+    candleStore.record(symbol, timeframe, candle),
+  );
+  // and the buckets still open, so a restart never leaves a hole in the chart
+  candleStore.setLiveSource(() => marketFeed.openCandles());
+  // pick up whatever the last process was in the middle of printing
+  marketFeed.primeCandles(await candleStore.openBuckets([...symbols]));
+  candleStore.start();
   // a closed exchange stops printing prices; OTC and crypto never close
   const sessionByAsset = new Map(assets.map((asset) => [asset.symbol, asset.scheduleId]));
   marketFeed.setSessionResolver((symbol) => marketHours.stateFor(sessionByAsset.get(symbol) ?? null).isOpen);
@@ -95,6 +116,8 @@ async function main() {
       await settlementEngine.drain();
       // persist prices last, so the snapshot is the final one
       await persister.flush();
+      candleStore.stop();
+      await candleStore.flush();
       chainWatcher.stop();
       marketFeed.stop();
       ws.close();

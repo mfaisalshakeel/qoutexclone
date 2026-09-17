@@ -29,9 +29,17 @@ export interface OtcParams {
   /** A regime lasts a uniform draw between these two, in minutes. */
   regimeMinMinutes: number;
   regimeMaxMinutes: number;
-  /** Drift while trending, as a multiple of the current per-tick sigma. */
+  /**
+   * Trend size, as a multiple of the move the regime's own duration implies.
+   * A strength of 1 means a trending regime travels about one standard
+   * deviation of its length beyond what diffusion alone would do.
+   */
   trendStrength: number;
-  /** Pull toward the anchor per tick while ranging (and, weaker, while trending). */
+  /**
+   * Share of the gap to the anchor closed per minute while ranging (and, more
+   * weakly, while trending). 0.05 is a reversion half-life of about a quarter
+   * of an hour.
+   */
   meanReversion: number;
   /** How fast the anchor itself wanders, as a fraction per hour. */
   anchorDriftPerHour: number;
@@ -54,10 +62,16 @@ export interface OtcState {
   anchor: number;
   /** Current per-tick variance (GARCH). */
   variance: number;
-  /** Last tick's return, feeding the next variance. */
+  /**
+   * Last tick's return, normalised to one `tickMs` interval, feeding the next
+   * variance. Normalising matters: a tick that covered three intervals prints
+   * a proportionally larger move, and feeding that raw into the GARCH
+   * recursion makes the variance explode instead of clustering.
+   */
   lastShock: number;
   regime: 'TREND' | 'RANGE';
-  /** Ticks remaining in the current regime. */
+  /** Ticks the current regime runs for in total, and how many are left. */
+  regimeTicks: number;
   regimeTicksLeft: number;
   trendDirection: 1 | -1;
   /** RNG state, so the path resumes exactly where it stopped. */
@@ -72,8 +86,8 @@ export const DEFAULT_OTC_PARAMS: OtcParams = {
   trendShare: 0.45,
   regimeMinMinutes: 3,
   regimeMaxMinutes: 25,
-  trendStrength: 0.35,
-  meanReversion: 0.0015,
+  trendStrength: 1,
+  meanReversion: 0.05,
   anchorDriftPerHour: 0.0025,
   spikeProbability: 0.0008,
   spikeSigmaMultiple: 4,
@@ -98,8 +112,8 @@ export function resolveParams(overrides?: Partial<OtcParams> | null): OtcParams 
     trendShare: clamp(merged.trendShare, 0, 1),
     regimeMinMinutes: clamp(merged.regimeMinMinutes, 0.5, 240),
     regimeMaxMinutes: clamp(Math.max(merged.regimeMaxMinutes, merged.regimeMinMinutes), 0.5, 480),
-    trendStrength: clamp(merged.trendStrength, 0, 3),
-    meanReversion: clamp(merged.meanReversion, 0, 0.2),
+    trendStrength: clamp(merged.trendStrength, 0, 5),
+    meanReversion: clamp(merged.meanReversion, 0, 5),
     anchorDriftPerHour: clamp(merged.anchorDriftPerHour, 0, 0.5),
     spikeProbability: clamp(merged.spikeProbability, 0, 0.05),
     spikeSigmaMultiple: clamp(merged.spikeSigmaMultiple, 1, 12),
@@ -107,6 +121,14 @@ export function resolveParams(overrides?: Partial<OtcParams> | null): OtcParams 
     tickMs: clamp(Math.round(merged.tickMs), 50, 10_000),
   };
 }
+
+/**
+ * How fast a spot-following anchor closes on the real market, per minute. An
+ * OTC twin exists to track its exchange market; only its texture is its own.
+ */
+const SPOT_TRACKING_PER_MINUTE = 4;
+/** A spot-following market reverts to that anchor at least this fast. */
+const SPOT_REVERSION_PER_MINUTE = 1.5;
 
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
@@ -156,6 +178,7 @@ export function initialState(symbol: string, basePrice: number, params: OtcParam
     variance: sigmaTick * sigmaTick,
     lastShock: 0,
     regime: regime.regime,
+    regimeTicks: regime.ticks,
     regimeTicksLeft: regime.ticks,
     trendDirection: regime.direction,
     rng: regime.rng,
@@ -211,12 +234,14 @@ export function nextTick({ state, params, elapsedMs, spotPrice, precision }: Tic
 
   // --- regime bookkeeping
   let regime = state.regime;
+  let regimeTicks = Math.max(state.regimeTicks, 1);
   let regimeTicksLeft = state.regimeTicksLeft - 1;
   let trendDirection = state.trendDirection;
   let rng = state.rng;
   if (regimeTicksLeft <= 0) {
     const next = pickRegime(rng, params);
     regime = next.regime;
+    regimeTicks = next.ticks;
     regimeTicksLeft = next.ticks;
     trendDirection = next.direction;
     rng = next.rng;
@@ -237,15 +262,30 @@ export function nextTick({ state, params, elapsedMs, spotPrice, precision }: Tic
   }
 
   // --- drift while trending, and reversion toward the anchor
-  const drift = regime === 'TREND' ? trendDirection * params.trendStrength * sigma : 0;
-  const reversionStrength = regime === 'RANGE' ? params.meanReversion : params.meanReversion * 0.3;
-  const reversion = ((state.anchor - state.price) / state.price) * reversionStrength * (dt / params.tickMs);
+  //
+  // Both terms are expressed in time, not in ticks. A per-tick drift would make
+  // the same configuration trend ten times as far at a ten-times finer tick,
+  // which is how this engine used to swing 10% in an hour on a market whose
+  // volatility says 0.7%. Dividing by the root of the regime's length makes a
+  // trend travel `trendStrength` times the move its own duration implies,
+  // whatever the tick size.
+  const drift =
+    regime === 'TREND' ? (trendDirection * params.trendStrength * sigma) / Math.sqrt(regimeTicks) : 0;
+  const configured = params.followSpot
+    ? Math.max(params.meanReversion, SPOT_REVERSION_PER_MINUTE)
+    : params.meanReversion;
+  const reversionPerMinute = regime === 'RANGE' ? configured : configured * 0.3;
+  const reversion = clamp(
+    ((state.anchor - state.price) / state.price) * reversionPerMinute * (dt / 60_000),
+    -0.5,
+    0.5,
+  );
 
   // --- the anchor itself wanders, or tracks the real market when asked to
   let anchor = state.anchor;
   if (params.followSpot && spotPrice && spotPrice > 0) {
     // ease toward spot rather than snapping, so the tape has no gap
-    anchor = anchor + (spotPrice - anchor) * clamp(0.02 * (dt / params.tickMs), 0, 1);
+    anchor = anchor + (spotPrice - anchor) * clamp(SPOT_TRACKING_PER_MINUTE * (dt / 60_000), 0, 1);
   } else {
     const anchorRoll = nextGaussian(rng);
     rng = anchorRoll.state;
@@ -275,8 +315,9 @@ export function nextTick({ state, params, elapsedMs, spotPrice, precision }: Tic
     price: nextPrice,
     anchor,
     variance,
-    lastShock: nextPrice / state.price - 1,
+    lastShock: (nextPrice / state.price - 1) / scale,
     regime,
+    regimeTicks,
     regimeTicksLeft,
     trendDirection,
     rng,
@@ -293,6 +334,7 @@ export function toRow(state: OtcState) {
     variance: state.variance,
     lastShock: state.lastShock,
     regime: state.regime,
+    regimeTicks: state.regimeTicks,
     regimeTicksLeft: state.regimeTicksLeft,
     trendDirection: state.trendDirection,
     rng: state.rng,
@@ -308,6 +350,7 @@ export interface OtcStateRow {
   variance: number;
   lastShock: number;
   regime: string;
+  regimeTicks?: number | null;
   regimeTicksLeft: number;
   trendDirection: number;
   rng: number;
@@ -322,6 +365,9 @@ export function fromRow(row: OtcStateRow): OtcState {
     variance: row.variance,
     lastShock: row.lastShock,
     regime: row.regime === 'TREND' ? 'TREND' : 'RANGE',
+    // a row written before the regime's full length was stored still resumes:
+    // what is left of it is the best available answer
+    regimeTicks: Math.max(row.regimeTicks ?? row.regimeTicksLeft, 1),
     regimeTicksLeft: row.regimeTicksLeft,
     trendDirection: row.trendDirection === -1 ? -1 : 1,
     rng: row.rng,

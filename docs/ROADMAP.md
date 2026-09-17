@@ -37,7 +37,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
   - when a real market is open, the OTC anchor can optionally follow the real price. When it's closed, it evolves on its own
   - **must not read positions, exposure or user data.** Add a test that runs the engine with different open-position sets and asserts identical price paths for the same seed
 - [x] **Real feeds.** Keep the Binance adapter for crypto. Add a provider interface for forex/stocks/indices, with one free/delayed implementation or a documented stub that falls back to OTC-style simulation, clearly labelled. Auto-fallback and reconnect with backoff.
-- [ ] **Candle storage.** Ticks go to rolling candles at 5s, 10s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m, 30m, 1h, 4h, 1d, persisted with retention per timeframe. The history endpoint is paginated backwards for infinite scroll. The chart never shows a gap after a restart.
+- [x] **Candle storage.** Ticks go to rolling candles at 5s, 10s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m, 30m, 1h, 4h, 1d, persisted with retention per timeframe. The history endpoint is paginated backwards for infinite scroll. The chart never shows a gap after a restart.
 - [ ] **Payout engine.** Each asset has a base payout. Adjustments can come from time-of-day, volatility, or schedule (e.g. lower on news hours), each rule configurable. A user status bonus is added (Phase 4). The payout is locked at the moment the trade opens and is shown live on the ticket.
 - [ ] **Risk limits.** Per asset: max stake per trade, max open stake per user, and max total open exposure per direction. Beyond a limit, *new* trades are rejected with a clear message. Admin sees live exposure. (Never alters price.)
 

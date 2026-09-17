@@ -22,6 +22,9 @@ function sourceLabel(source: string): { text: string; title: string } {
   return { text: `live · ${source}`, title: `Live market data from ${source}` };
 }
 
+/** Shown inline; the rest live behind the "···" menu. */
+const QUICK_TIMEFRAMES = ['5s', '15s', '1m', '5m', '1h'];
+
 const STUDIES = [
   { key: 'sma' as const, label: 'SMA 20', color: '#f6c445' },
   { key: 'ema' as const, label: 'EMA 50', color: '#3d7bff' },
@@ -43,6 +46,7 @@ export function Terminal() {
     bollinger: false,
   });
   const [studiesOpen, setStudiesOpen] = useState(false);
+  const [timeframesOpen, setTimeframesOpen] = useState(false);
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
 
   const asset = useMemo(() => assetOf(symbol, assets), [symbol, assets]);
@@ -86,6 +90,7 @@ export function Terminal() {
       if (event.key !== 'Escape') return;
       setMarketsOpen(false);
       setStudiesOpen(false);
+      setTimeframesOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -162,11 +167,14 @@ export function Terminal() {
 
           {/* the toolbar scrolls inside its own box rather than widening the page */}
           <div className="-mx-1 flex w-full min-w-0 items-center gap-1 overflow-x-auto px-1 md:ml-auto md:w-auto md:overflow-visible">
-            <div className="hidden gap-1 sm:flex">
-              {timeframes.map((tf) => (
+            {/* quick picks inline, the full set behind a menu: 14 timeframes
+                will not fit a toolbar at any width */}
+            <div className="flex gap-1">
+              {QUICK_TIMEFRAMES.filter((tf) => timeframes.includes(tf)).map((tf) => (
                 <button
                   key={tf}
                   onClick={() => setTimeframe(tf)}
+                  aria-pressed={timeframe === tf}
                   className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${
                     timeframe === tf ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
                   }`}
@@ -174,6 +182,39 @@ export function Terminal() {
                   {tf}
                 </button>
               ))}
+
+              <div className="relative">
+                <button
+                  onClick={() => setTimeframesOpen((open) => !open)}
+                  className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${
+                    QUICK_TIMEFRAMES.includes(timeframe)
+                      ? 'text-slate-400 hover:text-slate-200'
+                      : 'bg-ink-600 text-white'
+                  }`}
+                  aria-label="All timeframes"
+                >
+                  {QUICK_TIMEFRAMES.includes(timeframe) ? '···' : timeframe}
+                </button>
+                {timeframesOpen && (
+                  <div className="absolute right-0 z-30 mt-2 grid w-44 grid-cols-3 gap-1 rounded-xl border border-ink-500 bg-ink-800 p-1.5 shadow-2xl">
+                    {timeframes.map((tf) => (
+                      <button
+                        key={tf}
+                        onClick={() => {
+                          setTimeframe(tf);
+                          setTimeframesOpen(false);
+                        }}
+                        aria-pressed={timeframe === tf}
+                        className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${
+                          timeframe === tf ? 'bg-accent text-white' : 'text-slate-300 hover:bg-ink-700'
+                        }`}
+                      >
+                        {tf}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="mx-1 hidden h-5 w-px bg-ink-600 sm:block" />

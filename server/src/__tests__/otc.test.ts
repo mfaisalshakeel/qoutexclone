@@ -167,6 +167,109 @@ describe('otc engine behaviour', () => {
   });
 });
 
+describe('otc calibration', () => {
+  /** Walks one market for `minutes` of wall-clock time at a given tick size. */
+  function overTime(symbol: string, minutes: number, tickMs: number, volatility: number) {
+    const resolved = resolveParams({ baseVolatility: volatility, tickMs });
+    let state = initialState(symbol, 100, resolved);
+    let low = state.price;
+    let high = state.price;
+    const ticks = Math.round((minutes * 60_000) / tickMs);
+    for (let i = 0; i < ticks; i += 1) {
+      state = nextTick({ state, params: resolved, precision: 4 });
+      low = Math.min(low, state.price);
+      high = Math.max(high, state.price);
+    }
+    return { move: Math.abs(state.price / 100 - 1), range: (high - low) / 100 };
+  }
+
+  /**
+   * The engine must describe a market, not a loop. Its drift and its reversion
+   * are therefore expressed in time: the same configuration run at a quarter of
+   * a second a tick and at ten seconds a tick has to produce the same kind of
+   * market. It used to trend forty times as far at the finer tick, which is how
+   * generated history ended up tens of percent from the live price.
+   */
+  it('produces the same market at any tick size', () => {
+    const ranges = [250, 1_000, 10_000].map(
+      (tickMs) => overTime(`TICK_${tickMs}`, 240, tickMs, 0.0009).range,
+    );
+    const widest = Math.max(...ranges);
+    const tightest = Math.min(...ranges);
+    expect(widest / tightest, `ranges: ${ranges.join(', ')}`).toBeLessThan(3);
+  });
+
+  it('stays within reach of what its volatility claims, over an hour and a day', () => {
+    for (const volatility of [0.0004, 0.0009, 0.0025]) {
+      for (const [minutes, label] of [
+        [60, 'hour'],
+        [1440, 'day'],
+      ] as [number, string][]) {
+        const { range } = overTime(`REACH_${volatility}_${minutes}`, minutes, 1_000, volatility);
+        const diffusive = volatility * Math.sqrt(minutes);
+        // a real market's range over a horizon is a few sigma of that horizon,
+        // and never an order of magnitude more
+        expect(range, `${volatility} over an ${label}`).toBeGreaterThan(diffusive * 0.3);
+        expect(range, `${volatility} over an ${label}`).toBeLessThan(diffusive * 5);
+      }
+    }
+  });
+
+  it('keeps moving over long horizons instead of pinning to its anchor', () => {
+    const hour = overTime('HORIZON_1', 60, 1_000, 0.0009).range;
+    const week = overTime('HORIZON_2', 7 * 1440, 10_000, 0.0009).range;
+    expect(week).toBeGreaterThan(hour * 2);
+  });
+});
+
+describe('otc variance under uneven ticks', () => {
+  /**
+   * The GARCH recursion is defined per `tickMs`, so the shock fed back into it
+   * has to be normalised to that interval. Without that, a tick covering more
+   * than one interval reports a proportionally larger move, the recursion's
+   * effective coefficient passes 1, and the variance runs away — which is
+   * exactly what made generated history drift tens of percent.
+   */
+  it('stays near its long-run volatility when ticks cover several intervals', () => {
+    const resolved = resolveParams({ baseVolatility: 0.0009, tickMs: 10_000 });
+    const longRunSigma = 0.0009 * Math.sqrt(resolved.tickMs / 60_000);
+
+    for (const multiple of [1, 1.5, 3]) {
+      let state = initialState('VAR', 100, resolved);
+      const returns: number[] = [];
+      for (let i = 0; i < 2000; i += 1) {
+        const previous = state.price;
+        state = nextTick({
+          state,
+          params: resolved,
+          elapsedMs: resolved.tickMs * multiple,
+          precision: 5,
+        });
+        returns.push(state.price / previous - 1);
+      }
+
+      const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+      const sd = Math.sqrt(returns.reduce((a, b) => a + (b - mean) ** 2, 0) / returns.length);
+      const expected = longRunSigma * Math.sqrt(multiple);
+      // realised volatility tracks the square-root law rather than exploding
+      expect(sd / expected, `multiple ${multiple}`).toBeGreaterThan(0.6);
+      expect(sd / expected, `multiple ${multiple}`).toBeLessThan(1.6);
+    }
+  });
+
+  it('does not let a long gap push the level away', () => {
+    const resolved = resolveParams({ baseVolatility: 0.0009, tickMs: 10_000 });
+    let state = initialState('GAP', 100, resolved);
+    for (let i = 0; i < 1200; i += 1) {
+      state = nextTick({ state, params: resolved, elapsedMs: 30_000, precision: 4 });
+    }
+    // 1200 ticks of three intervals each is ten hours; a runaway variance used
+    // to end this walk 25% away from where it started
+    expect(state.price).toBeGreaterThan(90);
+    expect(state.price).toBeLessThan(110);
+  });
+});
+
 describe('otc parameters', () => {
   it('keeps the GARCH process stationary', () => {
     const resolved = resolveParams({ garchAlpha: 0.7, garchBeta: 0.7 });

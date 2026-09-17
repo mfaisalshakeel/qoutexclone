@@ -1,6 +1,7 @@
 import type { Server } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { marketFeed } from './engine/feed.js';
+import { candleStore } from './services/candles.js';
 import { verifyAccessToken } from './lib/jwt.js';
 import { tradeEvents } from './services/trading.js';
 import { depositEvents } from './services/deposits.js';
@@ -109,12 +110,18 @@ export function attachWebsocket(server: Server) {
           if (typeof msg.symbol === 'string') state.symbol = msg.symbol.toUpperCase();
           if (typeof msg.timeframe === 'string') state.timeframe = msg.timeframe;
           if (state.symbol) {
-            send(socket, {
-              type: 'candles',
-              symbol: state.symbol,
-              timeframe: state.timeframe,
-              candles: marketFeed.getCandles(state.symbol, state.timeframe, 200),
-            });
+            // durable history, not just the in-memory tail
+            void candleStore
+              .history(state.symbol, state.timeframe, { limit: 200 })
+              .then((candles) =>
+                send(socket, {
+                  type: 'candles',
+                  symbol: state.symbol,
+                  timeframe: state.timeframe,
+                  candles,
+                }),
+              )
+              .catch(() => undefined);
           }
           break;
         }

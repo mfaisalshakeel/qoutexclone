@@ -58,15 +58,32 @@ export async function fundAccount(page: Page, preset = '$250'): Promise<void> {
 }
 
 /** Fails the test on any console error or uncaught page error. */
+/**
+ * Sandboxed CI terminates TLS with its own CA, which Chromium rejects for
+ * third-party origins (the web font). That is the environment, not the app, and
+ * it carries no URL in the console text — so it is ignored here and replaced by
+ * a stricter check: any *same-origin* request that fails is a real fault.
+ */
+const ENVIRONMENT_NOISE = [/net::ERR_CERT_AUTHORITY_INVALID/];
+
 export function failOnPageErrors(page: Page, ignore: RegExp[] = []): string[] {
   const errors: string[] = [];
-  const keep = (text: string) => !ignore.some((pattern) => pattern.test(text));
+  const patterns = [...ENVIRONMENT_NOISE, ...ignore];
+  const keep = (text: string) => !patterns.some((pattern) => pattern.test(text));
 
   page.on('pageerror', (error) => {
     if (keep(error.message)) errors.push(`pageerror: ${error.message}`);
   });
   page.on('console', (message) => {
     if (message.type() === 'error' && keep(message.text())) errors.push(`console: ${message.text()}`);
+  });
+  page.on('requestfailed', (request) => {
+    const url = request.url();
+    if (!url.includes('localhost') && !url.startsWith('/')) return;
+    // a request the browser cancelled because the page moved on is not a fault
+    const reason = request.failure()?.errorText ?? '';
+    if (reason.includes('ERR_ABORTED')) return;
+    errors.push(`requestfailed: ${url} ${reason}`);
   });
   return errors;
 }

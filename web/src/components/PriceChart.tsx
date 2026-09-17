@@ -23,6 +23,12 @@ export interface IndicatorSettings {
   bollinger: boolean;
 }
 
+interface HistoryPage {
+  candles: Candle[];
+  /** Cursor for the next page of older candles; null when exhausted. */
+  nextBefore: number | null;
+}
+
 interface Props {
   symbol: string;
   timeframe: string;
@@ -62,6 +68,9 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
   const bandRefs = useRef<ISeriesApi<'Line'>[]>([]);
   const linesRef = useRef<IPriceLine[]>([]);
   const dataRef = useRef<Candle[]>([]);
+  /** Paging cursor for older history; null when the market has no more. */
+  const beforeRef = useRef<number | null>(null);
+  const loadingOlderRef = useRef(false);
   // live candle updates fire from a long-lived subscription, so the overlay
   // painter reads the current settings from a ref rather than a stale closure
   const settingsRef = useRef(indicators);
@@ -174,13 +183,15 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
     candleRef.current.applyOptions({ priceFormat });
     areaRef.current?.applyOptions({ priceFormat });
 
-    const toBar = (candle: Candle) => ({
-      time: candle.time as UTCTimestamp,
-      open: candle.open,
-      high: candle.high,
-      low: candle.low,
-      close: candle.close,
-    });
+    function toBar(candle: Candle) {
+      return {
+        time: candle.time as UTCTimestamp,
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close,
+      };
+    }
 
     const setAll = (candles: Candle[]) => {
       dataRef.current = candles;
@@ -190,9 +201,10 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
     };
 
     api
-      .get<{ candles: Candle[] }>(`/market/candles/${symbol}?timeframe=${timeframe}&limit=300`)
-      .then(({ candles }) => {
+      .get<HistoryPage>(`/market/candles/${symbol}?timeframe=${timeframe}&limit=300`)
+      .then(({ candles, nextBefore }) => {
         if (cancelled) return;
+        beforeRef.current = nextBefore ?? candles[0]?.time ?? null;
         setAll(candles);
         setLoading(false);
         chartRef.current?.timeScale().scrollToRealTime();
@@ -200,6 +212,44 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
       .catch(() => {
         if (!cancelled) setLoading(false);
       });
+
+    /**
+     * Infinite scroll into the past: when the view reaches the oldest loaded
+     * bar, fetch the previous page and prepend it. `nextBefore` is null once
+     * the market has no more history, which stops the paging for good.
+     */
+    const loadOlder = async () => {
+      if (loadingOlderRef.current || cancelled || beforeRef.current === null) return;
+      loadingOlderRef.current = true;
+      try {
+        const page = await api.get<HistoryPage>(
+          `/market/candles/${symbol}?timeframe=${timeframe}&limit=300&before=${beforeRef.current}`,
+        );
+        if (cancelled) return;
+        if (page.candles.length === 0) {
+          beforeRef.current = null;
+          return;
+        }
+        beforeRef.current = page.nextBefore;
+        dataRef.current = [...page.candles, ...dataRef.current];
+        candleRef.current?.setData(dataRef.current.map(toBar));
+        areaRef.current?.setData(
+          dataRef.current.map((candle) => ({ time: candle.time as UTCTimestamp, value: candle.close })),
+        );
+        paintOverlays();
+      } catch {
+        /* keep the cursor so the next scroll retries */
+      } finally {
+        loadingOlderRef.current = false;
+      }
+    };
+
+    const onRangeChange = (range: { from: number; to: number } | null) => {
+      if (!range) return;
+      // logical 0 is the oldest loaded bar, so a small margin pre-fetches
+      if (range.from < 10) void loadOlder();
+    };
+    chartRef.current?.timeScale().subscribeVisibleLogicalRangeChange(onRangeChange);
 
     realtime.subscribe(symbol, timeframe);
 
@@ -221,6 +271,7 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
 
     return () => {
       cancelled = true;
+      chartRef.current?.timeScale().unsubscribeVisibleLogicalRangeChange(onRangeChange);
       offSnapshot();
       offCandle();
     };

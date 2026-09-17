@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { notFound, wrap } from '../lib/errors.js';
-import { TIMEFRAMES, marketFeed } from '../engine/feed.js';
+import { badRequest, notFound, wrap } from '../lib/errors.js';
+import { marketFeed } from '../engine/feed.js';
+import { TIMEFRAME_KEYS, isTimeframe } from '../engine/timeframes.js';
+import { candleStore } from '../services/candles.js';
 import { durations } from '../services/trading.js';
 import { settings } from '../services/settings.js';
 import { marketHours } from '../services/market-hours.js';
@@ -48,7 +50,7 @@ router.get(
         };
       }),
       durations: durations(),
-      timeframes: Object.keys(TIMEFRAMES),
+      timeframes: TIMEFRAME_KEYS,
       provider: marketFeed.provider,
     });
   }),
@@ -60,18 +62,38 @@ router.get(
     const symbol = req.params.symbol.toUpperCase();
     const query = z
       .object({
-        timeframe: z.enum(['5s', '15s', '1m', '5m']).default('1m'),
-        limit: z.coerce.number().int().min(10).max(400).default(200),
+        timeframe: z.string().default('1m'),
+        limit: z.coerce.number().int().min(10).max(500).default(200),
+        /** paging cursor: return candles strictly older than this bucket */
+        before: z.coerce.number().int().positive().optional(),
       })
       .parse(req.query);
+
+    if (!isTimeframe(query.timeframe)) throw badRequest('Unknown timeframe', 'invalid_timeframe');
 
     const asset = await prisma.asset.findUnique({ where: { symbol } });
     if (!asset) throw notFound('Unknown asset');
 
+    const candles = await candleStore.history(symbol, query.timeframe, {
+      before: query.before,
+      limit: query.limit,
+    });
+
+    // the live (unclosed) bucket lives in the feed, not the store
+    const live = query.before ? [] : marketFeed.getCandles(symbol, query.timeframe, 1);
+    const merged = [...candles];
+    for (const candle of live) {
+      const last = merged[merged.length - 1];
+      if (last && last.time === candle.time) merged[merged.length - 1] = candle;
+      else if (!last || candle.time > last.time) merged.push(candle);
+    }
+
     res.json({
       symbol,
       timeframe: query.timeframe,
-      candles: marketFeed.getCandles(symbol, query.timeframe, query.limit),
+      candles: merged,
+      // null when the market has no more history to page into
+      nextBefore: candles.length === query.limit ? candles[0].time : null,
       price: marketFeed.getPrice(symbol),
     });
   }),

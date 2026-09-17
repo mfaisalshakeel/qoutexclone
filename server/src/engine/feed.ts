@@ -3,6 +3,7 @@ import { env } from '../env.js';
 import { log } from '../lib/logger.js';
 import { initialState, nextTick, resolveParams, type OtcParams, type OtcState } from './otc.js';
 import { providerRegistry, type ProviderHealth } from './providers/index.js';
+import { TIMEFRAMES, TIMEFRAME_LIST, bucketFor } from './timeframes.js';
 
 export interface Tick {
   symbol: string;
@@ -34,23 +35,15 @@ export interface AssetSpec {
   spotSymbol?: string | null;
 }
 
-export const TIMEFRAMES: Record<string, number> = {
-  '5s': 5,
-  '15s': 15,
-  '1m': 60,
-  '5m': 300,
-};
-
-const HISTORY_CANDLES = 400;
+export { TIMEFRAMES } from './timeframes.js';
 
 /**
- * Per-tick standard deviation. `baseVolatility` is per minute, which is how a
- * trader thinks about it; ticks arrive far more often, so it is scaled by the
- * square root of the tick's share of a minute.
+ * How many closed candles stay in memory per market and timeframe. The store
+ * owns the long history; this is only the tail a chart needs immediately, and
+ * it has to stay small because it is held for every market at once.
  */
-function tickSigma(params: { baseVolatility: number; tickMs: number }): number {
-  return params.baseVolatility * Math.sqrt(params.tickMs / 60000);
-}
+const MEMORY_CANDLES = 60;
+
 /**
  * Ticks are only kept long enough to price an expiry at its exact instant,
  * which settlement does within seconds. 600 ticks is ~2.5 minutes at the
@@ -58,26 +51,6 @@ function tickSigma(params: { baseVolatility: number; tickMs: number }): number {
  * every market in the catalogue at once.
  */
 const TICK_BUFFER = 600;
-
-/** Deterministic PRNG so restarts do not reshuffle chart history. */
-function mulberry32(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function hashSeed(text: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i += 1) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
 
 function round(value: number, precision: number): number {
   const f = 10 ** precision;
@@ -214,36 +187,15 @@ export class MarketFeed extends EventEmitter {
   }
 
   /**
-   * Back-fills candle history ending at the current price, walking backwards so
-   * the newest candle closes exactly where the live price is. It uses its own
-   * seeded generator (derived from the symbol) rather than the live engine
-   * state, which must not be consumed by drawing history.
+   * Starts each timeframe with a single candle at the current price. Long
+   * history comes from the candle store, which persists closed candles and
+   * generates a market's past the first time it is charted.
    */
   private seedHistory(state: SymbolState): void {
-    const now = Math.floor(this.now() / 1000);
-    const random = mulberry32(hashSeed(`${state.spec.symbol}:history`));
-    for (const [tf, seconds] of Object.entries(TIMEFRAMES)) {
-      const candles: Candle[] = [];
-      let close = state.price;
-      for (let i = 0; i < HISTORY_CANDLES; i += 1) {
-        const time = (Math.floor(now / seconds) - i) * seconds;
-        // history has to breathe at the same scale the live ticks do, so a
-        // candle's range is the tick sigma scaled by the ticks it contains
-        const vol = tickSigma(state.params) * Math.sqrt((seconds * 1000) / state.params.tickMs);
-        const open = close * (1 + (random() - 0.5) * vol * 2);
-        const high = Math.max(open, close) * (1 + random() * vol);
-        const low = Math.min(open, close) * (1 - random() * vol);
-        candles.push({
-          time,
-          open: round(open, state.spec.precision),
-          high: round(high, state.spec.precision),
-          low: round(low, state.spec.precision),
-          close: round(close, state.spec.precision),
-        });
-        close = open;
-      }
-      candles.reverse();
-      state.candles.set(tf, candles);
+    for (const spec of TIMEFRAME_LIST) {
+      const time = bucketFor(this.now(), spec.seconds);
+      const price = state.price;
+      state.candles.set(spec.key, [{ time, open: price, high: price, low: price, close: price }]);
     }
   }
 
@@ -332,10 +284,15 @@ export class MarketFeed extends EventEmitter {
       if (!series) continue;
       const bucket = Math.floor(seconds / size) * size;
       const last = series[series.length - 1];
+
       if (!last || last.time < bucket) {
+        // the previous bucket is final: hand it to the store for persistence
+        if (last)
+          this.emit('candleClosed', { symbol: state.spec.symbol, timeframe: tf, candle: { ...last } });
+
         const candle: Candle = { time: bucket, open: price, high: price, low: price, close: price };
         series.push(candle);
-        if (series.length > HISTORY_CANDLES) series.shift();
+        if (series.length > MEMORY_CANDLES) series.shift();
         this.emit('candle', { symbol: state.spec.symbol, timeframe: tf, candle, closed: false });
       } else {
         last.close = price;
@@ -393,6 +350,46 @@ export class MarketFeed extends EventEmitter {
     const last = series[series.length - 1].close;
     if (!first) return 0;
     return ((last - first) / first) * 100;
+  }
+
+  /**
+   * Adopts buckets the last process left open, so the current candle continues
+   * with its original open and its high and low intact rather than restarting
+   * from the resumed price.
+   */
+  primeCandles(rows: { symbol: string; timeframe: string; candle: Candle }[]): void {
+    for (const { symbol, timeframe, candle } of rows) {
+      const series = this.states.get(symbol)?.candles.get(timeframe);
+      if (!series) continue;
+      const last = series[series.length - 1];
+      // only the bucket the feed has just opened for itself may be replaced
+      if (!last || last.time !== candle.time) continue;
+      series[series.length - 1] = {
+        time: candle.time,
+        open: candle.open,
+        high: Math.max(candle.high, last.close),
+        low: Math.min(candle.low, last.close),
+        close: last.close,
+      };
+    }
+  }
+
+  /**
+   * Every bucket currently open, across all markets and timeframes.
+   *
+   * The store only hears about a candle when it closes, so without this the
+   * bucket that happened to be open when the process stopped would never be
+   * written and the chart would show a one-bucket hole after a restart.
+   */
+  openCandles(): { symbol: string; timeframe: string; candle: Candle }[] {
+    const open: { symbol: string; timeframe: string; candle: Candle }[] = [];
+    for (const [symbol, state] of this.states) {
+      for (const [timeframe, series] of state.candles) {
+        const last = series[series.length - 1];
+        if (last) open.push({ symbol, timeframe, candle: { ...last } });
+      }
+    }
+    return open;
   }
 
   getCandles(symbol: string, timeframe: string, limit = 200): Candle[] {

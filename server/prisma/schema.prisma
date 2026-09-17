@@ -444,10 +444,32 @@ model OtcMarketState {
   variance        Float
   lastShock       Float    @default(0)
   regime          String   @default("RANGE")
+  /// the regime's full length, which sizes its trend, and what is left of it
+  regimeTicks     Int      @default(0)
   regimeTicksLeft Int      @default(0)
   trendDirection  Int      @default(1)
   /// mulberry32 state is a uint32, which does not fit a signed INT
   rng             Int      @db.UnsignedInt
   ticks           Int      @default(0)
   updatedAt       DateTime @updatedAt
+}
+
+/// Rolling OHLC history per market and timeframe.
+///
+/// The composite id makes a write idempotent: re-flushing the same bucket
+/// updates it instead of duplicating. Retention is enforced per timeframe by
+/// the candle store, so short timeframes stay small.
+model Candle {
+  symbol    String
+  timeframe String
+  /// bucket start, unix seconds
+  time      Int
+  open      Float
+  high      Float
+  low       Float
+  close     Float
+
+  @@id([symbol, timeframe, time])
+  @@index([symbol, timeframe, time(sort: Desc)])
+  @@index([timeframe, time])
 }

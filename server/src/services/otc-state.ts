@@ -21,6 +21,7 @@ export async function loadStates(symbols: string[]): Promise<OtcState[]> {
         variance: row.variance,
         lastShock: row.lastShock,
         regime: row.regime,
+        regimeTicks: row.regimeTicks,
         regimeTicksLeft: row.regimeTicksLeft,
         trendDirection: row.trendDirection,
         rng: row.rng,
