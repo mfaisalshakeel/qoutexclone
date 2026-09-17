@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { TableSkeleton } from '../Skeleton';
 
 /** Page header inside the admin shell. */
 export function PageHead({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
@@ -94,6 +95,7 @@ export function Empty({ text }: { text: string }) {
   );
 }
 
-export function Loading() {
-  return <div className="card h-40 animate-pulse" />;
+/** Placeholder while a section loads — shaped like the table it becomes. */
+export function Loading({ rows = 6, cols = 5 }: { rows?: number; cols?: number }) {
+  return <TableSkeleton rows={rows} cols={cols} />;
 }

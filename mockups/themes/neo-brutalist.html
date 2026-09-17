@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quantex — Neo Brutalist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #fdf6e3;
+    --ink: #0a0a0a;
+    --lime: #c6ff3d;
+    --pink: #ff5ca8;
+    --blue: #3d6bff;
+    --yellow: #ffd23d;
+    --white: #ffffff;
+    --b: 3px solid var(--ink);
+    --sh: 6px 6px 0 var(--ink);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Space Grotesk', sans-serif; color: var(--ink); background-color: var(--bg);
+    background-image: radial-gradient(var(--ink) 1px, transparent 1px); background-size: 22px 22px; background-attachment: fixed;
+  }
+  .mono { font-family: 'Space Mono', monospace; font-variant-numeric: tabular-nums; }
+  .display { font-family: 'Archivo Black', sans-serif; text-transform: uppercase; letter-spacing: -.01em; }
+  .box { background: var(--white); border: var(--b); box-shadow: var(--sh); }
+  button { font-family: inherit; color: var(--ink); }
+  .press { transition: transform .08s, box-shadow .08s; cursor: pointer; }
+  .press:hover { transform: translate(-2px, -2px); box-shadow: 8px 8px 0 var(--ink); }
+  .press:active { transform: translate(4px, 4px); box-shadow: 2px 2px 0 var(--ink); }
+
+  header { display: flex; align-items: center; gap: 14px; padding: 16px 24px; border-bottom: var(--b); background: var(--yellow); position: sticky; top: 0; z-index: 20; flex-wrap: wrap; }
+  .logo { font-size: 28px; display: flex; align-items: center; gap: 8px; }
+  .logo i { width: 34px; height: 34px; background: var(--pink); border: var(--b); display: inline-block; transform: rotate(12deg); }
+  header nav { display: flex; gap: 8px; margin-left: 12px; }
+  header nav a { text-decoration: none; color: var(--ink); font-weight: 700; padding: 6px 12px; border: 3px solid transparent; }
+  header nav a.on { border: var(--b); background: var(--white); box-shadow: 3px 3px 0 var(--ink); }
+  .grow { flex: 1; }
+  .bal { padding: 8px 14px; font-weight: 700; }
+  .bal small { display: block; font-size: 10px; letter-spacing: .1em; }
+  .dep { background: var(--lime); border: var(--b); box-shadow: 4px 4px 0 var(--ink); padding: 12px 18px; font-weight: 700; font-size: 15px; }
+
+  .marquee { border-bottom: var(--b); background: var(--ink); color: var(--lime); overflow: hidden; white-space: nowrap; }
+  .marquee div { display: inline-block; padding: 8px 0; animation: m 28s linear infinite; font-size: 14px; }
+  .marquee span { margin: 0 22px; }
+  @keyframes m { to { transform: translateX(-50%); } }
+
+  .wrap { max-width: 1320px; margin: 0 auto; padding: 28px 24px 60px; display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 28px; }
+  .hero { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 28px; margin-bottom: 22px; }
+  .hero h1 { font-size: clamp(44px, 7vw, 96px); line-height: .85; }
+  .hero h1 span { background: var(--lime); padding: 0 8px; border: var(--b); display: inline-block; transform: rotate(-2deg); }
+  .ticker { padding: 12px 16px; transform: rotate(1.5deg); }
+  .ticker .px { font-size: 32px; font-weight: 700; }
+  .ticker .ch { font-weight: 700; font-size: 14px; }
+
+  .tabs { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+  .tabs button { border: var(--b); background: var(--white); box-shadow: 4px 4px 0 var(--ink); padding: 9px 14px; font-weight: 700; font-size: 14px; }
+  .tabs button.on { background: var(--blue); color: #fff; }
+  .tabs button small { font-family: 'Space Mono'; margin-left: 6px; font-size: 11px; background: var(--lime); color: var(--ink); padding: 1px 4px; border: 2px solid var(--ink); }
+
+  .chart-box { position: relative; padding: 0; overflow: hidden; }
+  .chart-top { display: flex; justify-content: space-between; align-items: center; border-bottom: var(--b); padding: 10px 14px; background: var(--pink); gap: 10px; flex-wrap: wrap; }
+  .chart-top b { font-size: 15px; }
+  .tf { display: flex; gap: 0; border: var(--b); }
+  .tf button { border: 0; background: var(--white); padding: 5px 10px; font: 700 12px 'Space Mono'; cursor: pointer; }
+  .tf button + button { border-left: var(--b); }
+  .tf button.on { background: var(--ink); color: var(--lime); }
+  .chart { position: relative; height: 420px; background: var(--white); }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 26px; }
+  .stat { padding: 16px; }
+  .stat small { font-weight: 700; font-size: 12px; letter-spacing: .08em; }
+  .stat b { display: block; font-size: 28px; margin-top: 4px; }
+  .stat:nth-child(1) { background: var(--lime); } .stat:nth-child(2) { background: var(--white); } .stat:nth-child(3) { background: #bfe0ff; }
+
+  /* ticket */
+  .ticket { padding: 0; align-self: start; position: sticky; top: 100px; }
+  .ticket-h { background: var(--ink); color: var(--white); padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; }
+  .ticket-h .display { font-size: 22px; }
+  .stamp { background: var(--lime); color: var(--ink); border: 2px solid var(--white); padding: 2px 8px; font: 700 12px 'Space Mono'; transform: rotate(-4deg); }
+  .t-body { padding: 18px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .t-lbl { font-weight: 700; font-size: 13px; margin-bottom: 8px; letter-spacing: .06em; }
+  .amount { display: flex; border: var(--b); }
+  .amount span { background: var(--yellow); padding: 0 14px; display: grid; place-items: center; font: 700 22px 'Space Mono'; border-right: var(--b); }
+  .amount input { flex: 1; width: 100%; min-width: 0; border: 0; padding: 12px; font: 700 28px 'Space Mono'; outline: none; background: var(--white); }
+  .amount input:focus { background: #f2ffd6; }
+  .presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+  .presets button { border: var(--b); background: var(--white); padding: 7px 0; font: 700 13px 'Space Mono'; box-shadow: 3px 3px 0 var(--ink); }
+  .times { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .times button { border: var(--b); background: var(--white); padding: 10px 0; font-weight: 700; box-shadow: 3px 3px 0 var(--ink); }
+  .times button.on { background: var(--pink); }
+  .receipt { border: var(--b); border-style: dashed; padding: 12px 14px; font-family: 'Space Mono'; font-size: 13px; background: #fffdf5; }
+  .receipt div { display: flex; justify-content: space-between; padding: 3px 0; }
+  .receipt .total { border-top: 2px dashed var(--ink); margin-top: 6px; padding-top: 8px; font-weight: 700; font-size: 16px; }
+  .big { display: grid; gap: 12px; }
+  .big button { border: var(--b); box-shadow: var(--sh); padding: 18px; font-family: 'Archivo Black'; font-size: 24px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
+  .big button small { font: 700 13px 'Space Mono'; text-transform: none; }
+  .b-up { background: var(--lime); }
+  .b-down { background: var(--pink); }
+
+  .positions { margin-top: 28px; }
+  .positions h2 { font-size: 26px; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+  .positions h2 i { font-style: normal; font: 700 14px 'Space Mono'; background: var(--ink); color: var(--lime); padding: 2px 8px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; }
+  .card { padding: 14px; position: relative; animation: slam .3s cubic-bezier(.2,1.6,.4,1); }
+  @keyframes slam { from { transform: scale(1.3) rotate(-4deg); opacity: 0; } }
+  .card.win { background: var(--lime); } .card.lose { background: #ffd0e5; }
+  .card .top { display: flex; justify-content: space-between; font-weight: 700; }
+  .card .timer { font: 700 30px 'Space Mono'; margin: 8px 0 2px; }
+  .card .meta { font: 400 12px 'Space Mono'; }
+  .card .pl { position: absolute; right: -10px; bottom: -12px; background: var(--ink); color: var(--white); padding: 4px 10px; font: 700 14px 'Space Mono'; transform: rotate(-5deg); }
+  .none { padding: 28px; text-align: center; font-weight: 700; background: var(--white); }
+
+  .result { position: fixed; inset: 0; display: grid; place-items: center; z-index: 90; pointer-events: none; }
+  .result div { font-family: 'Archivo Black'; font-size: clamp(56px, 14vw, 160px); text-transform: uppercase; border: 6px solid var(--ink); box-shadow: 14px 14px 0 var(--ink); padding: 10px 40px; transform: rotate(-6deg) scale(0); transition: transform .35s cubic-bezier(.2,1.6,.4,1); }
+  .result.show div { transform: rotate(-6deg) scale(1); }
+
+  @media (max-width: 1080px) {
+    .wrap { grid-template-columns: 1fr; }
+    .ticket { position: static; }
+    header nav { display: none; }
+  }
+  @media (max-width: 620px) {
+    header { padding: 12px 14px; }
+    .logo { font-size: 22px; }
+    .bal small { display: none; }
+    .wrap { padding: 20px 14px 40px; gap: 22px; }
+    .chart { height: 300px; }
+    .row3 { grid-template-columns: 1fr 1fr; }
+    .row3 .stat:last-child { grid-column: 1 / -1; }
+    .ticker { transform: none; }
+    .big button { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo display"><i></i>Quantex</div>
+  <nav><a class="on" href="#">Trade</a><a href="#">Battles</a><a href="#">Wallet</a><a href="#">History</a></nav>
+  <div class="grow"></div>
+  <div class="box bal mono"><small>LIVE BALANCE</small><span id="bal">$1,337.00</span></div>
+  <button class="dep press">DEPOSIT →</button>
+</header>
+<div class="marquee mono"><div id="marq"></div></div>
+
+<div class="wrap">
+  <main>
+    <div class="hero">
+      <h1 class="display">Call it.<br><span>Up or down.</span></h1>
+      <div class="box ticker">
+        <div class="mono" style="font-size:12px;font-weight:700" id="t-sym">BTC / USD</div>
+        <div class="px mono" id="t-px">64,250.00</div>
+        <div class="ch mono" id="t-ch">▲ +0.00%</div>
+      </div>
+    </div>
+
+    <div class="tabs" id="tabs"></div>
+
+    <div class="box chart-box">
+      <div class="chart-top"><b>LIVE CHART · <span class="mono" id="clock"></span></b><div class="tf"><button>15S</button><button class="on">1M</button><button>5M</button><button>1H</button></div></div>
+      <div class="chart"><canvas id="chart"></canvas></div>
+    </div>
+
+    <div class="row3">
+      <div class="box stat"><small>PAYOUT</small><b class="mono" id="s-pay">87%</b></div>
+      <div class="box stat"><small>STREAK</small><b class="mono" id="s-streak">0 🔥</b></div>
+      <div class="box stat"><small>TODAY P/L</small><b class="mono" id="s-pl">$0.00</b></div>
+    </div>
+
+    <section class="positions">
+      <h2 class="display">In play <i id="count">0</i></h2>
+      <div class="cards" id="cards"><div class="box none">NOTHING IN PLAY. SMASH A BUTTON. →</div></div>
+    </section>
+  </main>
+
+  <aside class="box ticket">
+    <div class="ticket-h"><span class="display">Trade slip</span><span class="stamp">#<span id="slip">0001</span></span></div>
+    <div class="t-body">
+      <div>
+        <div class="t-lbl">STAKE</div>
+        <div class="amount"><span>$</span><input id="amt" value="25" inputmode="decimal" /></div>
+        <div class="presets"><button class="press" data-v="5">5</button><button class="press" data-v="25">25</button><button class="press" data-v="100">100</button><button class="press" data-v="500">500</button></div>
+      </div>
+      <div>
+        <div class="t-lbl">EXPIRY</div>
+        <div class="times" id="times"><button class="press" data-s="30">30S</button><button class="press on" data-s="60">1M</button><button class="press" data-s="120">2M</button><button class="press" data-s="300">5M</button><button class="press" data-s="900">15M</button><button class="press" data-s="3600">1H</button></div>
+      </div>
+      <div class="receipt">
+        <div><span>STAKE</span><span id="r-stake">$25.00</span></div>
+        <div><span>PAYOUT</span><span id="r-pay">87%</span></div>
+        <div><span>EXPIRES</span><span id="r-exp">--:--:--</span></div>
+        <div class="total"><span>WIN</span><span id="r-win">+$21.75</span></div>
+      </div>
+      <div class="big">
+        <button class="press b-up" data-dir="up">Higher ↑ <small>call</small></button>
+        <button class="press b-down" data-dir="down">Lower ↓ <small>put</small></button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<div class="result" id="result"><div></div></div>
+
+<script>
+const A = [['BTC',64250,87],['ETH',3145.5,86],['SOL',148.2,84],['BNB',592.4,82],['XRP',0.5271,81],['DOGE',0.1284,80],['ADA',0.4382,80],['TON',6.84,78]];
+const $ = (id) => document.getElementById(id);
+const f = (v) => v.toLocaleString('en-US', { minimumFractionDigits: v < 1 ? 4 : 2, maximumFractionDigits: v < 1 ? 4 : 2 });
+let cur = 0, bars = [], price, pos = [], secs = 60, bal = 1337, pl = 0, streak = 0, slip = 1;
+
+$('marq').innerHTML = Array(2).fill(A.map(a => `<span>★ ${a[0]} ${f(a[1])}</span><span>PAYS ${a[2]}%</span>`).join('')).join('');
+function tabs() { $('tabs').innerHTML = A.map((a, i) => `<button class="press ${i === cur ? 'on' : ''}" data-i="${i}">${a[0]}<small>${a[2]}%</small></button>`).join(''); }
+$('tabs').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; cur = +b.dataset.i; $('t-sym').textContent = `${A[cur][0]} / USD`; $('s-pay').textContent = $('r-pay').textContent = A[cur][2] + '%'; seed(); tabs(); calc(); draw(); };
+
+function seed() { bars = []; let p = A[cur][1] * .99; for (let i = 0; i < 60; i++) { const o = p, c = o * (1 + (Math.random() - .48) * .004); bars.push({ o, c, h: Math.max(o, c) * (1 + Math.random() * .0015), l: Math.min(o, c) * (1 - Math.random() * .0015) }); p = c; } price = p; }
+const cvs = $('chart'), ctx = cvs.getContext('2d');
+function draw() {
+  const r = cvs.getBoundingClientRect(), d = devicePixelRatio || 1; cvs.width = r.width * d; cvs.height = r.height * d; ctx.setTransform(d, 0, 0, d, 0, 0);
+  const W = r.width, H = r.height, pr = 92, v = bars.slice(-Math.floor((W - pr) / 16)), hi = Math.max(...v.map(b => b.h)), lo = Math.min(...v.map(b => b.l));
+  const y = (p) => 18 + (hi - p) / (hi - lo || 1) * (H - 36), st = (W - pr) / v.length;
+  ctx.clearRect(0, 0, W, H); ctx.font = '700 11px Space Mono';
+  for (let i = 0; i <= 4; i++) { const p = lo + (hi - lo) * i / 4; ctx.fillStyle = '#e8e2d0'; ctx.fillRect(0, Math.round(y(p)), W - pr, 2); ctx.fillStyle = '#0a0a0a'; ctx.fillText(f(p), W - pr + 8, y(p) + 4); }
+  ctx.fillStyle = '#0a0a0a'; ctx.fillRect(W - pr, 0, 3, H);
+  v.forEach((b, i) => {
+    const x = i * st + st / 2, up = b.c >= b.o, top = Math.min(y(b.o), y(b.c)), h = Math.max(3, Math.abs(y(b.o) - y(b.c))), w = st * .62;
+    ctx.fillStyle = '#0a0a0a'; ctx.fillRect(x - 1.5, y(b.h), 3, y(b.l) - y(b.h));
+    ctx.fillRect(x - w / 2 + 3, top + 3, w, h);
+    ctx.fillStyle = up ? '#c6ff3d' : '#ff5ca8'; ctx.fillRect(x - w / 2, top, w, h);
+    ctx.strokeStyle = '#0a0a0a'; ctx.lineWidth = 2.5; ctx.strokeRect(x - w / 2, top, w, h); ctx.lineWidth = 1;
+  });
+  pos.filter(p => p.m === cur).forEach(p => { const yy = y(p.entry); ctx.fillStyle = p.dir === 'up' ? '#3d6bff' : '#ff5ca8'; for (let x = 0; x < W - pr; x += 14) ctx.fillRect(x, yy - 1.5, 8, 3); ctx.fillStyle = '#0a0a0a'; ctx.fillRect(4, yy - 22, 62, 18); ctx.fillStyle = '#fff'; ctx.fillText(p.dir === 'up' ? 'CALL ↑' : 'PUT ↓', 9, yy - 9); });
+  const py = y(price); ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, py - 1, W - pr, 2);
+  ctx.fillRect(W - pr + 6, py - 13, pr - 8, 26); ctx.fillStyle = '#c6ff3d'; ctx.fillRect(W - pr + 3, py - 16, pr - 8, 26); ctx.strokeStyle = '#0a0a0a'; ctx.lineWidth = 2.5; ctx.strokeRect(W - pr + 3, py - 16, pr - 8, 26); ctx.lineWidth = 1;
+  ctx.fillStyle = '#0a0a0a'; ctx.fillText(f(price), W - pr + 9, py + 1);
+}
+
+function tick() {
+  price *= 1 + (Math.random() - .495) * .0013; const b = bars[bars.length - 1]; b.c = price; b.h = Math.max(b.h, price); b.l = Math.min(b.l, price);
+  $('t-px').textContent = f(price); const ch = (price / A[cur][1] - 1) * 100; $('t-ch').textContent = `${ch >= 0 ? '▲ +' : '▼ '}${ch.toFixed(2)}%`;
+  $('clock').textContent = new Date().toLocaleTimeString([], { hour12: false }); $('r-exp').textContent = new Date(Date.now() + secs * 1000).toLocaleTimeString([], { hour12: false });
+  settle(); cards(); draw();
+}
+setInterval(() => bars.push({ o: price, c: price, h: price, l: price }), 5000);
+
+const amt = () => Math.max(1, parseFloat($('amt').value) || 0);
+function calc() { $('r-stake').textContent = '$' + amt().toFixed(2); $('r-win').textContent = '+$' + (amt() * A[cur][2] / 100).toFixed(2); }
+$('amt').oninput = calc;
+document.querySelector('.presets').onclick = (e) => { const v = e.target.dataset.v; if (v) { $('amt').value = v; calc(); } };
+$('times').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; [...$('times').children].forEach(x => x.classList.remove('on')); b.classList.add('on'); secs = +b.dataset.s; };
+document.querySelectorAll('.big button').forEach(b => b.onclick = () => {
+  pos.unshift({ m: cur, dir: b.dataset.dir, entry: price, stake: amt(), end: Date.now() + secs * 1000 });
+  bal -= amt(); $('bal').textContent = '$' + bal.toLocaleString('en-US', { minimumFractionDigits: 2 });
+  $('slip').textContent = String(++slip).padStart(4, '0'); cards(); draw();
+});
+function settle() {
+  pos = pos.filter(p => {
+    if (Date.now() < p.end) return true;
+    const won = p.dir === 'up' ? price > p.entry : price < p.entry, gain = p.stake * A[p.m][2] / 100;
+    if (won) { bal += p.stake + gain; pl += gain; streak++; } else { pl -= p.stake; streak = 0; }
+    $('bal').textContent = '$' + bal.toLocaleString('en-US', { minimumFractionDigits: 2 });
+    $('s-pl').textContent = (pl >= 0 ? '+$' : '−$') + Math.abs(pl).toFixed(2); $('s-streak').textContent = streak + ' 🔥';
+    const r = $('result'), d = r.firstElementChild; d.textContent = won ? 'Nailed it' : 'Rekt'; d.style.background = won ? '#c6ff3d' : '#ff5ca8';
+    r.classList.add('show'); setTimeout(() => r.classList.remove('show'), 1300);
+    return false;
+  });
+}
+function cards() {
+  $('count').textContent = pos.length;
+  if (!pos.length) { $('cards').innerHTML = '<div class="box none">NOTHING IN PLAY. SMASH A BUTTON. →</div>'; return; }
+  $('cards').innerHTML = pos.map(p => {
+    const px = p.m === cur ? price : p.entry, w = p.dir === 'up' ? px >= p.entry : px <= p.entry, s = Math.max(0, Math.ceil((p.end - Date.now()) / 1000));
+    return `<div class="box card ${w ? 'win' : 'lose'}"><div class="top"><span>${A[p.m][0]} ${p.dir === 'up' ? '↑ CALL' : '↓ PUT'}</span><span class="mono">$${p.stake}</span></div><div class="timer">${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}</div><div class="meta">STRIKE ${f(p.entry)}<br>NOW ${f(px)}</div><div class="pl">${w ? '+$' + (p.stake * A[p.m][2] / 100).toFixed(2) : '−$' + p.stake.toFixed(2)}</div></div>`;
+  }).join('');
+}
+
+seed(); tabs(); calc(); draw();
+setInterval(tick, 750); addEventListener('resize', draw);
+</script>
+</body>
+</html>

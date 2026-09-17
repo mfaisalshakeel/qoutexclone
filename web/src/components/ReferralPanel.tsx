@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { dateTime, money } from '../lib/format';
 import { CopyButton } from './Copy';
+import { Skeleton, SkeletonGroup } from './Skeleton';
 
 interface ReferralState {
   code: string;
@@ -19,7 +20,30 @@ export function ReferralPanel() {
     api.get<ReferralState>('/me/referrals').then(setState).catch(() => undefined);
   }, []);
 
-  if (!state) return <div className="card h-32 animate-pulse" />;
+  if (!state) {
+    return (
+      <SkeletonGroup label="Loading partner programme" className="card space-y-4 p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="space-y-2">
+            <Skeleton className="h-3.5 w-32" />
+            <Skeleton className="h-2.5 w-56 max-w-full" />
+          </div>
+          <div className="flex flex-col items-end gap-1.5">
+            <Skeleton className="h-2 w-12" />
+            <Skeleton className="h-4 w-16" />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-10 flex-1 !rounded-lg" />
+          <Skeleton className="h-10 w-16 !rounded-lg" />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Skeleton className="h-14 !rounded-lg" />
+          <Skeleton className="h-14 !rounded-lg" />
+        </div>
+      </SkeletonGroup>
+    );
+  }
   const link = `${location.origin}/register?ref=${state.code}`;
 
   return (

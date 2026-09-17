@@ -1,0 +1,5 @@
+# Apache / XAMPP: send every request to the theme browser for clean URLs
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f [OR]
+RewriteCond %{REQUEST_URI} \.html$
+RewriteRule ^ index.php [L,QSA]

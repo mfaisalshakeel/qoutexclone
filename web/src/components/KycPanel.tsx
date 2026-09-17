@@ -3,6 +3,7 @@ import { ApiError, api } from '../lib/api';
 import { dateTime } from '../lib/format';
 import { toast } from '../store/toast';
 import { useAuth } from '../store/auth';
+import { FormSkeleton } from './Skeleton';
 
 interface KycState {
   status: 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -66,7 +67,7 @@ export function KycPanel() {
     }
   };
 
-  if (!state) return <div className="card h-40 animate-pulse" />;
+  if (!state) return <FormSkeleton fields={6} />;
 
   const canSubmit = state.status === 'NOT_SUBMITTED' || state.status === 'REJECTED';
 

@@ -6,6 +6,7 @@ import { useAuth } from '../store/auth';
 import { CopyButton } from './Copy';
 import { QR } from './QR';
 import type { Deposit, PaymentMethod } from '../lib/types';
+import { PaymentPanelSkeleton } from './Skeleton';
 
 interface Props {
   methods: PaymentMethod[];
@@ -44,7 +45,7 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
     return () => window.clearInterval(id);
   }, []);
 
-  if (!method) return <div className="card h-40 animate-pulse" />;
+  if (!method) return <PaymentPanelSkeleton />;
 
   const checkPromo = async () => {
     const code = promoCode.trim();

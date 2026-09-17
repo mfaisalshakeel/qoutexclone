@@ -7,6 +7,7 @@ import { useAuth } from '../store/auth';
 import { DepositPanel } from '../components/DepositPanel';
 import { WithdrawPanel } from '../components/WithdrawPanel';
 import type { Deposit, PaymentMethod, Withdrawal } from '../lib/types';
+import { RowSkeletons } from '../components/Skeleton';
 
 type Tab = 'deposit' | 'withdraw' | 'history';
 
@@ -18,6 +19,7 @@ export function Wallet() {
   const [mockChain, setMockChain] = useState(false);
   const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [listsLoaded, setListsLoaded] = useState(false);
 
   const loadAll = useCallback(async () => {
     const [d, w] = await Promise.all([
@@ -26,6 +28,7 @@ export function Wallet() {
     ]);
     setDeposits(d.deposits);
     setWithdrawals(w.withdrawals);
+    setListsLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -80,7 +83,12 @@ export function Wallet() {
       {tab === 'withdraw' && (
         <WithdrawPanel methods={methods} withdrawals={withdrawals} onChanged={() => void loadAll()} />
       )}
-      {tab === 'history' && <WalletHistory deposits={deposits} withdrawals={withdrawals} />}
+      {tab === 'history' &&
+        (listsLoaded ? (
+          <WalletHistory deposits={deposits} withdrawals={withdrawals} />
+        ) : (
+          <RowSkeletons rows={6} className="card divide-y divide-ink-700" />
+        ))}
     </div>
   );
 }

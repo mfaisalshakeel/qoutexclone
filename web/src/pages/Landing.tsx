@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { percent, price } from '../lib/format';
 import { IconLogo } from '../components/Icons';
+import { RowSkeletons } from '../components/Skeleton';
 import type { Asset } from '../lib/types';
 
 const FEATURES = [
@@ -94,7 +95,11 @@ export function Landing() {
                   <span className="chip bg-up-soft text-up">{asset.payoutPct}%</span>
                 </li>
               ))}
-              {assets.length === 0 && <li className="px-4 py-10 text-center text-sm text-slate-500">Loading markets…</li>}
+              {assets.length === 0 && (
+                <li>
+                  <RowSkeletons rows={6} avatar className="divide-y divide-ink-700" rowClassName="px-4 py-3" />
+                </li>
+              )}
             </ul>
           </div>
         </div>

@@ -38,6 +38,19 @@
 }
 
 @layer components {
+  /* placeholder block with a soft sweep; shapes come from the caller */
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-ink-700;
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.08), transparent);
+    animation: skeleton-sweep 1.5s ease-in-out infinite;
+  }
+
   .card {
     @apply rounded-xl border border-ink-600 bg-ink-800;
   }
@@ -78,5 +91,17 @@
 
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+}
+
+@keyframes skeleton-sweep {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
   }
 }

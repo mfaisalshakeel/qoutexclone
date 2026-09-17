@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, api } from '../lib/api';
 import { countdown, dateTime, money } from '../lib/format';
 import { realtime } from '../lib/ws';
 import { useAuth } from '../store/auth';
 import { toast } from '../store/toast';
 import type { LeaderboardRow, Tournament } from '../lib/types';
+import { RowSkeletons, Skeleton, SkeletonGroup } from '../components/Skeleton';
 
 const STATUS_TONE: Record<Tournament['status'], string> = {
   SCHEDULED: 'bg-accent-soft text-accent',
@@ -16,11 +17,12 @@ const STATUS_TONE: Record<Tournament['status'], string> = {
 export function Tournaments() {
   const user = useAuth((s) => s.user);
   const refreshUser = useAuth((s) => s.refreshUser);
-  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [tournaments, setTournaments] = useState<Tournament[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [board, setBoard] = useState<LeaderboardRow[]>([]);
+  const [board, setBoard] = useState<LeaderboardRow[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [, tick] = useState(0);
+  const boardFor = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     const { tournaments: list } = await api.get<{ tournaments: Tournament[] }>('/tournaments');
@@ -44,6 +46,8 @@ export function Tournaments() {
 
   useEffect(() => {
     if (!openId) return;
+    if (boardFor.current !== openId) setBoard(null);
+    boardFor.current = openId;
     api
       .get<{ leaderboard: LeaderboardRow[] }>(`/tournaments/${openId}/leaderboard`)
       .then(({ leaderboard }) => setBoard(leaderboard))
@@ -74,12 +78,14 @@ export function Tournaments() {
         </p>
       </div>
 
-      {tournaments.length === 0 && (
+      {!tournaments && <TournamentSkeletons />}
+
+      {tournaments?.length === 0 && (
         <p className="card p-10 text-center text-sm text-slate-500">No tournaments scheduled right now.</p>
       )}
 
       <div className="space-y-3">
-        {tournaments.map((tournament) => {
+        {tournaments?.map((tournament) => {
           const live = tournament.status === 'RUNNING';
           const ended = tournament.status === 'FINISHED';
           return (
@@ -154,7 +160,9 @@ export function Tournaments() {
                       You are in. Switch the terminal to this tournament from the account selector to trade your chips.
                     </p>
                   )}
-                  {board.length === 0 ? (
+                  {!board ? (
+                    <RowSkeletons rows={4} rowClassName="px-4 py-2.5" className="divide-y divide-ink-700" />
+                  ) : board.length === 0 ? (
                     <p className="p-6 text-center text-xs text-slate-500">No entrants yet — be the first.</p>
                   ) : (
                     <table className="w-full text-sm">
@@ -196,5 +204,30 @@ export function Tournaments() {
         })}
       </div>
     </div>
+  );
+}
+
+function TournamentSkeletons() {
+  return (
+    <SkeletonGroup label="Loading tournaments" className="space-y-3">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="card flex flex-wrap items-center gap-3 p-4">
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-3.5 w-40" />
+              <Skeleton className="h-5 w-16 !rounded-full" />
+            </div>
+            <Skeleton className="h-2.5 w-64 max-w-full" />
+            <Skeleton className="h-2.5 w-48 max-w-full" />
+          </div>
+          <div className="flex flex-col items-end gap-1.5">
+            <Skeleton className="h-2 w-16" />
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-2.5 w-24" />
+          </div>
+          <Skeleton className="h-8 w-24 !rounded-lg" />
+        </div>
+      ))}
+    </SkeletonGroup>
   );
 }

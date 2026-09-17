@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quantex — Swiss Editorial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --paper: #f3f0e8;
+    --paper-2: #e9e5da;
+    --ink: #111110;
+    --soft: #6b6a64;
+    --rule: #cfcabd;
+    --signal: #ff4f00;
+    --up: #0f7b4a;
+    --down: #d7263d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: 'Instrument Sans', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+  .serif { font-family: 'Instrument Serif', serif; font-weight: 400; }
+  a { color: inherit; }
+
+  /* marquee of quotes */
+  .tape { border-bottom: 1px solid var(--ink); overflow: hidden; white-space: nowrap; background: var(--ink); color: var(--paper); }
+  .tape-inner { display: inline-flex; gap: 40px; padding: 8px 0; animation: tape 40s linear infinite; font-size: 12px; }
+  .tape-inner span b { font-weight: 600; margin-right: 8px; }
+  @keyframes tape { to { transform: translateX(-50%); } }
+
+  header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 24px; padding: 18px 32px; border-bottom: 1px solid var(--rule); }
+  .brand { font-size: 22px; font-weight: 700; letter-spacing: -.04em; display: flex; align-items: baseline; gap: 6px; }
+  .brand i { width: 10px; height: 10px; background: var(--signal); border-radius: 50%; display: inline-block; }
+  header nav { display: flex; gap: 28px; font-size: 14px; }
+  header nav a { text-decoration: none; color: var(--soft); padding-bottom: 3px; border-bottom: 2px solid transparent; }
+  header nav a.on { color: var(--ink); border-color: var(--ink); }
+  .hdr-right { display: flex; align-items: center; gap: 18px; font-size: 13px; }
+  .toggle { display: flex; border: 1px solid var(--ink); border-radius: 999px; overflow: hidden; }
+  .toggle button { border: 0; background: none; font: 500 12px 'Instrument Sans'; padding: 7px 14px; cursor: pointer; color: var(--ink); }
+  .toggle button.on { background: var(--ink); color: var(--paper); }
+  .cta { background: var(--signal); color: #fff; border: 0; font: 600 13px 'Instrument Sans'; padding: 10px 18px; border-radius: 999px; cursor: pointer; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: calc(100vh - 110px); }
+  .stage { padding: 28px 32px 32px; border-right: 1px solid var(--rule); min-width: 0; }
+  .eyebrow { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--soft); }
+  .asset-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 40px; margin-top: 10px; }
+  .asset-name { font-size: clamp(40px, 6vw, 84px); line-height: .9; letter-spacing: -.02em; }
+  .asset-name em { color: var(--soft); }
+  .big-price { font-size: clamp(28px, 3.6vw, 48px); font-weight: 500; letter-spacing: -.03em; }
+  .delta { font-size: 14px; margin-top: 4px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 10px; }
+  .pill { border: 1px solid var(--rule); background: transparent; border-radius: 999px; padding: 7px 14px; font: 500 13px 'Instrument Sans'; cursor: pointer; color: var(--ink); transition: .15s; }
+  .pill:hover { border-color: var(--ink); }
+  .pill.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .pill small { color: var(--signal); margin-left: 6px; font-weight: 600; }
+  .pill.on small { color: #ffb38a; }
+
+  .chart { position: relative; height: 46vh; min-height: 280px; margin-top: 18px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--rule); }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .chart-foot { display: flex; justify-content: space-between; font-size: 12px; color: var(--soft); padding-top: 10px; flex-wrap: wrap; gap: 8px; }
+  .tfs { display: flex; gap: 16px; }
+  .tfs button { background: none; border: 0; font: 500 12px 'IBM Plex Mono'; color: var(--soft); cursor: pointer; }
+  .tfs button.on { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; text-decoration-color: var(--signal); }
+
+  .figures { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 28px; border-top: 1px solid var(--rule); }
+  .figures div { padding: 16px 16px 0 0; }
+  .figures div + div { padding-left: 16px; border-left: 1px solid var(--rule); }
+  .figures small { font-size: 11px; color: var(--soft); letter-spacing: .08em; text-transform: uppercase; }
+  .figures b { display: block; font-size: 22px; font-weight: 500; margin-top: 6px; letter-spacing: -.02em; }
+
+  /* order column */
+  .order { display: flex; flex-direction: column; background: var(--paper-2); }
+  .order section { padding: 24px 28px; border-bottom: 1px solid var(--rule); }
+  .order h2 { font-size: 30px; line-height: 1; margin: 6px 0 18px; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; }
+  .amount { display: flex; align-items: baseline; gap: 6px; border-bottom: 2px solid var(--ink); padding: 8px 0; margin-top: 8px; }
+  .amount span { font-size: 28px; color: var(--soft); }
+  .amount input { flex: 1; min-width: 0; border: 0; background: none; font: 500 40px 'IBM Plex Mono'; color: var(--ink); outline: none; letter-spacing: -.03em; }
+  .quick { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+  .quick button { border: 1px solid var(--rule); background: var(--paper); padding: 6px 10px; font: 500 12px 'IBM Plex Mono'; cursor: pointer; border-radius: 4px; }
+  .quick button:hover { border-color: var(--ink); }
+  .expiry { display: grid; grid-template-columns: repeat(5, 1fr); margin-top: 10px; border: 1px solid var(--ink); }
+  .expiry button { background: none; border: 0; padding: 11px 0; font: 500 13px 'IBM Plex Mono'; cursor: pointer; color: var(--ink); }
+  .expiry button + button { border-left: 1px solid var(--ink); }
+  .expiry button.on { background: var(--ink); color: var(--paper); }
+  .summary { font-size: 14px; line-height: 1.8; margin-top: 18px; }
+  .summary .row b { font-weight: 600; }
+  .actions { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--ink); }
+  .act { border: 0; padding: 26px 20px; font: 600 18px 'Instrument Sans'; cursor: pointer; text-align: left; display: flex; flex-direction: column; gap: 4px; transition: .15s; }
+  .act small { font: 400 12px 'IBM Plex Mono'; opacity: .8; }
+  .act-up { background: var(--up); color: #fff; }
+  .act-down { background: var(--down); color: #fff; }
+  .act:hover { filter: brightness(1.08); }
+  .act:active { transform: translateY(1px); }
+
+  .ledger { padding: 20px 28px 28px; flex: 1; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+  th { text-align: left; font-weight: 500; font-size: 11px; color: var(--soft); letter-spacing: .08em; text-transform: uppercase; padding-bottom: 8px; border-bottom: 1px solid var(--ink); }
+  td { padding: 10px 0; border-bottom: 1px solid var(--rule); }
+  td:last-child, th:last-child { text-align: right; }
+  .up { color: var(--up); } .down { color: var(--down); }
+  .empty td { color: var(--soft); font-style: italic; text-align: left !important; }
+  tr.new { animation: flash 1.2s ease; }
+  @keyframes flash { from { background: #ffe1cf; } }
+
+  footer { padding: 16px 32px; font-size: 11px; color: var(--soft); border-top: 1px solid var(--rule); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+  @media (max-width: 1080px) {
+    .layout { grid-template-columns: 1fr; }
+    .stage { border-right: 0; }
+    .order { display: grid; grid-template-columns: 1fr 1fr; }
+    .order .actions { grid-column: 1 / -1; order: -1; position: sticky; top: 0; z-index: 5; }
+    .ledger { grid-column: 1 / -1; }
+  }
+  @media (max-width: 720px) {
+    header { grid-template-columns: 1fr auto; padding: 14px 16px; }
+    header nav { grid-column: 1 / -1; order: 3; overflow-x: auto; gap: 20px; }
+    .hdr-right .toggle { display: none; }
+    .stage { padding: 20px 16px; }
+    .order { display: flex; }
+    .order section, .ledger { padding: 20px 16px; }
+    .order .actions { position: fixed; top: auto; bottom: 0; left: 0; right: 0; }
+    .act { padding: 16px; font-size: 16px; }
+    body { padding-bottom: 84px; }
+    .figures { grid-template-columns: 1fr 1fr; }
+    .figures div:nth-child(3) { padding-left: 0; border-left: 0; }
+    .chart { height: 38vh; }
+    footer { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="tape"><div class="tape-inner mono" id="tape"></div></div>
+
+<header>
+  <div class="brand">Quantex<i></i></div>
+  <nav><a class="on" href="#">Trade</a><a href="#">Tournaments</a><a href="#">Wallet</a><a href="#">History</a><a href="#">Account</a></nav>
+  <div class="hdr-right">
+    <div class="toggle"><button class="on">Live</button><button>Practice</button></div>
+    <span class="mono" id="bal">$12,480.00</span>
+    <button class="cta">Deposit</button>
+  </div>
+</header>
+
+<div class="layout">
+  <main class="stage">
+    <div class="eyebrow">Binary option · Crypto · <span id="clock" class="mono"></span></div>
+    <div class="asset-row">
+      <h1 class="asset-name serif" id="name">Bitcoin <em>/USD</em></h1>
+      <div>
+        <div class="big-price mono" id="price">64,250.00</div>
+        <div class="delta mono up" id="delta">▲ 1.24% today</div>
+      </div>
+    </div>
+    <div class="pills" id="pills"></div>
+
+    <div class="chart"><canvas id="chart"></canvas></div>
+    <div class="chart-foot">
+      <span>Line · last 120 ticks · strike lines show your open positions</span>
+      <div class="tfs"><button>5S</button><button>15S</button><button class="on">1M</button><button>5M</button></div>
+    </div>
+
+    <div class="figures">
+      <div><small>Payout</small><b class="mono" id="f-pay">87%</b></div>
+      <div><small>Session high</small><b class="mono" id="f-hi">—</b></div>
+      <div><small>Session low</small><b class="mono" id="f-lo">—</b></div>
+      <div><small>Win rate · 30d</small><b class="mono">58.4%</b></div>
+    </div>
+  </main>
+
+  <aside class="order">
+    <section>
+      <div class="eyebrow">Step 01</div>
+      <h2 class="serif">How much?</h2>
+      <div class="amount"><span class="mono">$</span><input id="amt" value="250" inputmode="decimal" /></div>
+      <div class="quick"><button data-v="10">+10</button><button data-v="50">+50</button><button data-v="100">+100</button><button data-v="x2">×2</button><button data-v="half">½</button></div>
+    </section>
+    <section>
+      <div class="eyebrow">Step 02</div>
+      <h2 class="serif">For how long?</h2>
+      <div class="expiry" id="exp"><button>30s</button><button class="on">1m</button><button>2m</button><button>5m</button><button>15m</button></div>
+      <div class="summary">
+        <div class="row"><span>Pays if right</span><b class="mono up" id="s-win">+$217.50</b></div>
+        <div class="row"><span>Lose if wrong</span><b class="mono down" id="s-loss">−$250.00</b></div>
+        <div class="row"><span>Tie at strike</span><b class="mono">refund</b></div>
+      </div>
+    </section>
+    <div class="actions">
+      <button class="act act-up" data-dir="up">Higher ↗<small id="up-sub">87% · 1 min</small></button>
+      <button class="act act-down" data-dir="down">Lower ↘<small id="down-sub">87% · 1 min</small></button>
+    </div>
+    <div class="ledger">
+      <div class="eyebrow">Positions</div>
+      <table>
+        <thead><tr><th>Market</th><th>Strike</th><th>Ends</th><th>P/L</th></tr></thead>
+        <tbody id="rows"><tr class="empty"><td colspan="4">Nothing open. The page is yours.</td></tr></tbody>
+      </table>
+    </div>
+  </aside>
+</div>
+
+<footer><span>Binary options are high risk. You can lose the full amount of each position.</span><span class="mono">Feed: simulated · latency 38ms</span></footer>
+
+<script>
+const M = [['BTC','Bitcoin',64250,87],['ETH','Ethereum',3145.5,86],['SOL','Solana',148.2,84],['BNB','BNB',592.4,82],['XRP','XRP',0.5271,81],['DOGE','Dogecoin',0.1284,80],['ADA','Cardano',0.4382,80],['LTC','Litecoin',71.63,79]];
+const $ = (id) => document.getElementById(id);
+const fmt = (p) => p.toLocaleString('en-US', { minimumFractionDigits: p < 1 ? 4 : 2, maximumFractionDigits: p < 1 ? 4 : 2 });
+let cur = 0, series = [], price, open = [], expiry = 60;
+
+function seed() { series = []; let p = M[cur][2] * .99; for (let i = 0; i < 120; i++) { p *= 1 + (Math.random() - .48) * .0016; series.push(p); } price = p; }
+
+$('tape').innerHTML = [...M, ...M].map(m => `<span><b>${m[0]}</b>${fmt(m[2])} <span style="color:${Math.random() > .4 ? '#6ee7a8' : '#ff8a8a'}">${(Math.random() * 3).toFixed(2)}%</span></span>`).join('');
+function pills() {
+  $('pills').innerHTML = M.map((m, i) => `<button class="pill ${i === cur ? 'on' : ''}" data-i="${i}">${m[0]}<small>${m[3]}%</small></button>`).join('');
+}
+$('pills').onclick = (e) => {
+  const b = e.target.closest('.pill'); if (!b) return;
+  cur = +b.dataset.i; $('name').innerHTML = `${M[cur][1]} <em>/USD</em>`; $('f-pay').textContent = M[cur][3] + '%';
+  seed(); pills(); summary(); draw();
+};
+
+const cvs = $('chart'), ctx = cvs.getContext('2d');
+function draw() {
+  const r = cvs.getBoundingClientRect(), d = devicePixelRatio || 1;
+  cvs.width = r.width * d; cvs.height = r.height * d; ctx.setTransform(d, 0, 0, d, 0, 0);
+  const W = r.width, H = r.height, pr = 86, hi = Math.max(...series), lo = Math.min(...series);
+  const y = (v) => 16 + (hi - v) / (hi - lo || 1) * (H - 32), x = (i) => i / (series.length - 1) * (W - pr);
+  ctx.clearRect(0, 0, W, H);
+  ctx.font = '11px IBM Plex Mono'; ctx.fillStyle = '#6b6a64';
+  for (let i = 0; i <= 4; i++) {
+    const v = lo + (hi - lo) * i / 4; ctx.fillText(fmt(v), W - pr + 12, y(v) + 4);
+    ctx.fillStyle = '#cfcabd'; ctx.fillRect(0, Math.round(y(v)), W - pr, 1); ctx.fillStyle = '#6b6a64';
+  }
+  ctx.beginPath(); series.forEach((v, i) => ctx.lineTo(x(i), y(v)));
+  ctx.lineTo(x(series.length - 1), H); ctx.lineTo(0, H); ctx.fillStyle = 'rgba(17,17,16,.05)'; ctx.fill();
+  ctx.beginPath(); series.forEach((v, i) => ctx.lineTo(x(i), y(v)));
+  ctx.strokeStyle = '#111110'; ctx.lineWidth = 1.6; ctx.stroke(); ctx.lineWidth = 1;
+  open.filter(p => p.m === cur).forEach(p => {
+    ctx.strokeStyle = p.dir === 'up' ? '#0f7b4a' : '#d7263d'; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(0, y(p.entry)); ctx.lineTo(W - pr, y(p.entry)); ctx.stroke(); ctx.setLineDash([]);
+  });
+  const lx = x(series.length - 1), ly = y(price);
+  ctx.fillStyle = '#ff4f00'; ctx.beginPath(); ctx.arc(lx, ly, 5, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,79,0,.35)'; ctx.beginPath(); ctx.arc(lx, ly, 10 + (Date.now() / 90 % 8), 0, 7); ctx.stroke();
+  ctx.fillStyle = '#111110'; ctx.fillRect(W - pr + 4, ly - 11, pr - 4, 22);
+  ctx.fillStyle = '#f3f0e8'; ctx.font = '500 11px IBM Plex Mono'; ctx.fillText(fmt(price), W - pr + 10, ly + 4);
+  $('f-hi').textContent = fmt(hi); $('f-lo').textContent = fmt(lo);
+}
+
+function tick() {
+  price *= 1 + (Math.random() - .495) * .0011; series.push(price); if (series.length > 120) series.shift();
+  $('price').textContent = fmt(price);
+  const ch = (price / M[cur][2] - 1) * 100;
+  $('delta').textContent = `${ch >= 0 ? '▲' : '▼'} ${Math.abs(ch).toFixed(2)}% today`; $('delta').className = 'delta mono ' + (ch >= 0 ? 'up' : 'down');
+  $('clock').textContent = new Date().toLocaleTimeString([], { hour12: false });
+  settle(); draw(); rows();
+}
+
+const amt = () => Math.max(1, parseFloat($('amt').value) || 0);
+function summary() {
+  const pay = M[cur][3] / 100, label = expiry < 60 ? `${expiry} sec` : `${expiry / 60} min`;
+  $('s-win').textContent = '+$' + (amt() * pay).toFixed(2); $('s-loss').textContent = '−$' + amt().toFixed(2);
+  $('up-sub').textContent = $('down-sub').textContent = `${M[cur][3]}% · ${label}`;
+}
+$('amt').oninput = summary;
+document.querySelector('.quick').onclick = (e) => {
+  const v = e.target.dataset.v; if (!v) return;
+  $('amt').value = v === 'x2' ? amt() * 2 : v === 'half' ? Math.max(1, Math.round(amt() / 2)) : amt() + +v; summary();
+};
+$('exp').onclick = (e) => {
+  if (e.target.tagName !== 'BUTTON') return;
+  [...$('exp').children].forEach(b => b.classList.remove('on')); e.target.classList.add('on');
+  const t = e.target.textContent; expiry = t.endsWith('s') ? parseInt(t) : parseInt(t) * 60; summary();
+};
+document.querySelectorAll('.act').forEach(b => b.onclick = () => {
+  open.unshift({ id: Date.now(), m: cur, dir: b.dataset.dir, entry: price, stake: amt(), end: Date.now() + expiry * 1000, fresh: true });
+  rows(); draw();
+});
+function settle() {
+  open = open.filter(p => {
+    if (Date.now() < p.end) return true;
+    const won = p.dir === 'up' ? price > p.entry : price < p.entry;
+    const bal = parseFloat($('bal').textContent.replace(/[$,]/g, '')) + (won ? p.stake * M[p.m][3] / 100 : -p.stake);
+    $('bal').textContent = '$' + bal.toLocaleString('en-US', { minimumFractionDigits: 2 });
+    return false;
+  });
+}
+function rows() {
+  if (!open.length) { $('rows').innerHTML = '<tr class="empty"><td colspan="4">Nothing open. The page is yours.</td></tr>'; return; }
+  $('rows').innerHTML = open.map(p => {
+    const px = p.m === cur ? price : p.entry, w = p.dir === 'up' ? px >= p.entry : px <= p.entry, s = Math.max(0, Math.ceil((p.end - Date.now()) / 1000));
+    const html = `<tr class="${p.fresh ? 'new' : ''}"><td><b>${p.dir === 'up' ? '↗' : '↘'} ${M[p.m][0]}</b></td><td class="mono">${fmt(p.entry)}</td><td class="mono">${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</td><td class="mono ${w ? 'up' : 'down'}">${w ? '+' + (p.stake * M[p.m][3] / 100).toFixed(2) : '−' + p.stake.toFixed(2)}</td></tr>`;
+    p.fresh = false; return html;
+  }).join('');
+}
+
+seed(); pills(); summary(); draw();
+setInterval(tick, 800); addEventListener('resize', draw);
+</script>
+</body>
+</html>

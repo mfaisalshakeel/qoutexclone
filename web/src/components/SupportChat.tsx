@@ -4,6 +4,7 @@ import { dateTime } from '../lib/format';
 import { realtime } from '../lib/ws';
 import { toast } from '../store/toast';
 import type { SupportTicket } from '../lib/types';
+import { Skeleton, SkeletonGroup } from './Skeleton';
 
 /**
  * Floating support desk. One thread per question, replies arrive over the
@@ -17,6 +18,7 @@ export function SupportChat() {
   const [subject, setSubject] = useState('');
   const [composing, setComposing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
@@ -27,6 +29,8 @@ export function SupportChat() {
       setComposing(list.length === 0);
     } catch {
       /* the widget stays quiet if support is unreachable */
+    } finally {
+      setLoaded(true);
     }
   };
 
@@ -173,7 +177,13 @@ export function SupportChat() {
           )}
 
           <div className="flex-1 space-y-2 overflow-y-auto p-3">
-            {composing || !active ? (
+            {!loaded ? (
+              <SkeletonGroup label="Loading conversation" className="space-y-2">
+                <Skeleton className="h-10 w-3/5" />
+                <Skeleton className="ml-auto h-8 w-1/2" />
+                <Skeleton className="h-14 w-2/3" />
+              </SkeletonGroup>
+            ) : composing || !active ? (
               <p className="rounded-lg bg-ink-700/60 p-3 text-xs leading-relaxed text-slate-400">
                 Tell us what you need — deposits, withdrawals, verification or trading. An agent replies right here.
               </p>

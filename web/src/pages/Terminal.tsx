@@ -9,6 +9,7 @@ import { AssetPicker } from '../components/AssetPicker';
 import { PriceChart, type ChartType, type IndicatorSettings } from '../components/PriceChart';
 import { Positions } from '../components/Positions';
 import { TradeTicket } from '../components/TradeTicket';
+import { ChartSkeleton, Skeleton, SkeletonGroup } from '../components/Skeleton';
 import type { Trade } from '../lib/types';
 
 const STUDIES = [
@@ -22,6 +23,7 @@ export function Terminal() {
   const user = useAuth((s) => s.user);
   const [openTrades, setOpenTrades] = useState<Trade[]>([]);
   const [closedTrades, setClosedTrades] = useState<Trade[]>([]);
+  const [tradesLoaded, setTradesLoaded] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<'trade' | 'positions'>('trade');
   const [marketsOpen, setMarketsOpen] = useState(false);
   const [chartType, setChartType] = useState<ChartType>('candles');
@@ -38,12 +40,14 @@ export function Terminal() {
   }, [loaded, load]);
 
   const loadTrades = useCallback(async () => {
+    setTradesLoaded(false);
     const [open, closed] = await Promise.all([
       api.get<{ trades: Trade[] }>(`/trades?status=OPEN&accountType=${accountType}`),
       api.get<{ trades: Trade[] }>(`/trades?status=CLOSED&accountType=${accountType}&limit=30`),
     ]);
     setOpenTrades(open.trades);
     setClosedTrades(closed.trades);
+    setTradesLoaded(true);
   }, [accountType]);
 
   useEffect(() => {
@@ -70,6 +74,20 @@ export function Terminal() {
 
       <section className="flex min-h-0 flex-1 flex-col gap-2">
         <header className="card flex shrink-0 items-center gap-3 p-2.5">
+          {!asset ? (
+            <SkeletonGroup label="Loading market" className="flex items-center gap-3">
+              <Skeleton className="h-9 w-9 !rounded-full" />
+              <div className="space-y-1.5">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-2.5 w-28" />
+              </div>
+              <div className="ml-2 space-y-1.5">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-2.5 w-12" />
+              </div>
+            </SkeletonGroup>
+          ) : (
+            <>
           <button
             onClick={() => setMarketsOpen(true)}
             className="flex items-center gap-2 rounded-lg px-1 py-0.5 text-left md:pointer-events-none"
@@ -96,6 +114,8 @@ export function Terminal() {
               {percent(changePct)}
             </span>
           </div>
+            </>
+          )}
 
           <div className="ml-auto flex items-center gap-1">
             <div className="hidden gap-1 sm:flex">
@@ -161,7 +181,8 @@ export function Terminal() {
           </div>
         </header>
 
-        <div className="card h-[42dvh] min-h-[240px] overflow-hidden md:h-auto md:flex-1">
+        <div className="card relative h-[42dvh] min-h-[240px] overflow-hidden md:h-auto md:flex-1">
+          {!asset && <ChartSkeleton />}
           {asset && (
             <PriceChart
               symbol={symbol}
@@ -192,7 +213,7 @@ export function Terminal() {
           {mobilePanel === 'trade' ? (
             <TradeTicket asset={asset} onPlaced={(trade) => setOpenTrades((c) => [trade, ...c])} />
           ) : (
-            <Positions open={openTrades} closed={closedTrades} />
+            <Positions open={openTrades} closed={closedTrades} loading={!tradesLoaded} />
           )}
         </div>
       </section>
@@ -202,7 +223,7 @@ export function Terminal() {
           <TradeTicket asset={asset} onPlaced={(trade) => setOpenTrades((c) => [trade, ...c])} />
         </div>
         <div className="min-h-0 flex-1">
-          <Positions open={openTrades} closed={closedTrades} />
+          <Positions open={openTrades} closed={closedTrades} loading={!tradesLoaded} />
         </div>
       </aside>
 

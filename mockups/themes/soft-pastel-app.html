@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Quantex — Soft Pastel App</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f6f3ff;
+    --card: #ffffff;
+    --ink: #1d1a2f;
+    --muted: #8a85a3;
+    --line: #ece8f7;
+    --lilac: #b8a4ff;
+    --lilac-deep: #6c4dff;
+    --mint: #7ee0c3;
+    --mint-deep: #11a57a;
+    --peach: #ffb5a7;
+    --peach-deep: #f0515e;
+    --butter: #ffe8a3;
+    --shadow: 0 18px 40px -18px rgba(76, 52, 180, .28);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: var(--ink);
+    background:
+      radial-gradient(900px 500px at 10% -10%, #e5dcff 0%, transparent 60%),
+      radial-gradient(700px 500px at 110% 10%, #d7f5ec 0%, transparent 60%),
+      radial-gradient(600px 400px at 50% 120%, #ffe3dc 0%, transparent 60%),
+      var(--bg);
+    min-height: 100vh;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  .up { color: var(--mint-deep); } .down { color: var(--peach-deep); }
+
+  .shell { max-width: 1240px; margin: 0 auto; padding: 24px; display: grid; grid-template-columns: 88px minmax(0, 1fr) 360px; gap: 24px; min-height: 100vh; }
+
+  /* side rail */
+  .rail { background: var(--card); border-radius: 28px; box-shadow: var(--shadow); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 0; position: sticky; top: 24px; height: calc(100vh - 48px); }
+  .logo { width: 48px; height: 48px; border-radius: 16px; background: linear-gradient(135deg, var(--lilac-deep), #a78bfa); display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 20px; margin-bottom: 14px; }
+  .rail a { width: 52px; height: 52px; border-radius: 18px; display: grid; place-items: center; color: var(--muted); text-decoration: none; font-size: 20px; transition: .2s; }
+  .rail a.on { background: #efeaff; color: var(--lilac-deep); }
+  .rail a:hover { background: #f5f2ff; }
+  .rail .me { margin-top: auto; width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--butter), var(--peach)); display: grid; place-items: center; font-weight: 700; }
+
+  .top { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+  .hello small { color: var(--muted); font-size: 13px; }
+  .hello h1 { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+  .seg { margin-left: auto; display: flex; background: var(--card); padding: 5px; border-radius: 999px; box-shadow: var(--shadow); }
+  .seg button { border: 0; background: none; padding: 9px 18px; border-radius: 999px; font: 600 13px 'Plus Jakarta Sans'; color: var(--muted); cursor: pointer; }
+  .seg button.on { background: var(--ink); color: #fff; }
+
+  .balance { border-radius: 30px; padding: 26px; color: var(--ink); background: linear-gradient(135deg, #c9b8ff 0%, #b1e9d9 100%); position: relative; overflow: hidden; box-shadow: var(--shadow); }
+  .balance::after { content: ''; position: absolute; width: 260px; height: 260px; right: -60px; top: -90px; border-radius: 50%; background: rgba(255,255,255,.35); }
+  .balance small { font-size: 13px; font-weight: 600; opacity: .7; }
+  .balance .amt { font-size: 40px; font-weight: 800; letter-spacing: -.03em; margin: 6px 0 16px; }
+  .balance .row { display: flex; gap: 10px; position: relative; z-index: 1; flex-wrap: wrap; }
+  .chip { background: rgba(255,255,255,.65); border: 0; border-radius: 999px; padding: 10px 16px; font: 600 13px 'Plus Jakarta Sans'; cursor: pointer; color: var(--ink); }
+  .chip.dark { background: var(--ink); color: #fff; }
+
+  .assets { display: flex; gap: 12px; overflow-x: auto; padding: 18px 2px 8px; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .assets::-webkit-scrollbar { display: none; }
+  .asset { scroll-snap-align: start; flex: 0 0 150px; background: var(--card); border-radius: 22px; padding: 14px; cursor: pointer; border: 2px solid transparent; box-shadow: 0 10px 24px -16px rgba(76,52,180,.35); transition: .2s; }
+  .asset.on { border-color: var(--lilac-deep); transform: translateY(-3px); }
+  .asset .ic { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; font-size: 11px; }
+  .asset b { display: block; margin-top: 10px; font-size: 14px; }
+  .asset small { font-size: 12px; color: var(--muted); }
+  .asset svg { width: 100%; height: 30px; margin-top: 6px; }
+
+  .chart-card { background: var(--card); border-radius: 30px; padding: 22px; box-shadow: var(--shadow); margin-top: 10px; }
+  .chart-head { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .chart-head .px { font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 999px; }
+  .badge.up { background: #dcf7ee; } .badge.down { background: #ffe5e1; }
+  .tfs { margin-left: auto; display: flex; gap: 6px; }
+  .tfs button { border: 0; background: #f4f1fc; color: var(--muted); font: 600 12px 'Plus Jakarta Sans'; padding: 8px 12px; border-radius: 12px; cursor: pointer; }
+  .tfs button.on { background: #efeaff; color: var(--lilac-deep); }
+  .chart { position: relative; height: 320px; margin-top: 14px; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  /* ticket */
+  .ticket { background: var(--card); border-radius: 30px; padding: 22px; box-shadow: var(--shadow); position: sticky; top: 24px; display: flex; flex-direction: column; gap: 18px; }
+  .ticket h2 { font-size: 18px; font-weight: 800; }
+  .lbl { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+  .amount { display: flex; align-items: center; background: #f7f5fe; border-radius: 20px; padding: 8px; }
+  .amount button { width: 44px; height: 44px; border-radius: 14px; border: 0; background: var(--card); font-size: 20px; cursor: pointer; box-shadow: 0 4px 12px -6px rgba(76,52,180,.4); color: var(--ink); }
+  .amount input { flex: 1; min-width: 0; text-align: center; border: 0; background: none; font: 800 26px 'Plus Jakarta Sans'; color: var(--ink); outline: none; }
+  .times { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .times button { border: 0; background: #f7f5fe; border-radius: 16px; padding: 12px 0; font: 700 13px 'Plus Jakarta Sans'; color: var(--ink); cursor: pointer; transition: .15s; }
+  .times button.on { background: var(--butter); box-shadow: inset 0 0 0 2px #f2c94c; }
+  .payout { display: flex; align-items: center; justify-content: space-between; background: #effbf6; border-radius: 20px; padding: 14px 16px; }
+  .payout small { color: var(--muted); font-size: 12px; font-weight: 600; }
+  .payout b { font-size: 22px; font-weight: 800; color: var(--mint-deep); }
+  .go { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .go button { border: 0; border-radius: 22px; padding: 20px 10px; font: 800 16px 'Plus Jakarta Sans'; cursor: pointer; display: grid; justify-items: center; gap: 4px; transition: transform .15s; }
+  .go button:active { transform: scale(.96); }
+  .go .emo { font-size: 24px; }
+  .go-up { background: var(--mint); color: #064e3b; box-shadow: 0 14px 26px -14px var(--mint-deep); }
+  .go-down { background: var(--peach); color: #7f1d1d; box-shadow: 0 14px 26px -14px var(--peach-deep); }
+
+  .list h3 { font-size: 15px; font-weight: 800; margin: 26px 0 12px; display: flex; justify-content: space-between; }
+  .list h3 a { font-size: 12px; color: var(--lilac-deep); text-decoration: none; font-weight: 700; }
+  .pos { display: flex; align-items: center; gap: 12px; background: var(--card); padding: 12px; border-radius: 20px; margin-bottom: 10px; box-shadow: 0 10px 24px -18px rgba(76,52,180,.4); animation: in .35s ease; }
+  @keyframes in { from { opacity: 0; transform: scale(.96); } }
+  .ring { width: 46px; height: 46px; flex-shrink: 0; }
+  .pos .meta { flex: 1; min-width: 0; }
+  .pos .meta b { font-size: 14px; display: block; }
+  .pos .meta small { font-size: 12px; color: var(--muted); }
+  .pos .res { text-align: right; font-weight: 800; font-size: 14px; }
+  .empty { background: rgba(255,255,255,.6); border: 2px dashed var(--line); border-radius: 20px; padding: 22px; text-align: center; color: var(--muted); font-size: 13px; }
+
+  .confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; }
+  .sheet-toast { position: fixed; top: 20px; left: 50%; transform: translate(-50%, -140%); background: var(--ink); color: #fff; padding: 12px 18px; border-radius: 18px; font-weight: 600; font-size: 14px; transition: transform .4s cubic-bezier(.2,.9,.3,1.3); z-index: 70; }
+  .sheet-toast.show { transform: translate(-50%, 0); }
+  .tabbar { display: none; }
+
+  @media (max-width: 1100px) {
+    .shell { grid-template-columns: 80px minmax(0, 1fr); }
+    .side { grid-column: 2; }
+    .ticket { position: static; }
+  }
+  @media (max-width: 720px) {
+    .shell { grid-template-columns: 1fr; padding: 16px 16px 100px; gap: 16px; }
+    .rail { display: none; }
+    .side { grid-column: auto; }
+    .hello h1 { font-size: 22px; }
+    .seg { margin-left: 0; width: 100%; } .seg button { flex: 1; }
+    .balance .amt { font-size: 32px; }
+    .chart { height: 240px; }
+    .chart-card, .ticket { border-radius: 24px; padding: 18px; }
+    .tfs { margin-left: 0; width: 100%; } .tfs button { flex: 1; }
+    .tabbar { display: flex; position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); background: var(--ink); border-radius: 26px; padding: 8px; justify-content: space-around; z-index: 50; box-shadow: 0 20px 40px -12px rgba(29,26,47,.6); }
+    .tabbar a { color: #a09bba; text-decoration: none; font-size: 11px; font-weight: 600; display: grid; justify-items: center; gap: 2px; padding: 6px 10px; border-radius: 18px; }
+    .tabbar a span { font-size: 18px; }
+    .tabbar a.on { background: rgba(255,255,255,.1); color: #fff; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <nav class="rail">
+    <div class="logo">Q</div>
+    <a class="on" href="#" title="Trade">◎</a><a href="#" title="Tournaments">✦</a><a href="#" title="Wallet">▣</a><a href="#" title="History">◷</a><a href="#" title="Support">✉</a>
+    <div class="me">AK</div>
+  </nav>
+
+  <main>
+    <div class="top">
+      <div class="hello"><small>Good evening, Aisha 👋</small><h1>Ready for a trade?</h1></div>
+      <div class="seg"><button>Live</button><button class="on">Practice</button><button>Event</button></div>
+    </div>
+
+    <section class="balance">
+      <small>Practice balance</small>
+      <div class="amt num" id="bal">$10,000.00</div>
+      <div class="row"><button class="chip dark">+ Deposit</button><button class="chip">Withdraw</button><button class="chip">Reset practice</button></div>
+    </section>
+
+    <div class="assets" id="assets"></div>
+
+    <section class="chart-card">
+      <div class="chart-head">
+        <div>
+          <small style="color:var(--muted);font-weight:600;font-size:13px" id="c-name">Bitcoin · BTC/USD</small>
+          <div class="px num" id="c-px">$64,250.00</div>
+        </div>
+        <span class="badge up num" id="c-badge">▲ 1.20%</span>
+        <div class="tfs"><button>15s</button><button class="on">1m</button><button>5m</button><button>1h</button></div>
+      </div>
+      <div class="chart"><canvas id="chart"></canvas></div>
+    </section>
+
+    <div class="list">
+      <h3>Your positions <a href="#">See all</a></h3>
+      <div id="positions"><div class="empty">No trades yet. Pick a direction on the right and watch it play out here ✨</div></div>
+    </div>
+  </main>
+
+  <aside class="side">
+    <div class="ticket">
+      <h2>Make a prediction</h2>
+      <div>
+        <div class="lbl">How much?</div>
+        <div class="amount"><button id="minus">−</button><input id="amt" class="num" value="$50" /><button id="plus">+</button></div>
+      </div>
+      <div>
+        <div class="lbl">How long?</div>
+        <div class="times" id="times"><button data-s="30">30 sec</button><button data-s="60" class="on">1 min</button><button data-s="120">2 min</button><button data-s="300">5 min</button><button data-s="900">15 min</button><button data-s="3600">1 hour</button></div>
+      </div>
+      <div class="payout"><div><small>You could win</small><div style="font-size:12px;color:var(--muted)" id="pay-pct">87% payout</div></div><b class="num" id="win">+$43.50</b></div>
+      <div class="go">
+        <button class="go-up" data-dir="up"><span class="emo">🚀</span>Goes up</button>
+        <button class="go-down" data-dir="down"><span class="emo">🪂</span>Goes down</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<nav class="tabbar"><a class="on" href="#"><span>◎</span>Trade</a><a href="#"><span>✦</span>Events</a><a href="#"><span>▣</span>Wallet</a><a href="#"><span>◷</span>History</a></nav>
+<div class="sheet-toast" id="toast"></div>
+<canvas class="confetti" id="confetti"></canvas>
+
+<script>
+const A = [['BTC','Bitcoin',64250,87,'#fff1d6','#b7791f'],['ETH','Ethereum',3145.5,86,'#e7e9ff','#4c51bf'],['SOL','Solana',148.2,84,'#dcf7ee','#0f766e'],['BNB','BNB',592.4,82,'#fff6cc','#a16207'],['XRP','XRP',0.5271,81,'#eef0f4','#475569'],['DOGE','Dogecoin',0.1284,80,'#fdf1d8','#92400e'],['ADA','Cardano',0.4382,80,'#e0edff','#1d4ed8']];
+const $ = (id) => document.getElementById(id);
+const money = (v) => '$' + v.toLocaleString('en-US', { minimumFractionDigits: v < 1 ? 4 : 2, maximumFractionDigits: v < 1 ? 4 : 2 });
+const hist = A.map(a => { let p = a[2], h = []; for (let i = 0; i < 24; i++) { p *= 1 + (Math.random() - .48) * .006; h.push(p); } return h; });
+let cur = 0, pts = [], price, pos = [], secs = 60, bal = 10000;
+
+function sparkline(h, color) { const hi = Math.max(...h), lo = Math.min(...h); return `<svg viewBox="0 0 120 30" preserveAspectRatio="none"><polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="${h.map((v, i) => `${i / (h.length - 1) * 120},${27 - (v - lo) / (hi - lo || 1) * 24}`).join(' ')}"/></svg>`; }
+function assets() {
+  $('assets').innerHTML = A.map((a, i) => { const h = hist[i], up = h[h.length - 1] >= h[0]; return `<div class="asset ${i === cur ? 'on' : ''}" data-i="${i}"><div class="ic" style="background:${a[4]};color:${a[5]}">${a[0]}</div><b>${a[1]}</b><small class="num">${a[3]}% payout</small>${sparkline(h, up ? '#11a57a' : '#f0515e')}</div>`; }).join('');
+}
+$('assets').onclick = (e) => { const c = e.target.closest('.asset'); if (!c) return; cur = +c.dataset.i; $('c-name').textContent = `${A[cur][1]} · ${A[cur][0]}/USD`; $('pay-pct').textContent = A[cur][3] + '% payout'; seed(); assets(); calc(); draw(); };
+
+function seed() { pts = []; let p = A[cur][2] * .992; for (let i = 0; i < 70; i++) { p *= 1 + (Math.random() - .485) * .0022; pts.push(p); } price = p; }
+const cvs = $('chart'), ctx = cvs.getContext('2d');
+function draw() {
+  const r = cvs.getBoundingClientRect(), d = devicePixelRatio || 1; cvs.width = r.width * d; cvs.height = r.height * d; ctx.setTransform(d, 0, 0, d, 0, 0);
+  const W = r.width, H = r.height, hi = Math.max(...pts), lo = Math.min(...pts), pad = (hi - lo) * .15;
+  const y = (v) => 10 + (hi + pad - v) / (hi - lo + pad * 2 || 1) * (H - 30), x = (i) => i / (pts.length - 1) * (W - 20);
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#f1edfb'; for (let i = 0; i < 4; i++) ctx.fillRect(0, Math.round(10 + i * (H - 30) / 3), W, 1);
+  // smooth curve
+  const path = () => { ctx.beginPath(); ctx.moveTo(x(0), y(pts[0])); for (let i = 1; i < pts.length; i++) { const xc = (x(i - 1) + x(i)) / 2; ctx.bezierCurveTo(xc, y(pts[i - 1]), xc, y(pts[i]), x(i), y(pts[i])); } };
+  path(); ctx.lineTo(x(pts.length - 1), H); ctx.lineTo(0, H);
+  const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, 'rgba(108,77,255,.28)'); g.addColorStop(1, 'rgba(126,224,195,0)'); ctx.fillStyle = g; ctx.fill();
+  path(); const lg = ctx.createLinearGradient(0, 0, W, 0); lg.addColorStop(0, '#a78bfa'); lg.addColorStop(1, '#6c4dff'); ctx.strokeStyle = lg; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.stroke(); ctx.lineWidth = 1;
+  pos.filter(p => p.m === cur).forEach(p => {
+    const yy = y(p.entry); ctx.setLineDash([2, 6]); ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = p.dir === 'up' ? '#11a57a' : '#f0515e'; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W - 20, yy); ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+    ctx.font = '600 16px Plus Jakarta Sans'; ctx.fillText(p.dir === 'up' ? '🚀' : '🪂', 4, yy - 6);
+  });
+  const lx = x(pts.length - 1), ly = y(price);
+  ctx.fillStyle = 'rgba(108,77,255,.18)'; ctx.beginPath(); ctx.arc(lx, ly, 12, 0, 7); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(lx, ly, 6, 0, 7); ctx.fill(); ctx.strokeStyle = '#6c4dff'; ctx.lineWidth = 3; ctx.stroke(); ctx.lineWidth = 1;
+}
+
+function tick() {
+  price *= 1 + (Math.random() - .495) * .0012; pts.push(price); pts.shift();
+  $('c-px').textContent = money(price);
+  const ch = (price / A[cur][2] - 1) * 100; $('c-badge').textContent = `${ch >= 0 ? '▲' : '▼'} ${Math.abs(ch).toFixed(2)}%`; $('c-badge').className = 'badge num ' + (ch >= 0 ? 'up' : 'down');
+  settle(); list(); draw();
+}
+
+const amt = () => Math.max(1, parseFloat($('amt').value.replace(/[^0-9.]/g, '')) || 0);
+function calc() { $('win').textContent = '+$' + (amt() * A[cur][3] / 100).toFixed(2); }
+$('amt').oninput = calc; $('amt').onblur = () => $('amt').value = '$' + amt();
+$('minus').onclick = () => { $('amt').value = '$' + Math.max(1, amt() - 10); calc(); };
+$('plus').onclick = () => { $('amt').value = '$' + (amt() + 10); calc(); };
+$('times').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; [...$('times').children].forEach(x => x.classList.remove('on')); b.classList.add('on'); secs = +b.dataset.s; };
+document.querySelectorAll('.go button').forEach(b => b.onclick = () => {
+  pos.unshift({ m: cur, dir: b.dataset.dir, entry: price, stake: amt(), start: Date.now(), end: Date.now() + secs * 1000 });
+  bal -= amt(); $('bal').textContent = money(bal); toast(`${b.dataset.dir === 'up' ? '🚀' : '🪂'} Placed $${amt()} on ${A[cur][0]}`); list(); draw();
+});
+function settle() {
+  pos = pos.filter(p => {
+    if (Date.now() < p.end) return true;
+    const won = p.dir === 'up' ? price > p.entry : price < p.entry;
+    if (won) { bal += p.stake * (1 + A[p.m][3] / 100); confetti(); toast(`🎉 You won $${(p.stake * A[p.m][3] / 100).toFixed(2)}!`); } else toast('Not this time — try again 💜');
+    $('bal').textContent = money(bal); return false;
+  });
+}
+function list() {
+  if (!pos.length) { $('positions').innerHTML = '<div class="empty">No trades yet. Pick a direction on the right and watch it play out here ✨</div>'; return; }
+  $('positions').innerHTML = pos.map(p => {
+    const total = p.end - p.start, left = Math.max(0, p.end - Date.now()), frac = left / total, s = Math.ceil(left / 1000);
+    const px = p.m === cur ? price : p.entry, w = p.dir === 'up' ? px >= p.entry : px <= p.entry, col = w ? '#11a57a' : '#f0515e', c = 2 * Math.PI * 19;
+    return `<div class="pos"><svg class="ring" viewBox="0 0 46 46"><circle cx="23" cy="23" r="19" fill="none" stroke="#f1edfb" stroke-width="5"/><circle cx="23" cy="23" r="19" fill="none" stroke="${col}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - frac)}" transform="rotate(-90 23 23)"/><text x="23" y="27" text-anchor="middle" font-size="11" font-weight="700" fill="#1d1a2f">${s}s</text></svg>
+      <div class="meta"><b>${p.dir === 'up' ? '🚀 Up' : '🪂 Down'} · ${A[p.m][0]}</b><small class="num">$${p.stake} at ${money(p.entry)}</small></div>
+      <div class="res num" style="color:${col}">${w ? '+$' + (p.stake * A[p.m][3] / 100).toFixed(2) : '−$' + p.stake.toFixed(2)}<br><small style="color:var(--muted);font-weight:600;font-size:11px">${w ? 'winning' : 'losing'}</small></div></div>`;
+  }).join('');
+}
+let tt; function toast(m) { $('toast').textContent = m; $('toast').classList.add('show'); clearTimeout(tt); tt = setTimeout(() => $('toast').classList.remove('show'), 2400); }
+
+function confetti() {
+  const c = $('confetti'), x = c.getContext('2d'); c.width = innerWidth; c.height = innerHeight;
+  const bits = Array.from({ length: 120 }, () => ({ x: innerWidth / 2, y: innerHeight / 3, vx: (Math.random() - .5) * 14, vy: Math.random() * -12 - 4, r: Math.random() * 6 + 3, c: ['#b8a4ff', '#7ee0c3', '#ffb5a7', '#ffe8a3', '#6c4dff'][Math.floor(Math.random() * 5)], a: Math.random() * 6 }));
+  let f = 0; (function frame() { x.clearRect(0, 0, c.width, c.height); bits.forEach(b => { b.vy += .35; b.x += b.vx; b.y += b.vy; b.a += .1; x.save(); x.translate(b.x, b.y); x.rotate(b.a); x.fillStyle = b.c; x.fillRect(-b.r / 2, -b.r / 2, b.r, b.r * .6); x.restore(); }); if (++f < 90) requestAnimationFrame(frame); else x.clearRect(0, 0, c.width, c.height); })();
+}
+
+seed(); assets(); calc(); draw();
+setInterval(tick, 700); addEventListener('resize', draw);
+</script>
+</body>
+</html>

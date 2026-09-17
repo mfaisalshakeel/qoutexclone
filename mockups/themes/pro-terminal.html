@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quantex — Pro Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #000;
+    --panel: #0b0b0b;
+    --line: #262626;
+    --amber: #ffb000;
+    --amber-dim: #a37000;
+    --text: #e6e6e6;
+    --muted: #7a7a7a;
+    --up: #00e676;
+    --down: #ff3b30;
+    --blue: #4fc3f7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font: 12px/1.4 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+  .cond { font-family: 'IBM Plex Sans Condensed', sans-serif; }
+  .up { color: var(--up); } .down { color: var(--down); } .amber { color: var(--amber); } .muted { color: var(--muted); }
+
+  .topbar { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); height: 36px; }
+  .topbar > * { display: flex; align-items: center; padding: 0 12px; border-right: 1px solid var(--line); white-space: nowrap; }
+  .brand { background: var(--amber); color: #000; font: 700 14px 'IBM Plex Sans Condensed'; letter-spacing: .08em; }
+  .cmd { flex: 1; gap: 8px; min-width: 0; }
+  .cmd input { flex: 1; min-width: 0; background: none; border: 0; color: var(--amber); font: 500 13px 'IBM Plex Mono'; outline: none; text-transform: uppercase; }
+  .cmd kbd, .key { border: 1px solid var(--line); border-bottom-width: 2px; padding: 0 5px; border-radius: 3px; color: var(--muted); font-size: 10px; }
+  .fn { gap: 14px; }
+  .fn a { color: var(--muted); text-decoration: none; }
+  .fn a b { color: var(--amber); margin-right: 4px; }
+  .fn a.on { color: var(--text); }
+  .status { gap: 8px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--up); box-shadow: 0 0 8px var(--up); animation: blink 1.6s infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+
+  .grid {
+    display: grid; gap: 1px; background: var(--line);
+    grid-template-columns: 300px minmax(0, 1fr) 300px;
+    grid-template-rows: minmax(0, 1fr) 230px;
+    height: calc(100vh - 36px - 26px); min-height: 620px;
+  }
+  .p { background: var(--panel); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .p-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--line); background: #111; font: 600 11px 'IBM Plex Sans Condensed'; letter-spacing: .12em; text-transform: uppercase; color: var(--amber); }
+  .p-h span { color: var(--muted); font: 400 10px 'IBM Plex Mono'; letter-spacing: 0; text-transform: none; }
+  .p-b { overflow: auto; flex: 1; min-height: 0; }
+
+  .watch { grid-row: 1 / 3; }
+  table { width: 100%; border-collapse: collapse; }
+  th { position: sticky; top: 0; background: var(--panel); text-align: right; color: var(--muted); font-weight: 400; font-size: 10px; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  td { text-align: right; padding: 5px 8px; border-bottom: 1px solid #151515; white-space: nowrap; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: #151515; }
+  tbody tr.on { background: #1f1700; box-shadow: inset 2px 0 0 var(--amber); }
+  .flash-up { animation: fu .6s; } .flash-down { animation: fd .6s; }
+  @keyframes fu { from { background: rgba(0,230,118,.25); } } @keyframes fd { from { background: rgba(255,59,48,.25); } }
+  svg.spark { width: 48px; height: 16px; vertical-align: middle; }
+
+  .chartp .quote { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 22px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  .quote .sym { font: 700 20px 'IBM Plex Sans Condensed'; color: var(--amber); }
+  .quote .last { font-size: 22px; font-weight: 600; }
+  .quote .kv { color: var(--muted); font-size: 11px; }
+  .quote .kv b { color: var(--text); font-weight: 500; }
+  .tf { margin-left: auto; display: flex; gap: 2px; }
+  .tf button { background: none; border: 1px solid var(--line); color: var(--muted); font: 500 11px 'IBM Plex Mono'; padding: 2px 7px; cursor: pointer; }
+  .tf button.on { color: #000; background: var(--amber); border-color: var(--amber); }
+  .canvas-box { position: relative; flex: 1; min-height: 260px; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  .order .p-b { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+  .lbl { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 4px; display: flex; justify-content: space-between; }
+  .inp { display: flex; border: 1px solid var(--line); background: #000; }
+  .inp span { padding: 8px; color: var(--muted); border-right: 1px solid var(--line); }
+  .inp input { flex: 1; min-width: 0; background: none; border: 0; color: var(--amber); font: 600 16px 'IBM Plex Mono'; padding: 6px 8px; outline: none; text-align: right; }
+  .inp input:focus { background: #0f0a00; }
+  .seg { display: grid; grid-template-columns: repeat(6, 1fr); border: 1px solid var(--line); }
+  .seg button { background: #000; border: 0; color: var(--muted); font: 500 11px 'IBM Plex Mono'; padding: 7px 0; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--amber); color: #000; font-weight: 700; }
+  .kvs div { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dotted #222; }
+  .exec { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .exec button { border: 1px solid; background: transparent; font: 700 14px 'IBM Plex Sans Condensed'; letter-spacing: .1em; padding: 14px 6px 10px; cursor: pointer; text-align: center; transition: .1s; }
+  .exec button small { display: block; font: 400 10px 'IBM Plex Mono'; letter-spacing: 0; margin-top: 3px; opacity: .8; }
+  .buy { color: var(--up); border-color: var(--up) !important; } .buy:hover { background: var(--up); color: #000; }
+  .sell { color: var(--down); border-color: var(--down) !important; } .sell:hover { background: var(--down); color: #000; }
+  .sent { display: flex; height: 6px; } .sent i { display: block; }
+  .depth { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; font-size: 11px; }
+  .depth div { position: relative; padding: 2px 6px; display: flex; justify-content: space-between; }
+  .depth div::before { content: ''; position: absolute; top: 0; bottom: 0; width: var(--w); opacity: .18; }
+  .depth .b::before { right: 0; background: var(--up); } .depth .a::before { left: 0; background: var(--down); }
+
+  .blot { grid-column: 2 / 4; }
+  .tabs { display: flex; gap: 0; }
+  .tabs button { background: none; border: 0; border-right: 1px solid var(--line); color: var(--muted); font: 600 11px 'IBM Plex Sans Condensed'; letter-spacing: .12em; padding: 5px 12px; cursor: pointer; text-transform: uppercase; }
+  .tabs button.on { color: #000; background: var(--amber); }
+  .prog { display: inline-block; width: 70px; height: 5px; background: #222; vertical-align: middle; margin-right: 6px; }
+  .prog i { display: block; height: 100%; background: var(--amber); }
+
+  .foot { height: 26px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 18px; padding: 0 10px; color: var(--muted); font-size: 11px; overflow: hidden; white-space: nowrap; }
+  .foot b { color: var(--amber); font-weight: 500; }
+
+  @media (max-width: 1200px) {
+    .grid { grid-template-columns: 250px minmax(0,1fr) 270px; }
+    .fn { display: none !important; }
+  }
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; grid-template-rows: none; height: auto; min-height: 0; }
+    .watch { grid-row: auto; order: 3; }
+    .watch .p-b { max-height: 280px; }
+    .chartp { order: 1; }
+    .canvas-box { height: 42vh; flex: none; }
+    .order { order: 2; }
+    .blot { grid-column: auto; order: 4; }
+    .blot .p-b { max-height: 300px; }
+    .status .lat, .cmd kbd { display: none; }
+    th.hide, td.hide { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">QNTX</div>
+  <div class="cmd"><span class="amber">&gt;</span><input id="cmd" value="BTCUSD <GO>" spellcheck="false" /><kbd>/</kbd></div>
+  <div class="fn"><a class="on" href="#"><b>F1</b>TRADE</a><a href="#"><b>F2</b>EVENTS</a><a href="#"><b>F3</b>WALLET</a><a href="#"><b>F4</b>BLOTTER</a></div>
+  <div class="status"><i class="dot"></i><span class="lat muted">WS 22ms</span><span id="clock" class="amber"></span></div>
+</div>
+
+<div class="grid">
+  <section class="p watch">
+    <div class="p-h">Watchlist <span>↑↓ select</span></div>
+    <div class="p-b">
+      <table>
+        <thead><tr><th>SYM</th><th>LAST</th><th>CHG%</th><th class="hide">TREND</th><th>PAY</th></tr></thead>
+        <tbody id="watch"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="p chartp">
+    <div class="p-h">Chart <span id="ch-meta">BTCUSD · 1M · candles</span></div>
+    <div class="quote">
+      <span class="sym" id="q-sym">BTCUSD</span>
+      <span class="last" id="q-last">64,250.00</span>
+      <span id="q-chg" class="up">+0.00%</span>
+      <span class="kv">O <b id="q-o">—</b></span><span class="kv">H <b id="q-h">—</b></span><span class="kv">L <b id="q-l">—</b></span>
+      <div class="tf"><button>5S</button><button>15S</button><button class="on">1M</button><button>5M</button></div>
+    </div>
+    <div class="canvas-box"><canvas id="chart"></canvas></div>
+  </section>
+
+  <section class="p order">
+    <div class="p-h">Ticket <span><span class="key">H</span> higher · <span class="key">L</span> lower</span></div>
+    <div class="p-b">
+      <div>
+        <div class="lbl"><span>Stake</span><span>avail <b class="amber" id="avail">12,480.00</b></span></div>
+        <div class="inp"><span>USD</span><input id="amt" value="100.00" /></div>
+      </div>
+      <div>
+        <div class="lbl"><span>Expiry</span><span id="exp-t">12:00:00</span></div>
+        <div class="seg" id="exp"><button>30S</button><button class="on">1M</button><button>2M</button><button>5M</button><button>15M</button><button>1H</button></div>
+      </div>
+      <div class="kvs">
+        <div><span class="muted">PAYOUT</span><b class="amber" id="k-pay">87%</b></div>
+        <div><span class="muted">RETURN</span><b id="k-ret">187.00</b></div>
+        <div><span class="muted">NET IF ITM</span><b class="up" id="k-net">+87.00</b></div>
+        <div><span class="muted">MAX LOSS</span><b class="down" id="k-loss">-100.00</b></div>
+      </div>
+      <div class="exec">
+        <button class="buy" data-dir="up">▲ HIGHER<small>CALL · H</small></button>
+        <button class="sell" data-dir="down">▼ LOWER<small>PUT · L</small></button>
+      </div>
+      <div>
+        <div class="lbl"><span>Trader sentiment</span><span><b class="up" id="s-up">64%</b> / <b class="down" id="s-dn">36%</b></span></div>
+        <div class="sent"><i id="s-bar-u" style="background:var(--up);width:64%"></i><i id="s-bar-d" style="background:var(--down);width:36%"></i></div>
+      </div>
+      <div>
+        <div class="lbl"><span>Flow · last 60s</span><span>stake $</span></div>
+        <div class="depth" id="depth"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="p blot">
+    <div class="p-h" style="padding:0"><div class="tabs"><button class="on">Open <b id="n-open">0</b></button><button>Settled</button><button>Ledger</button></div><span style="padding-right:10px">P&amp;L session <b id="pnl" class="up">+0.00</b></span></div>
+    <div class="p-b">
+      <table>
+        <thead><tr><th>ID</th><th>SYM</th><th>SIDE</th><th>STAKE</th><th class="hide">STRIKE</th><th>MARK</th><th>TIME LEFT</th><th>P/L</th></tr></thead>
+        <tbody id="blot"><tr><td colspan="8" class="muted" style="text-align:left;padding:14px 8px">NO OPEN POSITIONS — PRESS H OR L TO TRADE</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<div class="foot"><span>ACCT <b>LIVE-00482</b></span><span>BAL <b id="f-bal">12,480.00</b></span><span>HELD <b>0.00</b></span><span>FEED <b>SIMULATED</b></span><span>MARGIN N/A · FIXED PAYOUT OPTIONS · HIGH RISK</span></div>
+
+<script>
+const M = [['BTCUSD',64250,87],['ETHUSD',3145.5,86],['SOLUSD',148.2,84],['BNBUSD',592.4,82],['XRPUSD',0.5271,81],['DOGEUSD',0.1284,80],['ADAUSD',0.4382,80],['LTCUSD',71.63,79],['TONUSD',6.84,78],['AVAXUSD',27.41,78],['DOTUSD',7.12,78],['LINKUSD',14.9,80]];
+const $ = (id) => document.getElementById(id);
+const f = (p) => p.toLocaleString('en-US', { minimumFractionDigits: p < 1 ? 5 : 2, maximumFractionDigits: p < 1 ? 5 : 2 });
+const S = M.map(m => { const h = []; let p = m[1]; for (let i = 0; i < 40; i++) { p *= 1 + (Math.random() - .5) * .003; h.push(p); } return { px: p, open: m[1], hist: h }; });
+let cur = 0, candles = [], pos = [], expiry = 60, pnl = 0, bal = 12480, seq = 1000;
+
+function seed() { candles = []; let p = S[cur].px * .99; for (let i = 0; i < 100; i++) { const o = p, c = o * (1 + (Math.random() - .48) * .0035); candles.push({ o, c, h: Math.max(o, c) * (1 + Math.random() * .0012), l: Math.min(o, c) * (1 - Math.random() * .0012) }); p = c; } S[cur].px = p; }
+const spark = (h) => { const hi = Math.max(...h), lo = Math.min(...h); return `<svg class="spark" viewBox="0 0 48 16"><polyline fill="none" stroke="${h[h.length - 1] >= h[0] ? '#00e676' : '#ff3b30'}" stroke-width="1" points="${h.map((v, i) => `${i / (h.length - 1) * 48},${15 - (v - lo) / (hi - lo || 1) * 14}`).join(' ')}"/></svg>`; };
+
+function watch(flash = []) {
+  $('watch').innerHTML = M.map((m, i) => {
+    const s = S[i], ch = (s.px / s.open - 1) * 100;
+    return `<tr data-i="${i}" class="${i === cur ? 'on' : ''} ${flash[i] || ''}"><td class="${i === cur ? 'amber' : ''}">${m[0]}</td><td>${f(s.px)}</td><td class="${ch >= 0 ? 'up' : 'down'}">${ch >= 0 ? '+' : ''}${ch.toFixed(2)}</td><td class="hide">${spark(s.hist)}</td><td class="amber">${m[2]}</td></tr>`;
+  }).join('');
+}
+$('watch').onclick = (e) => { const r = e.target.closest('tr'); if (r) select(+r.dataset.i); };
+function select(i) { cur = (i + M.length) % M.length; seed(); $('cmd').value = M[cur][0] + ' <GO>'; $('q-sym').textContent = M[cur][0]; $('ch-meta').textContent = `${M[cur][0]} · 1M · candles`; $('k-pay').textContent = M[cur][2] + '%'; calc(); watch(); draw(); }
+$('cmd').addEventListener('keydown', (e) => { if (e.key !== 'Enter') return; const q = e.target.value.replace('<GO>', '').trim().toUpperCase(); const i = M.findIndex(m => m[0].startsWith(q)); if (i >= 0) select(i); e.target.blur(); });
+
+const cvs = $('chart'), ctx = cvs.getContext('2d');
+function draw() {
+  const r = cvs.getBoundingClientRect(), d = devicePixelRatio || 1; cvs.width = r.width * d; cvs.height = r.height * d; ctx.setTransform(d, 0, 0, d, 0, 0);
+  const W = r.width, H = r.height, pr = 80, volH = 44, v = candles.slice(-Math.floor((W - pr) / 8));
+  const hi = Math.max(...v.map(c => c.h)), lo = Math.min(...v.map(c => c.l)), y = (p) => 10 + (hi - p) / (hi - lo || 1) * (H - volH - 26), st = (W - pr) / v.length;
+  ctx.clearRect(0, 0, W, H); ctx.font = '10px IBM Plex Mono';
+  for (let i = 0; i <= 6; i++) { const p = lo + (hi - lo) * i / 6; ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, Math.round(y(p)), W - pr, 1); ctx.fillStyle = '#7a7a7a'; ctx.fillText(f(p), W - pr + 6, y(p) + 3); }
+  for (let i = 0; i < v.length; i += 12) { ctx.fillStyle = '#1a1a1a'; ctx.fillRect(Math.round(i * st), 0, 1, H - volH); }
+  v.forEach((c, i) => {
+    const x = i * st + st / 2, up = c.c >= c.o; ctx.fillStyle = ctx.strokeStyle = up ? '#00e676' : '#ff3b30';
+    ctx.beginPath(); ctx.moveTo(Math.round(x) + .5, y(c.h)); ctx.lineTo(Math.round(x) + .5, y(c.l)); ctx.stroke();
+    const top = Math.min(y(c.o), y(c.c)), hgt = Math.max(1, Math.abs(y(c.o) - y(c.c)));
+    if (up) { ctx.fillStyle = '#000'; ctx.fillRect(x - st * .35, top, st * .7, hgt); ctx.strokeRect(x - st * .35 + .5, top + .5, st * .7 - 1, hgt - 1); } else ctx.fillRect(x - st * .35, top, st * .7, hgt);
+    const vol = (Math.abs(c.c - c.o) / (hi - lo) * 6 + .15) % 1; ctx.globalAlpha = .35; ctx.fillStyle = up ? '#00e676' : '#ff3b30'; ctx.fillRect(x - st * .35, H - vol * volH, st * .7, vol * volH); ctx.globalAlpha = 1;
+  });
+  pos.filter(p => p.m === cur).forEach(p => { ctx.strokeStyle = p.dir === 'up' ? '#00e676' : '#ff3b30'; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(0, y(p.entry)); ctx.lineTo(W - pr, y(p.entry)); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = ctx.strokeStyle; ctx.fillText(`#${p.id} ${p.dir === 'up' ? 'CALL' : 'PUT'}`, 4, y(p.entry) - 3); });
+  const px = S[cur].px, yy = y(px); ctx.strokeStyle = '#ffb000'; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W - pr, yy); ctx.stroke();
+  ctx.fillStyle = '#ffb000'; ctx.fillRect(W - pr, yy - 8, pr, 16); ctx.fillStyle = '#000'; ctx.font = '700 10px IBM Plex Mono'; ctx.fillText(f(px), W - pr + 6, yy + 4);
+  const last = v[v.length - 1]; $('q-o').textContent = f(last.o); $('q-h').textContent = f(hi); $('q-l').textContent = f(lo);
+}
+
+function tick() {
+  const flash = [];
+  S.forEach((s, i) => { const old = s.px; s.px *= 1 + (Math.random() - .495) * (i === cur ? .0012 : .0018); s.hist.push(s.px); s.hist.shift(); if (Math.random() < .35) flash[i] = s.px > old ? 'flash-up' : 'flash-down'; });
+  const c = candles[candles.length - 1], px = S[cur].px; c.c = px; c.h = Math.max(c.h, px); c.l = Math.min(c.l, px);
+  $('q-last').textContent = f(px); const ch = (px / S[cur].open - 1) * 100; $('q-chg').textContent = (ch >= 0 ? '+' : '') + ch.toFixed(2) + '%'; $('q-chg').className = ch >= 0 ? 'up' : 'down';
+  const su = 50 + Math.round(Math.sin(Date.now() / 9000) * 18); $('s-up').textContent = su + '%'; $('s-dn').textContent = 100 - su + '%'; $('s-bar-u').style.width = su + '%'; $('s-bar-d').style.width = 100 - su + '%';
+  $('depth').innerHTML = Array.from({ length: 5 }, () => { const b = Math.random() * 100, a = Math.random() * 100; return `<div class="b" style="--w:${b}%"><span class="up">CALL</span><span>${(b * 48).toFixed(0)}</span></div><div class="a" style="--w:${a}%"><span>${(a * 48).toFixed(0)}</span><span class="down">PUT</span></div>`; }).join('');
+  $('clock').textContent = new Date().toLocaleTimeString([], { hour12: false }) + ' UTC+5';
+  $('exp-t').textContent = new Date(Date.now() + expiry * 1000).toLocaleTimeString([], { hour12: false });
+  watch(flash); settle(); blot(); draw();
+}
+
+const amt = () => Math.max(1, parseFloat($('amt').value) || 0);
+function calc() { const a = amt(), p = M[cur][2] / 100; $('k-ret').textContent = (a * (1 + p)).toFixed(2); $('k-net').textContent = '+' + (a * p).toFixed(2); $('k-loss').textContent = '-' + a.toFixed(2); }
+$('amt').oninput = calc;
+$('exp').onclick = (e) => { if (e.target.tagName !== 'BUTTON') return; [...$('exp').children].forEach(b => b.classList.remove('on')); e.target.classList.add('on'); const t = e.target.textContent; expiry = parseInt(t) * (t.endsWith('S') ? 1 : t.endsWith('H') ? 3600 : 60); };
+function place(dir) { pos.unshift({ id: ++seq, m: cur, dir, entry: S[cur].px, stake: amt(), start: Date.now(), end: Date.now() + expiry * 1000 }); blot(); draw(); }
+document.querySelectorAll('.exec button').forEach(b => b.onclick = () => place(b.dataset.dir));
+addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'h' || e.key === 'H') place('up'); if (e.key === 'l' || e.key === 'L') place('down');
+  if (e.key === 'ArrowDown') { e.preventDefault(); select(cur + 1); } if (e.key === 'ArrowUp') { e.preventDefault(); select(cur - 1); }
+  if (e.key === '/') { e.preventDefault(); $('cmd').select(); }
+});
+function settle() {
+  pos = pos.filter(p => { if (Date.now() < p.end) return true; const px = S[p.m].px, won = p.dir === 'up' ? px > p.entry : px < p.entry, d = won ? p.stake * M[p.m][2] / 100 : -p.stake; pnl += d; bal += d; return false; });
+  $('pnl').textContent = (pnl >= 0 ? '+' : '') + pnl.toFixed(2); $('pnl').className = pnl >= 0 ? 'up' : 'down';
+  $('f-bal').textContent = $('avail').textContent = bal.toLocaleString('en-US', { minimumFractionDigits: 2 });
+}
+function blot() {
+  $('n-open').textContent = pos.length;
+  if (!pos.length) { $('blot').innerHTML = '<tr><td colspan="8" class="muted" style="text-align:left;padding:14px 8px">NO OPEN POSITIONS — PRESS H OR L TO TRADE</td></tr>'; return; }
+  $('blot').innerHTML = pos.map(p => {
+    const px = S[p.m].px, w = p.dir === 'up' ? px >= p.entry : px <= p.entry, left = Math.max(0, p.end - Date.now()), s = Math.ceil(left / 1000);
+    return `<tr><td class="muted">${p.id}</td><td class="amber">${M[p.m][0]}</td><td class="${p.dir === 'up' ? 'up' : 'down'}">${p.dir === 'up' ? 'CALL' : 'PUT'}</td><td>${p.stake.toFixed(2)}</td><td class="hide">${f(p.entry)}</td><td class="${w ? 'up' : 'down'}">${f(px)}</td><td><span class="prog"><i style="width:${(1 - left / (p.end - p.start)) * 100}%"></i></span>${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}</td><td class="${w ? 'up' : 'down'}">${w ? '+' + (p.stake * M[p.m][2] / 100).toFixed(2) : '-' + p.stake.toFixed(2)}</td></tr>`;
+  }).join('');
+}
+
+seed(); watch(); calc(); draw(); tick();
+setInterval(tick, 900); setInterval(() => { const px = S[cur].px; candles.push({ o: px, c: px, h: px, l: px }); }, 6000);
+addEventListener('resize', draw);
+</script>
+</body>
+</html>

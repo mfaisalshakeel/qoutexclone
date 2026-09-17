@@ -4,6 +4,7 @@ import { dateTime, money, shortHash } from '../lib/format';
 import { toast } from '../store/toast';
 import { useAuth } from '../store/auth';
 import type { PaymentMethod, Withdrawal, WithdrawalQuote } from '../lib/types';
+import { PaymentPanelSkeleton } from './Skeleton';
 
 interface Props {
   methods: PaymentMethod[];
@@ -49,7 +50,7 @@ export function WithdrawPanel({ methods, withdrawals, onChanged }: Props) {
     return () => window.clearTimeout(id);
   }, [method, amount]);
 
-  if (!method) return <div className="card h-40 animate-pulse" />;
+  if (!method) return <PaymentPanelSkeleton />;
 
   const cents = Math.round(amount * 100);
   const belowMin = quote ? cents < quote.minAmount : false;

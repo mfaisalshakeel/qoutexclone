@@ -4,6 +4,7 @@ import { api } from '../../lib/api';
 import { dateTime, money } from '../../lib/format';
 import { Empty, Loading, PageHead, StatCard, StatusPill, Table, Td } from '../../components/admin/ui';
 import type { Deposit, Withdrawal } from '../../lib/types';
+import { Skeleton, StatSkeletons } from '../../components/Skeleton';
 
 interface Overview {
   users: number;
@@ -34,7 +35,23 @@ export function AdminDashboard() {
     ]).catch(() => undefined);
   }, []);
 
-  if (!overview) return <Loading />;
+  if (!overview) {
+    return (
+      <>
+        <div className="mb-5 space-y-2">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-2.5 w-64 max-w-full" />
+        </div>
+        <StatSkeletons count={8} className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4" />
+        <div className="mb-6 grid gap-3 sm:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-16 !rounded-xl" />
+          ))}
+        </div>
+        <Loading rows={4} />
+      </>
+    );
+  }
 
   const netFlow = overview.depositVolume - overview.withdrawalVolume;
 

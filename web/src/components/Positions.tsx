@@ -2,14 +2,16 @@ import { useEffect, useState } from 'react';
 import { useMarket } from '../store/market';
 import { countdown, dateTime, money, price } from '../lib/format';
 import type { Trade } from '../lib/types';
+import { Skeleton, SkeletonGroup } from './Skeleton';
 
 interface Props {
   open: Trade[];
   closed: Trade[];
+  loading?: boolean;
 }
 
 /** Open positions with a live countdown, plus the most recent settled ones. */
-export function Positions({ open, closed }: Props) {
+export function Positions({ open, closed, loading = false }: Props) {
   const prices = useMarket((s) => s.prices);
   const assets = useMarket((s) => s.assets);
   const [tab, setTab] = useState<'open' | 'closed'>('open');
@@ -34,13 +36,16 @@ export function Positions({ open, closed }: Props) {
               tab === key ? 'bg-ink-700 text-white' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            {key === 'open' ? `Open (${open.length})` : 'Closed'}
+            {key === 'open' ? (loading ? 'Open' : `Open (${open.length})`) : 'Closed'}
           </button>
         ))}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
-        {tab === 'open' &&
+        {loading && <PositionSkeletons />}
+
+        {!loading &&
+          tab === 'open' &&
           (open.length === 0 ? (
             <Empty text="No open positions" />
           ) : (
@@ -81,7 +86,8 @@ export function Positions({ open, closed }: Props) {
             })
           ))}
 
-        {tab === 'closed' &&
+        {!loading &&
+          tab === 'closed' &&
           (closed.length === 0 ? (
             <Empty text="No closed trades yet" />
           ) : (
@@ -120,6 +126,25 @@ export function Positions({ open, closed }: Props) {
           ))}
       </div>
     </div>
+  );
+}
+
+function PositionSkeletons() {
+  return (
+    <SkeletonGroup label="Loading positions">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="mb-1.5 space-y-2.5 rounded-lg bg-ink-700/40 p-2.5">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-3 w-20 bg-ink-600" />
+            <Skeleton className="h-4 w-10 bg-ink-600" />
+          </div>
+          <div className="flex items-end justify-between">
+            <Skeleton className="h-2.5 w-28 bg-ink-600" />
+            <Skeleton className="h-2.5 w-12 bg-ink-600" />
+          </div>
+        </div>
+      ))}
+    </SkeletonGroup>
   );
 }
 

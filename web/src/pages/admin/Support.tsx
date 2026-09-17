@@ -3,8 +3,9 @@ import { ApiError, api } from '../../lib/api';
 import { dateTime, money } from '../../lib/format';
 import { realtime } from '../../lib/ws';
 import { toast } from '../../store/toast';
-import { Empty, Loading, PageHead, StatusPill } from '../../components/admin/ui';
+import { Empty, PageHead, StatusPill } from '../../components/admin/ui';
 import type { SupportTicket } from '../../lib/types';
+import { RowSkeletons, Skeleton, SkeletonGroup } from '../../components/Skeleton';
 
 /** Support desk: conversation list on the left, thread and reply box on the right. */
 export function AdminSupport() {
@@ -71,7 +72,26 @@ export function AdminSupport() {
     }
   };
 
-  if (!tickets) return <Loading />;
+  if (!tickets) {
+    return (
+      <>
+        <div className="mb-5 space-y-2">
+          <Skeleton className="h-5 w-36" />
+          <Skeleton className="h-2.5 w-56 max-w-full" />
+        </div>
+        <div className="grid gap-3 lg:grid-cols-[20rem_1fr]">
+          <RowSkeletons rows={6} className="card p-1.5" rowClassName="p-2.5" />
+          <SkeletonGroup className="card hidden space-y-3 p-4 lg:block">
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-12 w-3/5" />
+            <Skeleton className="ml-auto h-10 w-1/2" />
+            <Skeleton className="h-16 w-2/3" />
+            <Skeleton className="mt-6 h-14 w-full !rounded-lg" />
+          </SkeletonGroup>
+        </div>
+      </>
+    );
+  }
 
   const waiting = tickets.filter((t) => t.unreadByAgent > 0).length;
 

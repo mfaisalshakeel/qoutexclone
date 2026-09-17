@@ -4,6 +4,7 @@ import { dateTime, duration, money, price } from '../lib/format';
 import { useAuth } from '../store/auth';
 import { useMarket } from '../store/market';
 import type { AccountType, Trade, TradingStats, Transaction } from '../lib/types';
+import { RowSkeletons, StatSkeletons } from '../components/Skeleton';
 
 export function History() {
   const user = useAuth((s) => s.user);
@@ -13,8 +14,10 @@ export function History() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [stats, setStats] = useState<TradingStats | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    setLoading(true);
     const [t, s, tx] = await Promise.all([
       api.get<{ trades: Trade[] }>(`/trades?status=CLOSED&accountType=${accountType}&limit=100`),
       api.get<{ stats: TradingStats }>(`/me/stats?accountType=${accountType}`),
@@ -23,6 +26,7 @@ export function History() {
     setTrades(t.trades);
     setStats(s.stats);
     setTransactions(tx.transactions);
+    setLoading(false);
   }, [accountType]);
 
   useEffect(() => {
@@ -50,7 +54,8 @@ export function History() {
         </div>
       </div>
 
-      {stats && (
+      {loading && <StatSkeletons count={4} className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4" />}
+      {!loading && stats && (
         <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Stat label="Trades" value={String(stats.total)} />
           <Stat label="Win rate" value={`${stats.winRate}%`} tone={stats.winRate >= 50 ? 'up' : 'down'} />
@@ -73,7 +78,9 @@ export function History() {
         ))}
       </div>
 
-      {view === 'trades' ? (
+      {loading ? (
+        <RowSkeletons rows={7} className="card divide-y divide-ink-700" />
+      ) : view === 'trades' ? (
         trades.length === 0 ? (
           <p className="card p-10 text-center text-sm text-slate-500">No closed trades on this account yet.</p>
         ) : (

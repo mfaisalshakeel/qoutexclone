@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMarket } from '../store/market';
 import { percent, price } from '../lib/format';
+import { RowSkeletons } from './Skeleton';
 
 interface Props {
   onPicked?: () => void;
@@ -8,7 +9,7 @@ interface Props {
 
 /** Searchable market list with live quotes — the left rail on desktop. */
 export function AssetPicker({ onPicked }: Props) {
-  const { assets, prices, symbol, selectSymbol } = useMarket();
+  const { assets, prices, symbol, selectSymbol, loaded } = useMarket();
   const [query, setQuery] = useState('');
 
   const filtered = useMemo(() => {
@@ -59,7 +60,8 @@ export function AssetPicker({ onPicked }: Props) {
             </button>
           );
         })}
-        {filtered.length === 0 && <p className="p-4 text-center text-xs text-slate-500">No markets match “{query}”.</p>}
+        {!loaded && <RowSkeletons rows={8} avatar rowClassName="px-2.5 py-2.5" />}
+        {loaded && filtered.length === 0 && <p className="p-4 text-center text-xs text-slate-500">No markets match “{query}”.</p>}
       </div>
     </div>
   );
