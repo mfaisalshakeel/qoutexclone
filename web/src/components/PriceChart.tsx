@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ColorType,
   CrosshairMode,
@@ -13,6 +13,7 @@ import { api } from '../lib/api';
 import { realtime } from '../lib/ws';
 import { bollinger, ema, sma } from '../lib/indicators';
 import type { Candle, Trade } from '../lib/types';
+import { ChartSkeleton } from './Skeleton';
 
 export type ChartType = 'candles' | 'line';
 
@@ -52,6 +53,7 @@ const EMA_PERIOD = 50;
  */
 export function PriceChart({ symbol, timeframe, precision, trades, chartType, indicators }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [loading, setLoading] = useState(true);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const areaRef = useRef<ISeriesApi<'Area'> | null>(null);
@@ -156,6 +158,7 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
   useEffect(() => {
     if (!candleRef.current) return;
     let cancelled = false;
+    setLoading(true);
 
     const priceFormat = { type: 'price' as const, precision, minMove: 1 / 10 ** precision };
     candleRef.current.applyOptions({ priceFormat });
@@ -181,15 +184,19 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
       .then(({ candles }) => {
         if (cancelled) return;
         setAll(candles);
+        setLoading(false);
         chartRef.current?.timeScale().scrollToRealTime();
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
 
     realtime.subscribe(symbol, timeframe);
 
     const offSnapshot = realtime.on('candles', (payload) => {
       if (cancelled || payload.symbol !== symbol || payload.timeframe !== timeframe) return;
       setAll(payload.candles);
+      setLoading(false);
     });
     const offCandle = realtime.on('candle', (payload) => {
       if (cancelled || payload.symbol !== symbol || payload.timeframe !== timeframe) return;
@@ -244,8 +251,11 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
       );
     }
 
+    // the library asserts markers are in ascending time order; open trades arrive newest first
     series.setMarkers(
-      mine.map((trade) => ({
+      [...mine]
+        .sort((a, b) => new Date(a.openedAt).getTime() - new Date(b.openedAt).getTime())
+        .map((trade) => ({
         time: Math.floor(new Date(trade.openedAt).getTime() / 1000) as UTCTimestamp,
         position: trade.direction === 'UP' ? ('belowBar' as const) : ('aboveBar' as const),
         color: trade.direction === 'UP' ? THEME.up : THEME.down,
@@ -255,5 +265,10 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
     );
   }, [trades, symbol]);
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return (
+    <div className="relative h-full w-full">
+      <div ref={containerRef} className="h-full w-full" />
+      {loading && <ChartSkeleton />}
+    </div>
+  );
 }
