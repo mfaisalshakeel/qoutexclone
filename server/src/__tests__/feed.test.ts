@@ -16,7 +16,8 @@ describe('market feed', () => {
       const candles = feed.getCandles('TESTUSD', tf, 400);
       expect(candles.length).toBeGreaterThan(100);
       // ascending, non-overlapping buckets with sane OHLC
-      for (let i = 1; i < candles.length; i += 1) expect(candles[i].time).toBeGreaterThan(candles[i - 1].time);
+      for (let i = 1; i < candles.length; i += 1)
+        expect(candles[i].time).toBeGreaterThan(candles[i - 1].time);
       for (const c of candles) {
         expect(c.high).toBeGreaterThanOrEqual(Math.max(c.open, c.close));
         expect(c.low).toBeLessThanOrEqual(Math.min(c.open, c.close));
@@ -25,7 +26,9 @@ describe('market feed', () => {
   });
 
   it('is deterministic across instances', () => {
-    expect(feedWithHistory().getCandles('TESTUSD', '1m', 20)).toEqual(feedWithHistory().getCandles('TESTUSD', '1m', 20));
+    expect(feedWithHistory().getCandles('TESTUSD', '1m', 20)).toEqual(
+      feedWithHistory().getCandles('TESTUSD', '1m', 20),
+    );
   });
 
   it('stays near the base price over a long simulated run', () => {

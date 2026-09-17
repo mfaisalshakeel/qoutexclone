@@ -115,7 +115,9 @@ export function WithdrawPanel({ methods, withdrawals, onChanged }: Props) {
               key={`${m.currency}-${m.network}`}
               onClick={() => setIndex(i)}
               className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${
-                i === index ? 'border-accent bg-accent-soft' : 'border-ink-600 bg-ink-800 hover:border-ink-500'
+                i === index
+                  ? 'border-accent bg-accent-soft'
+                  : 'border-ink-600 bg-ink-800 hover:border-ink-500'
               }`}
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-600 text-[10px] font-bold">
@@ -230,19 +232,32 @@ export function WithdrawPanel({ methods, withdrawals, onChanged }: Props) {
 
       {withdrawals.some((w) => w.txHash) && (
         <p className="text-[11px] text-slate-500">
-          Last payout transaction: <span className="font-mono">{shortHash(withdrawals.find((w) => w.txHash)?.txHash, 10)}</span>
+          Last payout transaction:{' '}
+          <span className="font-mono">{shortHash(withdrawals.find((w) => w.txHash)?.txHash, 10)}</span>
         </p>
       )}
     </div>
   );
 }
 
-function Row({ label, value, hint, strong }: { label: string; value: string; hint?: string; strong?: boolean }) {
+function Row({
+  label,
+  value,
+  hint,
+  strong,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  strong?: boolean;
+}) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="text-xs text-slate-400">{label}</dt>
       <dd className="text-right">
-        <span className={`tabular block ${strong ? 'text-base font-bold' : 'text-sm text-slate-200'}`}>{value}</span>
+        <span className={`tabular block ${strong ? 'text-base font-bold' : 'text-sm text-slate-200'}`}>
+          {value}
+        </span>
         {hint && <span className="block text-[11px] text-slate-500">{hint}</span>}
       </dd>
     </div>

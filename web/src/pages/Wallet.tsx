@@ -78,7 +78,12 @@ export function Wallet() {
       </div>
 
       {tab === 'deposit' && (
-        <DepositPanel methods={methods} mockChain={mockChain} deposits={deposits} onChanged={() => void loadAll()} />
+        <DepositPanel
+          methods={methods}
+          mockChain={mockChain}
+          deposits={deposits}
+          onChanged={() => void loadAll()}
+        />
       )}
       {tab === 'withdraw' && (
         <WithdrawPanel methods={methods} withdrawals={withdrawals} onChanged={() => void loadAll()} />
@@ -142,10 +147,14 @@ function WalletHistory({ deposits, withdrawals }: { deposits: Deposit[]; withdra
             <span className="block text-[11px] text-slate-500">{dateTime(row.when)}</span>
           </span>
           <span className="text-right">
-            <span className={`tabular block text-sm font-bold ${row.positive ? 'text-up' : 'text-slate-200'}`}>
+            <span
+              className={`tabular block text-sm font-bold ${row.positive ? 'text-up' : 'text-slate-200'}`}
+            >
               {row.amount === 0 ? '—' : money(row.amount, { sign: true })}
             </span>
-            <span className="block text-[10px] uppercase tracking-wide text-slate-500">{row.status.toLowerCase()}</span>
+            <span className="block text-[10px] uppercase tracking-wide text-slate-500">
+              {row.status.toLowerCase()}
+            </span>
             {row.hash &&
               (row.url ? (
                 <a

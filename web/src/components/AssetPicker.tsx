@@ -47,12 +47,16 @@ export function AssetPicker({ onPicked }: Props) {
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-600 text-[9px] font-bold text-slate-300">
                   {asset.base}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-100">{asset.name}</span>
+                <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-100">
+                  {asset.name}
+                </span>
                 <span className="chip shrink-0 bg-up-soft text-up">{asset.payoutPct}%</span>
               </span>
               <span className="mt-1 flex items-baseline gap-2 pl-9">
                 <span className="flex-1 text-[10px] text-slate-500">{asset.symbol}</span>
-                <span className="tabular text-xs font-semibold text-slate-100">{price(live, asset.precision)}</span>
+                <span className="tabular text-xs font-semibold text-slate-100">
+                  {price(live, asset.precision)}
+                </span>
                 <span className={`tabular text-[10px] ${asset.changePct >= 0 ? 'text-up' : 'text-down'}`}>
                   {percent(asset.changePct)}
                 </span>
@@ -61,7 +65,9 @@ export function AssetPicker({ onPicked }: Props) {
           );
         })}
         {!loaded && <RowSkeletons rows={8} avatar rowClassName="px-2.5 py-2.5" />}
-        {loaded && filtered.length === 0 && <p className="p-4 text-center text-xs text-slate-500">No markets match “{query}”.</p>}
+        {loaded && filtered.length === 0 && (
+          <p className="p-4 text-center text-xs text-slate-500">No markets match “{query}”.</p>
+        )}
       </div>
     </div>
   );

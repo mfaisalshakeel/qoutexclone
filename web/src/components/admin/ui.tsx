@@ -2,7 +2,15 @@ import type { ReactNode } from 'react';
 import { TableSkeleton } from '../Skeleton';
 
 /** Page header inside the admin shell. */
-export function PageHead({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
+export function PageHead({
+  title,
+  subtitle,
+  action,
+}: {
+  title: string;
+  subtitle?: string;
+  action?: ReactNode;
+}) {
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
@@ -25,7 +33,8 @@ export function StatCard({
   hint?: string;
   tone?: 'up' | 'down' | 'warn';
 }) {
-  const toneClass = tone === 'up' ? 'text-up' : tone === 'down' ? 'text-down' : tone === 'warn' ? 'text-amber-300' : '';
+  const toneClass =
+    tone === 'up' ? 'text-up' : tone === 'down' ? 'text-down' : tone === 'warn' ? 'text-amber-300' : '';
   return (
     <div className="card p-4">
       <p className="text-[10px] uppercase tracking-wide text-slate-400">{label}</p>
@@ -70,7 +79,10 @@ export function Table({ head, children }: { head: string[]; children: ReactNode 
           <thead className="bg-ink-700/60 text-[10px] uppercase tracking-wide text-slate-400">
             <tr>
               {head.map((label, i) => (
-                <th key={label} className={`px-4 py-2.5 font-medium ${i === head.length - 1 ? 'text-right' : 'text-left'}`}>
+                <th
+                  key={label}
+                  className={`px-4 py-2.5 font-medium ${i === head.length - 1 ? 'text-right' : 'text-left'}`}
+                >
                   {label}
                 </th>
               ))}

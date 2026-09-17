@@ -54,7 +54,9 @@ export function Account() {
             <p className="truncate text-sm text-slate-400">{user.email}</p>
             <p className="text-xs text-slate-500">Member since {dateTime(user.createdAt)}</p>
           </div>
-          <span className={`chip ml-auto ${user.status === 'ACTIVE' ? 'bg-up-soft text-up' : 'bg-down-soft text-down'}`}>
+          <span
+            className={`chip ml-auto ${user.status === 'ACTIVE' ? 'bg-up-soft text-up' : 'bg-down-soft text-down'}`}
+          >
             {user.status.toLowerCase()}
           </span>
         </div>

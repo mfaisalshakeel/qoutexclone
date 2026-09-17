@@ -9,7 +9,8 @@ const MAX_OPEN_TICKETS = 5;
 
 export async function openTicket(userId: string, subject: string, body: string): Promise<SupportTicket> {
   const open = await prisma.supportTicket.count({ where: { userId, status: { not: 'CLOSED' } } });
-  if (open >= MAX_OPEN_TICKETS) throw conflict('You already have several open conversations', 'too_many_tickets');
+  if (open >= MAX_OPEN_TICKETS)
+    throw conflict('You already have several open conversations', 'too_many_tickets');
 
   const ticket = await prisma.$transaction(async (tx) => {
     const created = await tx.supportTicket.create({

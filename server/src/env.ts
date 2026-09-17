@@ -1,4 +1,5 @@
-import 'dotenv/config';
+// side-effect import: finds server/.env from any working directory
+import './lib/load-env.js';
 
 function num(value: string | undefined, fallback: number): number {
   const parsed = Number(value);

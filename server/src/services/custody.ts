@@ -16,7 +16,11 @@ export interface PayoutRequest {
  */
 export interface CustodyProvider {
   readonly name: string;
-  getDepositAddress(userId: string, currency: string, network: string): Promise<{ address: string; memo?: string }>;
+  getDepositAddress(
+    userId: string,
+    currency: string,
+    network: string,
+  ): Promise<{ address: string; memo?: string }>;
   sendPayout(request: PayoutRequest): Promise<{ txHash: string }>;
 }
 

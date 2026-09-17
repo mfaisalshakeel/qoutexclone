@@ -40,7 +40,7 @@ export function BalanceSwitcher() {
   if (!user) return null;
   const inTournament = Boolean(tournamentId);
   const isDemo = !inTournament && user.activeAccount === 'DEMO';
-  const balance = inTournament ? tournamentBalance ?? 0 : isDemo ? user.demoBalance : user.realBalance;
+  const balance = inTournament ? (tournamentBalance ?? 0) : isDemo ? user.demoBalance : user.realBalance;
 
   const choose = async (accountType: 'DEMO' | 'REAL') => {
     setOpen(false);
@@ -63,7 +63,7 @@ export function BalanceSwitcher() {
         />
         <span className="leading-tight">
           <span className="block max-w-[7rem] truncate text-[10px] uppercase tracking-wide text-slate-400">
-            {inTournament ? tournamentName ?? 'Tournament' : isDemo ? 'Practice' : 'Live'}
+            {inTournament ? (tournamentName ?? 'Tournament') : isDemo ? 'Practice' : 'Live'}
           </span>
           <span className="tabular block text-sm font-semibold">{money(balance)}</span>
         </span>
@@ -101,7 +101,11 @@ export function BalanceSwitcher() {
               key={tournament.id}
               onClick={() => {
                 setOpen(false);
-                setTournament({ id: tournament.id, name: tournament.name, balance: tournament.myBalance ?? 0 });
+                setTournament({
+                  id: tournament.id,
+                  name: tournament.name,
+                  balance: tournament.myBalance ?? 0,
+                });
                 toast.info(`Trading ${tournament.name}`, 'Positions are staked in tournament chips');
               }}
               className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left transition ${

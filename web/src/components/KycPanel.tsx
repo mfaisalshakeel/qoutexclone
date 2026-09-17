@@ -47,7 +47,11 @@ export function KycPanel() {
     documentNumber: '',
   });
 
-  const load = () => api.get<KycState>('/me/kyc').then(setState).catch(() => undefined);
+  const load = () =>
+    api
+      .get<KycState>('/me/kyc')
+      .then(setState)
+      .catch(() => undefined);
   useEffect(() => {
     void load();
   }, []);
@@ -90,10 +94,13 @@ export function KycPanel() {
       {state.submission && state.status !== 'NOT_SUBMITTED' && (
         <div className="rounded-lg bg-ink-700/60 p-3 text-xs text-slate-400">
           <p>
-            {DOCUMENTS.find((d) => d.value === state.submission!.documentType)?.label ?? state.submission.documentType}{' '}
+            {DOCUMENTS.find((d) => d.value === state.submission!.documentType)?.label ??
+              state.submission.documentType}{' '}
             submitted {dateTime(state.submission.createdAt)}
           </p>
-          {state.submission.note && <p className="mt-1 text-slate-300">Reviewer note: {state.submission.note}</p>}
+          {state.submission.note && (
+            <p className="mt-1 text-slate-300">Reviewer note: {state.submission.note}</p>
+          )}
         </div>
       )}
 
@@ -194,8 +201,8 @@ export function KycPanel() {
             </div>
           </div>
           <p className="text-[11px] leading-relaxed text-slate-500">
-            Document images are uploaded to your operator's document store, never to the trading database. Submitting
-            confirms the details above are yours.
+            Document images are uploaded to your operator's document store, never to the trading database.
+            Submitting confirms the details above are yours.
           </p>
           <button type="submit" disabled={busy} className="btn-primary">
             {busy ? 'Submitting…' : state.status === 'REJECTED' ? 'Submit again' : 'Submit for verification'}

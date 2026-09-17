@@ -13,9 +13,11 @@ export interface PromoPreview {
 }
 
 /** Bonus a code is worth on a deposit of `depositCents`, capped and floored. */
-export function bonusFor(promo: Pick<PromoCode, 'kind' | 'value' | 'maxBonus'>, depositCents: number): number {
-  const raw =
-    promo.kind === 'FIXED_CREDIT' ? promo.value : Math.floor((depositCents * promo.value) / 100);
+export function bonusFor(
+  promo: Pick<PromoCode, 'kind' | 'value' | 'maxBonus'>,
+  depositCents: number,
+): number {
+  const raw = promo.kind === 'FIXED_CREDIT' ? promo.value : Math.floor((depositCents * promo.value) / 100);
   if (raw <= 0) return 0;
   return promo.maxBonus > 0 ? Math.min(raw, promo.maxBonus) : raw;
 }
@@ -34,15 +36,23 @@ export function describe(promo: Pick<PromoCode, 'kind' | 'value' | 'minDeposit' 
  * Validates a code for this user and deposit size without consuming it.
  * Throws with a human-readable reason so the UI can show it as typed.
  */
-export async function previewPromo(code: string, userId: string, depositCents: number): Promise<PromoPreview> {
+export async function previewPromo(
+  code: string,
+  userId: string,
+  depositCents: number,
+): Promise<PromoPreview> {
   const promo = await prisma.promoCode.findUnique({ where: { code: code.trim().toUpperCase() } });
   if (!promo || !promo.enabled) throw notFound('That promo code is not valid');
-  if (promo.expiresAt && promo.expiresAt < new Date()) throw badRequest('That promo code has expired', 'promo_expired');
+  if (promo.expiresAt && promo.expiresAt < new Date())
+    throw badRequest('That promo code has expired', 'promo_expired');
   if (promo.maxRedemptions > 0 && promo.redemptions >= promo.maxRedemptions) {
     throw badRequest('That promo code has been fully claimed', 'promo_exhausted');
   }
   if (depositCents < promo.minDeposit) {
-    throw badRequest(`This code needs a deposit of at least $${(promo.minDeposit / 100).toFixed(2)}`, 'promo_min_deposit');
+    throw badRequest(
+      `This code needs a deposit of at least $${(promo.minDeposit / 100).toFixed(2)}`,
+      'promo_min_deposit',
+    );
   }
   const used = await prisma.promoRedemption.findUnique({
     where: { promoCodeId_userId: { promoCodeId: promo.id, userId } },

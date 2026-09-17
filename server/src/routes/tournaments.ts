@@ -18,7 +18,13 @@ router.get(
   '/:id/leaderboard',
   optionalAuth,
   wrap(async (req, res) => {
-    const limit = z.coerce.number().int().min(1).max(100).default(50).parse(req.query.limit ?? 50);
+    const limit = z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .default(50)
+      .parse(req.query.limit ?? 50);
     res.json({ leaderboard: await leaderboard(req.params.id, limit) });
   }),
 );

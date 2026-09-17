@@ -36,7 +36,10 @@ export function useRealtime(): void {
 
     const offDeposit = realtime.on('deposit:updated', ({ deposit }) => {
       if (deposit.status === 'COMPLETED') {
-        toast.success('Deposit credited', `${deposit.cryptoAmount} ${deposit.currency} → ${money(deposit.creditedAmount)}`);
+        toast.success(
+          'Deposit credited',
+          `${deposit.cryptoAmount} ${deposit.currency} → ${money(deposit.creditedAmount)}`,
+        );
         void refreshUser();
       } else if (deposit.status === 'CONFIRMING') {
         toast.info('Payment detected', `Waiting for ${deposit.requiredConf} confirmations`);

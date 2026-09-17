@@ -44,13 +44,29 @@ export function Register() {
           <label className="label" htmlFor="name">
             Full name
           </label>
-          <input id="name" required minLength={2} value={form.name} onChange={update('name')} className="field" placeholder="Alex Carter" />
+          <input
+            id="name"
+            required
+            minLength={2}
+            value={form.name}
+            onChange={update('name')}
+            className="field"
+            placeholder="Alex Carter"
+          />
         </div>
         <div>
           <label className="label" htmlFor="email">
             Email
           </label>
-          <input id="email" type="email" required value={form.email} onChange={update('email')} className="field" placeholder="you@example.com" />
+          <input
+            id="email"
+            type="email"
+            required
+            value={form.email}
+            onChange={update('email')}
+            className="field"
+            placeholder="you@example.com"
+          />
         </div>
         <div>
           <label className="label" htmlFor="password">
@@ -71,7 +87,13 @@ export function Register() {
           <label className="label" htmlFor="country">
             Country <span className="normal-case text-slate-500">(optional)</span>
           </label>
-          <input id="country" value={form.country} onChange={update('country')} className="field" placeholder="Pakistan" />
+          <input
+            id="country"
+            value={form.country}
+            onChange={update('country')}
+            className="field"
+            placeholder="Pakistan"
+          />
         </div>
         <div>
           <label className="label" htmlFor="referralCode">

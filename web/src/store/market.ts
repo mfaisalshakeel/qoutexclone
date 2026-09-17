@@ -32,7 +32,9 @@ export const useMarket = create<MarketState>((set, get) => ({
   loaded: false,
 
   async load() {
-    const data = await api.get<{ assets: Asset[]; durations: number[]; timeframes: string[] }>('/market/assets');
+    const data = await api.get<{ assets: Asset[]; durations: number[]; timeframes: string[] }>(
+      '/market/assets',
+    );
     const symbol = data.assets.some((a) => a.symbol === get().symbol) ? get().symbol : data.assets[0]?.symbol;
     set({
       assets: data.assets,

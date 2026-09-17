@@ -57,8 +57,8 @@ export function Landing() {
               <span className="block text-accent">Know the payout.</span>
             </h1>
             <p className="mt-4 max-w-lg text-base leading-relaxed text-slate-400">
-              Up or down on BTC, ETH, SOL and more. Fixed payouts up to 87%, expiries from 30 seconds, deposits and
-              withdrawals settled in crypto.
+              Up or down on BTC, ETH, SOL and more. Fixed payouts up to 87%, expiries from 30 seconds,
+              deposits and withdrawals settled in crypto.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Link to="/register" className="btn-primary !px-5 !py-3">
@@ -68,7 +68,9 @@ export function Landing() {
                 I already have one
               </Link>
             </div>
-            <p className="mt-4 text-xs text-slate-500">No deposit required to use the $10,000 practice account.</p>
+            <p className="mt-4 text-xs text-slate-500">
+              No deposit required to use the $10,000 practice account.
+            </p>
           </div>
 
           <div className="card overflow-hidden">
@@ -87,8 +89,12 @@ export function Landing() {
                     <span className="block text-[11px] text-slate-500">{asset.symbol}</span>
                   </span>
                   <span className="text-right">
-                    <span className="tabular block text-sm font-semibold">{price(asset.price, asset.precision)}</span>
-                    <span className={`tabular block text-[11px] ${asset.changePct >= 0 ? 'text-up' : 'text-down'}`}>
+                    <span className="tabular block text-sm font-semibold">
+                      {price(asset.price, asset.precision)}
+                    </span>
+                    <span
+                      className={`tabular block text-[11px] ${asset.changePct >= 0 ? 'text-up' : 'text-down'}`}
+                    >
                       {percent(asset.changePct)}
                     </span>
                   </span>
@@ -97,7 +103,12 @@ export function Landing() {
               ))}
               {assets.length === 0 && (
                 <li>
-                  <RowSkeletons rows={6} avatar className="divide-y divide-ink-700" rowClassName="px-4 py-3" />
+                  <RowSkeletons
+                    rows={6}
+                    avatar
+                    className="divide-y divide-ink-700"
+                    rowClassName="px-4 py-3"
+                  />
                 </li>
               )}
             </ul>
@@ -119,9 +130,10 @@ export function Landing() {
       <footer className="mx-auto max-w-6xl px-4 py-10 text-xs leading-relaxed text-slate-500">
         <p className="font-semibold text-slate-400">Risk warning</p>
         <p className="mt-2 max-w-3xl">
-          Binary options are high-risk instruments. You can lose your entire investment on a single trade. This platform
-          is a reference implementation built for education and development — run it against your own infrastructure and
-          comply with the regulations that apply to you before accepting real customer funds.
+          Binary options are high-risk instruments. You can lose your entire investment on a single trade.
+          This platform is a reference implementation built for education and development — run it against
+          your own infrastructure and comply with the regulations that apply to you before accepting real
+          customer funds.
         </p>
         <p className="mt-6">© {new Date().getFullYear()} Quantex. All rights reserved.</p>
       </footer>

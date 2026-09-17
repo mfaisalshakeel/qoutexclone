@@ -22,7 +22,9 @@ export function AdminWithdrawals() {
 
   const act = async (id: string, action: 'approve' | 'reject') => {
     const note =
-      action === 'reject' ? window.prompt('Reason for rejection? The trader sees this.') : 'Approved from back office';
+      action === 'reject'
+        ? window.prompt('Reason for rejection? The trader sees this.')
+        : 'Approved from back office';
     if (action === 'reject' && !note) return;
     try {
       await api.post(`/admin/withdrawals/${id}/${action}`, { note });
@@ -68,7 +70,9 @@ export function AdminWithdrawals() {
                 </span>
                 <span className="block font-mono text-[10px] text-slate-500">{w.address}</span>
                 <span className="block text-[10px] text-slate-500">{w.networkLabel}</span>
-                {w.txHash && <span className="block font-mono text-[10px] text-accent">{shortHash(w.txHash)}</span>}
+                {w.txHash && (
+                  <span className="block font-mono text-[10px] text-accent">{shortHash(w.txHash)}</span>
+                )}
               </Td>
               <Td className="text-[11px] text-slate-500">{dateTime(w.createdAt)}</Td>
               <Td>
@@ -78,10 +82,16 @@ export function AdminWithdrawals() {
               <Td className="text-right">
                 {w.status === 'PENDING' ? (
                   <span className="flex justify-end gap-2">
-                    <button onClick={() => void act(w.id, 'approve')} className="btn-up !px-3 !py-1.5 text-xs">
+                    <button
+                      onClick={() => void act(w.id, 'approve')}
+                      className="btn-up !px-3 !py-1.5 text-xs"
+                    >
                       Approve
                     </button>
-                    <button onClick={() => void act(w.id, 'reject')} className="btn-ghost !px-3 !py-1.5 text-xs !text-down">
+                    <button
+                      onClick={() => void act(w.id, 'reject')}
+                      className="btn-ghost !px-3 !py-1.5 text-xs !text-down"
+                    >
                       Reject
                     </button>
                   </span>
@@ -127,11 +137,7 @@ export function AdminDeposits() {
   if (!rows) return <Loading />;
   const pending = rows.filter((d) => d.status === 'AWAITING_PAYMENT' || d.status === 'CONFIRMING');
   const visible =
-    filter === 'ALL'
-      ? rows
-      : filter === 'PENDING'
-        ? pending
-        : rows.filter((d) => d.status === filter);
+    filter === 'ALL' ? rows : filter === 'PENDING' ? pending : rows.filter((d) => d.status === filter);
 
   return (
     <>
@@ -156,19 +162,25 @@ export function AdminDeposits() {
                   {d.cryptoAmount} {d.currency}
                 </span>
                 {d.creditedAmount > 0 && (
-                  <span className="tabular block text-[11px] text-up">credited {money(d.creditedAmount)}</span>
+                  <span className="tabular block text-[11px] text-up">
+                    credited {money(d.creditedAmount)}
+                  </span>
                 )}
                 {d.bonusAmount > 0 && (
                   <span className="tabular block text-[11px] text-up">bonus {money(d.bonusAmount)}</span>
                 )}
-                {d.promoCode && <span className="block font-mono text-[10px] text-slate-500">{d.promoCode}</span>}
+                {d.promoCode && (
+                  <span className="block font-mono text-[10px] text-slate-500">{d.promoCode}</span>
+                )}
               </Td>
               <Td>
                 <span className="block font-mono text-[10px] text-slate-500">{d.address}</span>
                 <span className="block text-[10px] text-slate-500">
                   {d.networkLabel} · {d.confirmations}/{d.requiredConf} conf
                 </span>
-                {d.txHash && <span className="block font-mono text-[10px] text-accent">{shortHash(d.txHash)}</span>}
+                {d.txHash && (
+                  <span className="block font-mono text-[10px] text-accent">{shortHash(d.txHash)}</span>
+                )}
               </Td>
               <Td className="text-[11px] text-slate-500">{dateTime(d.createdAt)}</Td>
               <Td>
@@ -177,10 +189,16 @@ export function AdminDeposits() {
               <Td className="text-right">
                 {d.status === 'AWAITING_PAYMENT' || d.status === 'CONFIRMING' ? (
                   <span className="flex justify-end gap-2">
-                    <button onClick={() => void act(d.id, 'confirm')} className="btn-up !px-3 !py-1.5 text-xs">
+                    <button
+                      onClick={() => void act(d.id, 'confirm')}
+                      className="btn-up !px-3 !py-1.5 text-xs"
+                    >
                       Credit
                     </button>
-                    <button onClick={() => void act(d.id, 'reject')} className="btn-ghost !px-3 !py-1.5 text-xs !text-down">
+                    <button
+                      onClick={() => void act(d.id, 'reject')}
+                      className="btn-ghost !px-3 !py-1.5 text-xs !text-down"
+                    >
                       Reject
                     </button>
                   </span>

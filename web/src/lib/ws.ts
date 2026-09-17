@@ -1,7 +1,7 @@
 import { api, tokens } from './api';
 import type { AccountType, Candle, Deposit, SupportMessage, SupportTicket, Trade, Withdrawal } from './types';
 
-type Handler = (payload: any) => void;
+type Handler = (payload: never) => void;
 
 export interface RealtimeEvents {
   quotes: { prices: Record<string, number>; ts: number };
@@ -32,7 +32,10 @@ class RealtimeClient {
   private reconnectTimer: number | null = null;
 
   connect(): void {
-    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+    if (
+      this.socket &&
+      (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)
+    ) {
       return;
     }
     this.closedByUs = false;
@@ -100,7 +103,8 @@ class RealtimeClient {
   }
 
   private emit(type: string, payload: unknown): void {
-    this.handlers.get(type)?.forEach((handler) => handler(payload));
+    // the public `on` signature keeps callers type-safe; the map itself is untyped
+    this.handlers.get(type)?.forEach((handler) => (handler as (value: unknown) => void)(payload));
   }
 }
 

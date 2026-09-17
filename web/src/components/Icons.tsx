@@ -70,7 +70,13 @@ export const IconCup = ({ className = base }: Props) => (
 export const IconLogo = ({ className = 'h-7 w-7' }: Props) => (
   <svg viewBox="0 0 32 32" fill="none" className={className}>
     <rect width="32" height="32" rx="9" fill="#3d7bff" />
-    <path d="M8 21l5-6 4 3.5L24 10" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    <path
+      d="M8 21l5-6 4 3.5L24 10"
+      stroke="#fff"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
     <circle cx="24" cy="10" r="2.3" fill="#12b886" stroke="#0a0e17" strokeWidth="1.2" />
   </svg>
 );

@@ -10,7 +10,9 @@ import { attachWebsocket } from './ws.js';
 async function main() {
   const assets = await prisma.asset.findMany({ where: { enabled: true }, orderBy: { sortOrder: 'asc' } });
   if (assets.length === 0) {
-    console.warn('[boot] no assets found — run `npm run seed --workspace=server` to load the default markets');
+    console.warn(
+      '[boot] no assets found — run `npm run seed --workspace=server` to load the default markets',
+    );
   }
   marketFeed.load(
     assets.map((a) => ({

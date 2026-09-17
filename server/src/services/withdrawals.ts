@@ -161,7 +161,11 @@ export async function approveWithdrawal(
   return completed;
 }
 
-export async function rejectWithdrawal(withdrawalId: string, adminId: string | null, note: string): Promise<Withdrawal> {
+export async function rejectWithdrawal(
+  withdrawalId: string,
+  adminId: string | null,
+  note: string,
+): Promise<Withdrawal> {
   const withdrawal = await prisma.withdrawal.findUnique({ where: { id: withdrawalId } });
   if (!withdrawal) throw notFound('Withdrawal not found');
   if (!['PENDING', 'APPROVED'].includes(withdrawal.status)) {
@@ -174,7 +178,13 @@ export async function rejectWithdrawal(withdrawalId: string, adminId: string | n
       data: { status: 'REJECTED', adminNote: note, processedById: adminId, processedAt: new Date() },
     });
     if (claimed.count === 0) throw conflict('Withdrawal can no longer be rejected', 'bad_status');
-    await releaseHold(tx, withdrawal.userId, withdrawal.amount, withdrawal.id, `Withdrawal rejected: ${note}`);
+    await releaseHold(
+      tx,
+      withdrawal.userId,
+      withdrawal.amount,
+      withdrawal.id,
+      `Withdrawal rejected: ${note}`,
+    );
     return tx.withdrawal.findUnique({ where: { id: withdrawalId } });
   });
 
@@ -185,7 +195,8 @@ export async function rejectWithdrawal(withdrawalId: string, adminId: string | n
 export async function cancelWithdrawal(userId: string, withdrawalId: string): Promise<Withdrawal> {
   const withdrawal = await prisma.withdrawal.findUnique({ where: { id: withdrawalId } });
   if (!withdrawal || withdrawal.userId !== userId) throw notFound('Withdrawal not found');
-  if (withdrawal.status !== 'PENDING') throw conflict('Only pending withdrawals can be cancelled', 'bad_status');
+  if (withdrawal.status !== 'PENDING')
+    throw conflict('Only pending withdrawals can be cancelled', 'bad_status');
 
   const updated = await prisma.$transaction(async (tx) => {
     const claimed = await tx.withdrawal.updateMany({
@@ -202,5 +213,9 @@ export async function cancelWithdrawal(userId: string, withdrawalId: string): Pr
 }
 
 export function listWithdrawals(userId: string, limit = 50) {
-  return prisma.withdrawal.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: Math.min(limit, 200) });
+  return prisma.withdrawal.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    take: Math.min(limit, 200),
+  });
 }

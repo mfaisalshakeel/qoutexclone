@@ -39,7 +39,10 @@ export async function listTournaments(userId?: string) {
   });
 
   const myEntries = userId
-    ? await prisma.tournamentEntry.findMany({ where: { userId }, select: { tournamentId: true, balance: true, rank: true, prize: true } })
+    ? await prisma.tournamentEntry.findMany({
+        where: { userId },
+        select: { tournamentId: true, balance: true, rank: true, prize: true },
+      })
     : [];
 
   return tournaments.map((tournament) => {
@@ -93,7 +96,8 @@ export async function joinTournament(userId: string, tournamentId: string): Prom
     include: { _count: { select: { entries: true } } },
   });
   if (!tournament) throw notFound('Tournament not found');
-  if (!['SCHEDULED', 'RUNNING'].includes(tournament.status)) throw conflict('This tournament is closed', 'closed');
+  if (!['SCHEDULED', 'RUNNING'].includes(tournament.status))
+    throw conflict('This tournament is closed', 'closed');
   if (tournament.endsAt < new Date()) throw conflict('This tournament has already ended', 'closed');
   if (tournament.maxEntries > 0 && tournament._count.entries >= tournament.maxEntries) {
     throw conflict('This tournament is full', 'full');
@@ -251,7 +255,10 @@ export async function finishDueTournaments(): Promise<number> {
     select: { id: true },
   });
   for (const tournament of starting) {
-    const updated = await prisma.tournament.update({ where: { id: tournament.id }, data: { status: 'RUNNING' } });
+    const updated = await prisma.tournament.update({
+      where: { id: tournament.id },
+      data: { status: 'RUNNING' },
+    });
     tournamentEvents.emit('updated', updated);
   }
   return due.length;

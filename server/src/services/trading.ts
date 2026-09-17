@@ -125,7 +125,8 @@ export function resolveOutcome(input: OutcomeInput): Outcome {
   else if (input.direction === 'UP') status = input.exitPrice > input.entryPrice ? 'WON' : 'LOST';
   else status = input.exitPrice < input.entryPrice ? 'WON' : 'LOST';
 
-  const profit = status === 'WON' ? winProfit(input.stake, input.payoutPct) : status === 'LOST' ? -input.stake : 0;
+  const profit =
+    status === 'WON' ? winProfit(input.stake, input.payoutPct) : status === 'LOST' ? -input.stake : 0;
   const credit = status === 'WON' ? input.stake + profit : status === 'REFUNDED' ? input.stake : 0;
   return { status, profit, credit };
 }
@@ -182,7 +183,7 @@ export async function settleTrade(tradeId: string): Promise<SettlementResult | n
         where: { id: trade.userId },
         select: { demoBalance: true, realBalance: true },
       });
-      balance = trade.accountType === 'DEMO' ? user?.demoBalance ?? 0 : user?.realBalance ?? 0;
+      balance = trade.accountType === 'DEMO' ? (user?.demoBalance ?? 0) : (user?.realBalance ?? 0);
     }
 
     const settled = await tx.trade.findUnique({ where: { id: trade.id } });

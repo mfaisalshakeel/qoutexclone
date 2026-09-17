@@ -4,6 +4,7 @@ import { useAuth } from '../store/auth';
 import { useMarket } from '../store/market';
 import { useRealtime } from '../hooks/useRealtime';
 import { BalanceSwitcher } from './BalanceSwitcher';
+import { ErrorBoundary } from './ErrorBoundary';
 import { SupportChat } from './SupportChat';
 import { Toasts } from './Toasts';
 import { IconChart, IconCup, IconHistory, IconLogo, IconShield, IconUser, IconWallet } from './Icons';
@@ -114,8 +115,12 @@ export function Layout() {
         </div>
       </header>
 
-      <main className={`flex-1 pb-20 md:pb-0 ${isTerminal ? '' : 'mx-auto w-full max-w-[1400px] px-3 py-5 sm:px-4'}`}>
-        <Outlet />
+      <main
+        className={`flex-1 pb-20 md:pb-0 ${isTerminal ? '' : 'mx-auto w-full max-w-[1400px] px-3 py-5 sm:px-4'}`}
+      >
+        <ErrorBoundary resetKey={location.pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-ink-700 bg-ink-900/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">

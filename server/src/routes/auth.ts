@@ -159,7 +159,10 @@ router.post(
   '/logout-all',
   requireAuth,
   wrap(async (req, res) => {
-    await prisma.refreshToken.updateMany({ where: { userId: req.user!.id, revokedAt: null }, data: { revokedAt: new Date() } });
+    await prisma.refreshToken.updateMany({
+      where: { userId: req.user!.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
     res.json({ ok: true });
   }),
 );

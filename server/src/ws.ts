@@ -73,7 +73,12 @@ export function attachWebsocket(server: Server) {
       }
     }
 
-    send(socket, { type: 'welcome', provider: marketFeed.provider, prices: marketFeed.getPrices(), ts: Date.now() });
+    send(socket, {
+      type: 'welcome',
+      provider: marketFeed.provider,
+      prices: marketFeed.getPrices(),
+      ts: Date.now(),
+    });
 
     socket.on('pong', () => {
       state.alive = true;
@@ -137,7 +142,8 @@ export function attachWebsocket(server: Server) {
       send(socket, { type: 'quotes', prices, ts });
       if (state.symbol) {
         const [candle] = marketFeed.getCandles(state.symbol, state.timeframe, 1);
-        if (candle) send(socket, { type: 'candle', symbol: state.symbol, timeframe: state.timeframe, candle });
+        if (candle)
+          send(socket, { type: 'candle', symbol: state.symbol, timeframe: state.timeframe, candle });
       }
     }
   }, BROADCAST_MS);
@@ -156,7 +162,12 @@ export function attachWebsocket(server: Server) {
   heartbeat.unref?.();
 
   tradeEvents.on('settled', ({ trade, balance }) => {
-    toUser(trade.userId, { type: 'trade:settled', trade: publicTrade(trade), balance, accountType: trade.accountType });
+    toUser(trade.userId, {
+      type: 'trade:settled',
+      trade: publicTrade(trade),
+      balance,
+      accountType: trade.accountType,
+    });
   });
   tradeEvents.on('opened', (trade) => {
     toUser(trade.userId, { type: 'trade:opened', trade: publicTrade(trade) });
@@ -168,7 +179,8 @@ export function attachWebsocket(server: Server) {
     if (deposit) toUser(deposit.userId, { type: 'deposit:created', deposit: publicDeposit(deposit) });
   });
   withdrawalEvents.on('updated', (withdrawal) => {
-    if (withdrawal) toUser(withdrawal.userId, { type: 'withdrawal:updated', withdrawal: publicWithdrawal(withdrawal) });
+    if (withdrawal)
+      toUser(withdrawal.userId, { type: 'withdrawal:updated', withdrawal: publicWithdrawal(withdrawal) });
   });
 
   supportEvents.on('message', ({ message, userId, subject }) => {

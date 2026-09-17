@@ -53,7 +53,10 @@ router.post(
       data: { passwordHash: await bcrypt.hash(body.newPassword, 10) },
     });
     // Password changed: every other session is invalidated.
-    await prisma.refreshToken.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
+    await prisma.refreshToken.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
     res.json({ ok: true });
   }),
 );
@@ -74,7 +77,10 @@ router.post(
   '/demo/reset',
   wrap(async (req, res) => {
     const user = await prisma.$transaction(async (tx) => {
-      const current = await tx.user.findUnique({ where: { id: req.user!.id }, select: { demoBalance: true } });
+      const current = await tx.user.findUnique({
+        where: { id: req.user!.id },
+        select: { demoBalance: true },
+      });
       if (!current) throw notFound('Account not found');
       const delta = DEMO_START - current.demoBalance;
       if (delta !== 0) {
@@ -106,7 +112,10 @@ router.get(
   '/kyc',
   wrap(async (req, res) => {
     const [user, submission] = await Promise.all([
-      prisma.user.findUnique({ where: { id: req.user!.id }, select: { kycStatus: true, kycReviewedAt: true } }),
+      prisma.user.findUnique({
+        where: { id: req.user!.id },
+        select: { kycStatus: true, kycReviewedAt: true },
+      }),
       latestKycSubmission(req.user!.id),
     ]);
     res.json({

@@ -126,7 +126,13 @@ export function ResetPassword() {
             <label className="label" htmlFor="token">
               Reset token
             </label>
-            <input id="token" required value={token} onChange={(e) => setToken(e.target.value)} className="field font-mono !text-xs" />
+            <input
+              id="token"
+              required
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              className="field font-mono !text-xs"
+            />
           </div>
         )}
         <div>

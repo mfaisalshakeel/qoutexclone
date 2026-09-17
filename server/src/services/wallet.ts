@@ -78,7 +78,12 @@ export async function applyLedger(tx: TxClient, entry: LedgerEntry): Promise<num
 }
 
 /** Moves funds from the spendable real balance into the pending-withdrawal hold. */
-export async function holdFunds(tx: TxClient, userId: string, amount: number, withdrawalId: string): Promise<number> {
+export async function holdFunds(
+  tx: TxClient,
+  userId: string,
+  amount: number,
+  withdrawalId: string,
+): Promise<number> {
   const balance = await applyLedger(tx, {
     userId,
     accountType: 'REAL',
@@ -129,7 +134,10 @@ export async function getBalances(userId: string) {
   return user;
 }
 
-export async function listTransactions(userId: string, options: { accountType?: AccountType; limit?: number; cursor?: string }) {
+export async function listTransactions(
+  userId: string,
+  options: { accountType?: AccountType; limit?: number; cursor?: string },
+) {
   const limit = Math.min(options.limit ?? 50, 200);
   const rows = await prisma.transaction.findMany({
     where: { userId, ...(options.accountType ? { accountType: options.accountType } : {}) },

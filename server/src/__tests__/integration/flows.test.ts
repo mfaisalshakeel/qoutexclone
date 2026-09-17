@@ -14,11 +14,11 @@ if (TEST_DB) process.env.DATABASE_URL = TEST_DB;
 const suite = TEST_DB ? describe : describe.skip;
 
 suite('money flows', () => {
-  let prisma: typeof import('../../lib/prisma.js')['prisma'];
+  let prisma: (typeof import('../../lib/prisma.js'))['prisma'];
   let deposits: typeof import('../../services/deposits.js');
   let withdrawals: typeof import('../../services/withdrawals.js');
   let trading: typeof import('../../services/trading.js');
-  let feed: typeof import('../../engine/feed.js')['marketFeed'];
+  let feed: (typeof import('../../engine/feed.js'))['marketFeed'];
 
   const made = { users: [] as string[], promos: [] as string[], assets: [] as string[] };
 
@@ -39,7 +39,13 @@ suite('money flows', () => {
   const balanceOf = async (id: string) =>
     prisma.user.findUniqueOrThrow({
       where: { id },
-      select: { realBalance: true, lockedBalance: true, totalDeposited: true, totalWithdrawn: true, referralEarnings: true },
+      select: {
+        realBalance: true,
+        lockedBalance: true,
+        totalDeposited: true,
+        totalWithdrawn: true,
+        referralEarnings: true,
+      },
     });
 
   beforeAll(async () => {

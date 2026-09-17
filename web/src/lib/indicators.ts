@@ -33,7 +33,11 @@ export function ema(candles: Candle[], period: number): LinePoint[] {
 }
 
 /** Bollinger bands around an SMA, at `mult` standard deviations. */
-export function bollinger(candles: Candle[], period = 20, mult = 2): { upper: LinePoint[]; lower: LinePoint[] } {
+export function bollinger(
+  candles: Candle[],
+  period = 20,
+  mult = 2,
+): { upper: LinePoint[]; lower: LinePoint[] } {
   const upper: LinePoint[] = [];
   const lower: LinePoint[] = [];
   if (candles.length < period) return { upper, lower };

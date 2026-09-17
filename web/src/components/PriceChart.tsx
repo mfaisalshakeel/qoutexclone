@@ -108,8 +108,18 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
       priceFormat,
       visible: false,
     });
-    smaRef.current = chart.addLineSeries({ color: THEME.sma, lineWidth: 1, priceLineVisible: false, visible: false });
-    emaRef.current = chart.addLineSeries({ color: THEME.ema, lineWidth: 1, priceLineVisible: false, visible: false });
+    smaRef.current = chart.addLineSeries({
+      color: THEME.sma,
+      lineWidth: 1,
+      priceLineVisible: false,
+      visible: false,
+    });
+    emaRef.current = chart.addLineSeries({
+      color: THEME.ema,
+      lineWidth: 1,
+      priceLineVisible: false,
+      visible: false,
+    });
     bandRefs.current = [0, 1].map(() =>
       chart.addLineSeries({
         color: THEME.band,
@@ -214,8 +224,6 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
       offSnapshot();
       offCandle();
     };
-    // paintOverlays reads the latest settings through the indicators effect below
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, timeframe, precision]);
 
   // chart type and indicator toggles
@@ -226,7 +234,6 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
     emaRef.current?.applyOptions({ visible: indicators.ema });
     for (const band of bandRefs.current) band.applyOptions({ visible: indicators.bollinger });
     paintOverlays();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chartType, indicators.sma, indicators.ema, indicators.bollinger]);
 
   // strike lines and entry markers for open positions on this market
@@ -256,12 +263,12 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
       [...mine]
         .sort((a, b) => new Date(a.openedAt).getTime() - new Date(b.openedAt).getTime())
         .map((trade) => ({
-        time: Math.floor(new Date(trade.openedAt).getTime() / 1000) as UTCTimestamp,
-        position: trade.direction === 'UP' ? ('belowBar' as const) : ('aboveBar' as const),
-        color: trade.direction === 'UP' ? THEME.up : THEME.down,
-        shape: trade.direction === 'UP' ? ('arrowUp' as const) : ('arrowDown' as const),
-        text: `${trade.direction} $${(trade.stake / 100).toFixed(0)}`,
-      })),
+          time: Math.floor(new Date(trade.openedAt).getTime() / 1000) as UTCTimestamp,
+          position: trade.direction === 'UP' ? ('belowBar' as const) : ('aboveBar' as const),
+          color: trade.direction === 'UP' ? THEME.up : THEME.down,
+          shape: trade.direction === 'UP' ? ('arrowUp' as const) : ('arrowDown' as const),
+          text: `${trade.direction} $${(trade.stake / 100).toFixed(0)}`,
+        })),
     );
   }, [trades, symbol]);
 

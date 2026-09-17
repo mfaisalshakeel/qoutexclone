@@ -51,8 +51,7 @@ export function Positions({ open, closed, loading = false }: Props) {
           ) : (
             open.map((trade) => {
               const live = prices[trade.symbol] ?? trade.entryPrice;
-              const winning =
-                trade.direction === 'UP' ? live > trade.entryPrice : live < trade.entryPrice;
+              const winning = trade.direction === 'UP' ? live > trade.entryPrice : live < trade.entryPrice;
               const flat = live === trade.entryPrice;
               return (
                 <div key={trade.id} className="mb-1.5 rounded-lg bg-ink-700/60 p-2.5">
@@ -76,8 +75,14 @@ export function Positions({ open, closed, loading = false }: Props) {
                     </span>
                     <span className="text-right">
                       <span className="tabular block text-slate-300">{money(trade.stake)}</span>
-                      <span className={`tabular block font-semibold ${flat ? 'text-slate-400' : winning ? 'text-up' : 'text-down'}`}>
-                        {flat ? 'at entry' : winning ? `+${money(trade.potentialProfit, { currency: true })}` : `−${money(trade.stake)}`}
+                      <span
+                        className={`tabular block font-semibold ${flat ? 'text-slate-400' : winning ? 'text-up' : 'text-down'}`}
+                      >
+                        {flat
+                          ? 'at entry'
+                          : winning
+                            ? `+${money(trade.potentialProfit, { currency: true })}`
+                            : `−${money(trade.stake)}`}
                       </span>
                     </span>
                   </div>
@@ -92,7 +97,10 @@ export function Positions({ open, closed, loading = false }: Props) {
             <Empty text="No closed trades yet" />
           ) : (
             closed.map((trade) => (
-              <div key={trade.id} className="mb-1.5 flex items-center justify-between rounded-lg bg-ink-700/40 p-2.5">
+              <div
+                key={trade.id}
+                className="mb-1.5 flex items-center justify-between rounded-lg bg-ink-700/40 p-2.5"
+              >
                 <span>
                   <span className="block text-xs font-semibold">
                     <span className={trade.direction === 'UP' ? 'text-up' : 'text-down'}>
@@ -107,7 +115,11 @@ export function Positions({ open, closed, loading = false }: Props) {
                 <span className="text-right">
                   <span
                     className={`tabular block text-xs font-bold ${
-                      trade.status === 'WON' ? 'text-up' : trade.status === 'LOST' ? 'text-down' : 'text-slate-300'
+                      trade.status === 'WON'
+                        ? 'text-up'
+                        : trade.status === 'LOST'
+                          ? 'text-down'
+                          : 'text-slate-300'
                     }`}
                   >
                     {trade.status === 'WON'

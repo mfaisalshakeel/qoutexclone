@@ -66,7 +66,8 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
     }
   };
 
-  const cryptoEstimate = amount > 0 && method.rate > 0 ? (amount / method.rate).toFixed(method.decimals) : '0';
+  const cryptoEstimate =
+    amount > 0 && method.rate > 0 ? (amount / method.rate).toFixed(method.decimals) : '0';
   const belowMin = amount < method.minDepositUsd;
 
   const create = async () => {
@@ -113,7 +114,9 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
                 {pending.networkLabel} · rate locked at ${pending.rate.toLocaleString()} /{pending.currency}
               </p>
               {pending.promoCode && (
-                <p className="mt-1 text-xs text-up">Promo {pending.promoCode} applies when this deposit confirms</p>
+                <p className="mt-1 text-xs text-up">
+                  Promo {pending.promoCode} applies when this deposit confirms
+                </p>
               )}
             </div>
             <span className="chip bg-accent-soft text-accent">
@@ -161,8 +164,8 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
                 </div>
               </div>
               <p className="text-[11px] leading-relaxed text-slate-500">
-                Send only {pending.currency} over {pending.networkLabel} to this address. Funds are credited after{' '}
-                {pending.requiredConf} network confirmations.
+                Send only {pending.currency} over {pending.networkLabel} to this address. Funds are credited
+                after {pending.requiredConf} network confirmations.
               </p>
               {pending.txHash && (
                 <p className="text-[11px] text-slate-400">
@@ -200,7 +203,9 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
               key={`${m.currency}-${m.network}`}
               onClick={() => setIndex(i)}
               className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${
-                i === index ? 'border-accent bg-accent-soft' : 'border-ink-600 bg-ink-800 hover:border-ink-500'
+                i === index
+                  ? 'border-accent bg-accent-soft'
+                  : 'border-ink-600 bg-ink-800 hover:border-ink-500'
               }`}
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-600 text-[10px] font-bold">

@@ -97,7 +97,9 @@ export function AdminTournaments() {
 
   const showBoard = async (id: string) => {
     if (board?.id === id) return setBoard(null);
-    const { leaderboard } = await api.get<{ leaderboard: LeaderboardRow[] }>(`/admin/tournaments/${id}/leaderboard`);
+    const { leaderboard } = await api.get<{ leaderboard: LeaderboardRow[] }>(
+      `/admin/tournaments/${id}/leaderboard`,
+    );
     setBoard({ id, rows: leaderboard });
   };
 
@@ -248,12 +250,18 @@ export function AdminTournaments() {
                       {board?.id === t.id ? 'Hide' : 'Leaderboard'}
                     </button>
                     {t.status === 'SCHEDULED' && (
-                      <button onClick={() => void act(t.id, 'start')} className="btn-primary !px-3 !py-1.5 text-xs">
+                      <button
+                        onClick={() => void act(t.id, 'start')}
+                        className="btn-primary !px-3 !py-1.5 text-xs"
+                      >
                         Start
                       </button>
                     )}
                     {t.status === 'RUNNING' && (
-                      <button onClick={() => void act(t.id, 'finish')} className="btn-up !px-3 !py-1.5 text-xs">
+                      <button
+                        onClick={() => void act(t.id, 'finish')}
+                        className="btn-up !px-3 !py-1.5 text-xs"
+                      >
                         Finish & pay
                       </button>
                     )}
@@ -272,7 +280,9 @@ export function AdminTournaments() {
                             <span className="w-6 font-bold text-slate-500">{row.place}</span>
                             <span className="flex-1 truncate">{row.name}</span>
                             <span className="tabular">{money(row.balance)}</span>
-                            <span className={`tabular w-20 text-right ${row.profit >= 0 ? 'text-up' : 'text-down'}`}>
+                            <span
+                              className={`tabular w-20 text-right ${row.profit >= 0 ? 'text-up' : 'text-down'}`}
+                            >
                               {money(row.profit, { sign: true })}
                             </span>
                             <span className="tabular w-20 text-right text-up">
@@ -336,7 +346,10 @@ export function AdminPromos() {
 
   return (
     <>
-      <PageHead title="Promo codes" subtitle="Deposit bonuses credited automatically when a payment confirms" />
+      <PageHead
+        title="Promo codes"
+        subtitle="Deposit bonuses credited automatically when a payment confirms"
+      />
 
       <form onSubmit={create} className="card mb-4 grid gap-3 p-4 sm:grid-cols-5">
         <div>
@@ -413,7 +426,9 @@ export function AdminPromos() {
                 {promo.redemptions}
                 {promo.maxRedemptions > 0 ? ` / ${promo.maxRedemptions}` : ''}
               </Td>
-              <Td className="text-[11px] text-slate-500">{promo.expiresAt ? dateTime(promo.expiresAt) : 'no expiry'}</Td>
+              <Td className="text-[11px] text-slate-500">
+                {promo.expiresAt ? dateTime(promo.expiresAt) : 'no expiry'}
+              </Td>
               <Td>
                 <StatusPill status={promo.enabled ? 'active' : 'closed'} />
               </Td>
@@ -487,7 +502,13 @@ export function AdminAssets() {
                   Payout
                 </button>
                 <button
-                  onClick={() => void patch(asset.id, { enabled: !asset.enabled }, asset.enabled ? 'Market closed' : 'Market opened')}
+                  onClick={() =>
+                    void patch(
+                      asset.id,
+                      { enabled: !asset.enabled },
+                      asset.enabled ? 'Market closed' : 'Market opened',
+                    )
+                  }
                   className="btn-ghost !px-3 !py-1.5 text-xs"
                 >
                   {asset.enabled ? 'Close' : 'Open'}
@@ -503,7 +524,16 @@ export function AdminAssets() {
 
 export function AdminAudit() {
   const [logs, setLogs] = useState<
-    { id: string; action: string; targetType: string | null; targetId: string | null; detail: string | null; createdAt: string; actor?: { email: string } }[] | null
+    | {
+        id: string;
+        action: string;
+        targetType: string | null;
+        targetId: string | null;
+        detail: string | null;
+        createdAt: string;
+        actor?: { email: string };
+      }[]
+    | null
   >(null);
 
   useEffect(() => {
@@ -527,7 +557,9 @@ export function AdminAudit() {
               <Td className="font-mono text-[11px] text-accent">{log.action}</Td>
               <Td className="text-[11px] text-slate-400">
                 {log.targetType}
-                <span className="block font-mono text-[10px] text-slate-500">{log.targetId?.slice(0, 12)}</span>
+                <span className="block font-mono text-[10px] text-slate-500">
+                  {log.targetId?.slice(0, 12)}
+                </span>
               </Td>
               <Td className="text-[11px] text-slate-400">{log.detail ?? '—'}</Td>
               <Td className="text-[11px] text-slate-500">{log.actor?.email ?? 'system'}</Td>

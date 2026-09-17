@@ -30,7 +30,9 @@ export function AdminDashboard() {
   useEffect(() => {
     void Promise.all([
       api.get<Overview>('/admin/overview').then(setOverview),
-      api.get<{ withdrawals: Withdrawal[] }>('/admin/withdrawals').then((d) => setWithdrawals(d.withdrawals.slice(0, 6))),
+      api
+        .get<{ withdrawals: Withdrawal[] }>('/admin/withdrawals')
+        .then((d) => setWithdrawals(d.withdrawals.slice(0, 6))),
       api.get<{ deposits: Deposit[] }>('/admin/deposits').then((d) => setDeposits(d.deposits.slice(0, 6))),
     ]).catch(() => undefined);
   }, []);
@@ -83,7 +85,9 @@ export function AdminDashboard() {
         <StatCard
           label="Needs attention"
           value={String(overview.pendingWithdrawals + overview.pendingKyc + overview.openTickets)}
-          tone={overview.pendingWithdrawals + overview.pendingKyc + overview.openTickets > 0 ? 'warn' : undefined}
+          tone={
+            overview.pendingWithdrawals + overview.pendingKyc + overview.openTickets > 0 ? 'warn' : undefined
+          }
           hint="payouts, verifications, messages"
         />
       </div>
@@ -149,7 +153,9 @@ function Queue({ label, count, to }: { label: string; count: number; to: string 
         count > 0 ? 'border-accent/40' : ''
       }`}
     >
-      <span className={`tabular text-2xl font-bold ${count > 0 ? 'text-accent' : 'text-slate-500'}`}>{count}</span>
+      <span className={`tabular text-2xl font-bold ${count > 0 ? 'text-accent' : 'text-slate-500'}`}>
+        {count}
+      </span>
       <span className="text-xs text-slate-400">{label}</span>
       <span className="ml-auto text-slate-500">›</span>
     </Link>

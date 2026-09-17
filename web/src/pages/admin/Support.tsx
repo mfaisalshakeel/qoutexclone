@@ -97,13 +97,16 @@ export function AdminSupport() {
 
   return (
     <>
-      <PageHead title="Support desk" subtitle={`${tickets.length} conversations · ${waiting} waiting on a reply`} />
+      <PageHead
+        title="Support desk"
+        subtitle={`${tickets.length} conversations · ${waiting} waiting on a reply`}
+      />
 
       {tickets.length === 0 ? (
         <Empty text="No conversations yet" />
       ) : (
-        <div className="grid gap-3 lg:grid-cols-[20rem_1fr]">
-          <div className="card max-h-[32rem] overflow-y-auto p-1.5">
+        <div className="grid min-w-0 gap-3 lg:grid-cols-[20rem_1fr]">
+          <div className="card min-w-0 max-h-[32rem] overflow-y-auto p-1.5">
             {tickets.map((ticket) => (
               <button
                 key={ticket.id}
@@ -130,12 +133,13 @@ export function AdminSupport() {
           </div>
 
           {active && (
-            <div className="card flex max-h-[32rem] flex-col">
+            <div className="card flex min-w-0 max-h-[32rem] flex-col">
               <header className="flex items-center gap-3 border-b border-ink-600 p-3">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{active.subject}</p>
                   <p className="truncate text-[11px] text-slate-500">
-                    {active.user?.name} · {active.user?.email} · balance {money(active.user?.realBalance ?? 0)}
+                    {active.user?.name} · {active.user?.email} · balance{' '}
+                    {money(active.user?.realBalance ?? 0)}
                   </p>
                 </div>
                 <button
@@ -146,7 +150,7 @@ export function AdminSupport() {
                 </button>
               </header>
 
-              <div className="flex-1 space-y-2 overflow-y-auto p-3">
+              <div className="min-w-0 flex-1 space-y-2 overflow-y-auto p-3">
                 {active.messages.map((message) => (
                   <div
                     key={message.id}
@@ -155,7 +159,9 @@ export function AdminSupport() {
                     }`}
                   >
                     <p className="whitespace-pre-wrap break-words">{message.body}</p>
-                    <p className={`mt-1 text-[9px] ${message.fromSupport ? 'text-white/70' : 'text-slate-500'}`}>
+                    <p
+                      className={`mt-1 text-[9px] ${message.fromSupport ? 'text-white/70' : 'text-slate-500'}`}
+                    >
                       {message.fromSupport ? 'You' : active.user?.name} · {dateTime(message.createdAt)}
                     </p>
                   </div>
@@ -177,7 +183,11 @@ export function AdminSupport() {
                   placeholder="Reply to the trader…"
                   className="field max-h-28 flex-1 resize-none !py-2 !text-xs"
                 />
-                <button type="submit" disabled={busy || !draft.trim()} className="btn-primary !px-4 !py-2 text-xs">
+                <button
+                  type="submit"
+                  disabled={busy || !draft.trim()}
+                  className="btn-primary !px-4 !py-2 text-xs"
+                >
                   Send
                 </button>
               </form>

@@ -20,7 +20,9 @@ export const notFound = (msg = 'Not found') => new AppError(404, msg, 'not_found
 export const conflict = (msg: string, code = 'conflict') => new AppError(409, msg, code);
 
 /** Wraps an async route handler so rejected promises reach the error middleware. */
-export function wrap(handler: (req: Request, res: Response, next: NextFunction) => Promise<unknown>): RequestHandler {
+export function wrap(
+  handler: (req: Request, res: Response, next: NextFunction) => Promise<unknown>,
+): RequestHandler {
   return (req, res, next) => {
     handler(req, res, next).catch(next);
   };

@@ -86,7 +86,9 @@ export function AdminUsers() {
               <Td>
                 <span className="block text-xs font-semibold">
                   {user.name}
-                  {user.role === 'ADMIN' && <span className="ml-2 chip bg-accent-soft text-accent">admin</span>}
+                  {user.role === 'ADMIN' && (
+                    <span className="ml-2 chip bg-accent-soft text-accent">admin</span>
+                  )}
                 </span>
                 <span className="block text-[11px] text-slate-500">{user.email}</span>
                 <span className="block text-[10px] text-slate-500">joined {dateTime(user.createdAt)}</span>
@@ -94,7 +96,9 @@ export function AdminUsers() {
               <Td>
                 <span className="tabular block text-xs font-semibold">{money(user.realBalance)}</span>
                 {user.lockedBalance > 0 && (
-                  <span className="tabular block text-[10px] text-amber-300">{money(user.lockedBalance)} held</span>
+                  <span className="tabular block text-[10px] text-amber-300">
+                    {money(user.lockedBalance)} held
+                  </span>
                 )}
               </Td>
               <Td className="tabular text-xs text-slate-400">{money(user.demoBalance)}</Td>
@@ -139,7 +143,8 @@ export function AdminKyc() {
   }, [load]);
 
   const review = async (id: string, decision: 'APPROVED' | 'REJECTED') => {
-    const note = decision === 'REJECTED' ? window.prompt('Reason for rejection? The trader sees this.') : undefined;
+    const note =
+      decision === 'REJECTED' ? window.prompt('Reason for rejection? The trader sees this.') : undefined;
     if (decision === 'REJECTED' && !note) return;
     try {
       await api.post(`/admin/kyc/${id}/review`, { decision, note });
@@ -189,7 +194,10 @@ export function AdminKyc() {
               <Td className="text-right">
                 {row.status === 'PENDING' && (
                   <span className="flex justify-end gap-2">
-                    <button onClick={() => void review(row.id, 'APPROVED')} className="btn-up !px-3 !py-1.5 text-xs">
+                    <button
+                      onClick={() => void review(row.id, 'APPROVED')}
+                      className="btn-up !px-3 !py-1.5 text-xs"
+                    >
                       Approve
                     </button>
                     <button

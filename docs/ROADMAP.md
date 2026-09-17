@@ -14,10 +14,10 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 
 ## Phase 0 — Foundations (do first, everything else depends on it)
 
-- [ ] **Fix seed env loading.** `server/src/seed.ts` loads `dotenv/config`. `npm run seed` works from root and server.
-- [ ] **Error boundaries.** A route-level boundary on every page shows a friendly error with a "reload" button and logs the error. The terminal chart gets its own boundary, so a chart failure never blanks the page. Test: throw inside a child and assert the boundary renders.
-- [ ] **Lint and format.** ESLint (typescript-eslint, react-hooks, jsx-a11y) plus Prettier, with `npm run lint` at the root, zero warnings, run in CI.
-- [ ] **E2E harness.** Playwright is in the repo with specs for register → login → place a practice trade → settles → appears in history, deposit invoice flow, admin approve withdrawal. Runs in CI against MySQL service. Also `npm run e2e`.
+- [x] **Fix seed env loading.** `server/src/seed.ts` loads `dotenv/config`. `npm run seed` works from root and server.
+- [x] **Error boundaries.** A route-level boundary on every page shows a friendly error with a "reload" button and logs the error. The terminal chart gets its own boundary, so a chart failure never blanks the page. Test: throw inside a child and assert the boundary renders.
+- [x] **Lint and format.** ESLint (typescript-eslint, react-hooks, jsx-a11y) plus Prettier, with `npm run lint` at the root, zero warnings, run in CI.
+- [x] **E2E harness.** Playwright is in the repo with specs for register → login → place a practice trade → settles → appears in history, deposit invoice flow, admin approve withdrawal. Runs in CI against MySQL service. Also `npm run e2e`.
 - [ ] **Env validation.** The server validates env with zod at boot and fails fast with a clear message.
 - [ ] **Structured logging.** pino with request ids, logs for HTTP, settlement and ws events, and no secrets in logs.
 - [ ] **Runtime settings service.** A typed settings registry over the `Setting` table. Each key has a zod schema and a default, reads are cached, and writes invalidate the cache and broadcast over ws. Every "configurable" item in this roadmap reads from here.

@@ -19,7 +19,10 @@ describe('crypto networks', () => {
   it('derives stable addresses that pass their own network validation', () => {
     for (const spec of NETWORKS) {
       const address = deriveAddress('secret', 'user-1', spec.currency, spec.network);
-      expect(isValidAddress(spec.currency, spec.network, address), `${spec.currency}/${spec.network}: ${address}`).toBe(true);
+      expect(
+        isValidAddress(spec.currency, spec.network, address),
+        `${spec.currency}/${spec.network}: ${address}`,
+      ).toBe(true);
       expect(deriveAddress('secret', 'user-1', spec.currency, spec.network)).toBe(address);
     }
   });

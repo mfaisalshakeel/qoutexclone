@@ -68,9 +68,18 @@ router.get(
   '/deposit-address',
   wrap(async (req, res) => {
     const query = z.object({ currency: z.string().min(2), network: z.string().min(3) }).parse(req.query);
-    const address = await getDepositAddress(req.user!.id, query.currency.toUpperCase(), query.network.toUpperCase());
+    const address = await getDepositAddress(
+      req.user!.id,
+      query.currency.toUpperCase(),
+      query.network.toUpperCase(),
+    );
     res.json({
-      address: { currency: address.currency, network: address.network, address: address.address, memo: address.memo },
+      address: {
+        currency: address.currency,
+        network: address.network,
+        address: address.address,
+        memo: address.memo,
+      },
       rate: usdRate(address.currency),
     });
   }),
@@ -138,10 +147,18 @@ router.get(
   '/withdrawals/quote',
   wrap(async (req, res) => {
     const query = z
-      .object({ currency: z.string().min(2), network: z.string().min(3), amount: z.coerce.number().positive() })
+      .object({
+        currency: z.string().min(2),
+        network: z.string().min(3),
+        amount: z.coerce.number().positive(),
+      })
       .parse(req.query);
     res.json({
-      quote: quoteWithdrawal(query.currency.toUpperCase(), query.network.toUpperCase(), Math.round(query.amount * 100)),
+      quote: quoteWithdrawal(
+        query.currency.toUpperCase(),
+        query.network.toUpperCase(),
+        Math.round(query.amount * 100),
+      ),
     });
   }),
 );
@@ -197,7 +214,9 @@ router.get(
       listDeposits(req.user!.id, 10),
       listWithdrawals(req.user!.id, 10),
     ]);
-    const pendingWithdrawals = withdrawals.filter((w) => ['PENDING', 'APPROVED', 'PROCESSING'].includes(w.status));
+    const pendingWithdrawals = withdrawals.filter((w) =>
+      ['PENDING', 'APPROVED', 'PROCESSING'].includes(w.status),
+    );
     if (balances.realBalance < 0) throw badRequest('Balance inconsistency detected', 'balance_error');
     res.json({
       balances,

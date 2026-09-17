@@ -59,7 +59,11 @@ export function History() {
         <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Stat label="Trades" value={String(stats.total)} />
           <Stat label="Win rate" value={`${stats.winRate}%`} tone={stats.winRate >= 50 ? 'up' : 'down'} />
-          <Stat label="Net P&L" value={money(stats.netProfit, { sign: true })} tone={stats.netProfit >= 0 ? 'up' : 'down'} />
+          <Stat
+            label="Net P&L"
+            value={money(stats.netProfit, { sign: true })}
+            tone={stats.netProfit >= 0 ? 'up' : 'down'}
+          />
           <Stat label="Volume" value={money(stats.volume)} />
         </div>
       )}
@@ -82,7 +86,9 @@ export function History() {
         <RowSkeletons rows={7} className="card divide-y divide-ink-700" />
       ) : view === 'trades' ? (
         trades.length === 0 ? (
-          <p className="card p-10 text-center text-sm text-slate-500">No closed trades on this account yet.</p>
+          <p className="card p-10 text-center text-sm text-slate-500">
+            No closed trades on this account yet.
+          </p>
         ) : (
           <>
             {/* table on desktop, cards on mobile */}
@@ -121,7 +127,11 @@ export function History() {
                       <Td className="text-right">
                         <span
                           className={`tabular font-bold ${
-                            trade.status === 'WON' ? 'text-up' : trade.status === 'LOST' ? 'text-down' : 'text-slate-300'
+                            trade.status === 'WON'
+                              ? 'text-up'
+                              : trade.status === 'LOST'
+                                ? 'text-down'
+                                : 'text-slate-300'
                           }`}
                         >
                           {trade.status === 'REFUNDED' ? 'Refunded' : money(trade.profit, { sign: true })}
@@ -149,7 +159,11 @@ export function History() {
                   </span>
                   <span
                     className={`tabular text-sm font-bold ${
-                      trade.status === 'WON' ? 'text-up' : trade.status === 'LOST' ? 'text-down' : 'text-slate-300'
+                      trade.status === 'WON'
+                        ? 'text-up'
+                        : trade.status === 'LOST'
+                          ? 'text-down'
+                          : 'text-slate-300'
                     }`}
                   >
                     {trade.status === 'REFUNDED' ? 'Refund' : money(trade.profit, { sign: true })}
@@ -166,12 +180,16 @@ export function History() {
           {transactions.map((tx) => (
             <li key={tx.id} className="flex items-center gap-3 p-3.5">
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold capitalize">{tx.type.replace(/_/g, ' ').toLowerCase()}</span>
+                <span className="block text-sm font-semibold capitalize">
+                  {tx.type.replace(/_/g, ' ').toLowerCase()}
+                </span>
                 <span className="block truncate text-[11px] text-slate-500">{tx.note ?? '—'}</span>
                 <span className="block text-[11px] text-slate-500">{dateTime(tx.createdAt)}</span>
               </span>
               <span className="text-right">
-                <span className={`tabular block text-sm font-bold ${tx.amount >= 0 ? 'text-up' : 'text-down'}`}>
+                <span
+                  className={`tabular block text-sm font-bold ${tx.amount >= 0 ? 'text-up' : 'text-down'}`}
+                >
                   {money(tx.amount, { sign: true })}
                 </span>
                 <span className="tabular block text-[11px] text-slate-500">bal {money(tx.balanceAfter)}</span>
@@ -188,7 +206,9 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: 'up
   return (
     <div className="card p-3">
       <p className="text-[10px] uppercase tracking-wide text-slate-400">{label}</p>
-      <p className={`tabular text-base font-bold ${tone === 'up' ? 'text-up' : tone === 'down' ? 'text-down' : ''}`}>
+      <p
+        className={`tabular text-base font-bold ${tone === 'up' ? 'text-up' : tone === 'down' ? 'text-down' : ''}`}
+      >
         {value}
       </p>
     </div>

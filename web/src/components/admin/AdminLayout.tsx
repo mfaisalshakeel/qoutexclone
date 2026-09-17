@@ -4,6 +4,7 @@ import { api } from '../../lib/api';
 import { realtime } from '../../lib/ws';
 import { useAuth } from '../../store/auth';
 import { useRealtime } from '../../hooks/useRealtime';
+import { ErrorBoundary } from '../ErrorBoundary';
 import { Toasts } from '../Toasts';
 import { IconLogo } from '../Icons';
 
@@ -82,6 +83,16 @@ export function AdminLayout() {
     setDrawer(false);
   }, [location.pathname]);
 
+  // Escape closes the drawer, as it does for any modal surface
+  useEffect(() => {
+    if (!drawer) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setDrawer(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawer]);
+
   const nav = (
     <nav className="flex h-full flex-col">
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-ink-700 px-4">
@@ -105,13 +116,17 @@ export function AdminLayout() {
                   end={item.to === '/admin'}
                   className={({ isActive }) =>
                     `mb-0.5 flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
-                      isActive ? 'bg-accent-soft font-semibold text-accent' : 'text-slate-400 hover:bg-ink-700 hover:text-slate-100'
+                      isActive
+                        ? 'bg-accent-soft font-semibold text-accent'
+                        : 'text-slate-400 hover:bg-ink-700 hover:text-slate-100'
                     }`
                   }
                 >
                   <span className="flex-1">{item.label}</span>
                   {badge > 0 && (
-                    <span className="rounded-full bg-down px-1.5 text-[10px] font-bold text-white">{badge}</span>
+                    <span className="rounded-full bg-down px-1.5 text-[10px] font-bold text-white">
+                      {badge}
+                    </span>
                   )}
                 </NavLink>
               );
@@ -144,12 +159,15 @@ export function AdminLayout() {
       </aside>
 
       {drawer && (
-        <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setDrawer(false)}>
-          <div className="absolute inset-0 bg-ink-900/70 backdrop-blur-sm" />
-          <div
-            className="absolute inset-y-0 left-0 w-64 border-r border-ink-600 bg-ink-800 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-50 lg:hidden">
+          {/* a real button, so the backdrop is reachable by keyboard and screen readers */}
+          <button
+            type="button"
+            aria-label="Close navigation"
+            onClick={() => setDrawer(false)}
+            className="absolute inset-0 h-full w-full cursor-default bg-ink-900/70 backdrop-blur-sm"
+          />
+          <div className="absolute inset-y-0 left-0 w-64 border-r border-ink-600 bg-ink-800 shadow-2xl">
             {nav}
           </div>
         </div>
@@ -157,7 +175,11 @@ export function AdminLayout() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-ink-700 bg-ink-900/95 px-4 backdrop-blur lg:hidden">
-          <button onClick={() => setDrawer(true)} className="btn-ghost !px-2.5 !py-2" aria-label="Open navigation">
+          <button
+            onClick={() => setDrawer(true)}
+            className="btn-ghost !px-2.5 !py-2"
+            aria-label="Open navigation"
+          >
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
             </svg>
@@ -166,7 +188,9 @@ export function AdminLayout() {
         </header>
 
         <main className="min-w-0 flex-1 p-4 sm:p-6">
-          <Outlet />
+          <ErrorBoundary resetKey={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
 
         <Toasts />

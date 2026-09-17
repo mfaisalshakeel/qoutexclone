@@ -9,7 +9,15 @@ export function Skeleton({ className = '' }: { className?: string }) {
 }
 
 /** Announces the loading state once to screen readers; children stay decorative. */
-export function SkeletonGroup({ children, className = '', label = 'Loading' }: { children: ReactNode; className?: string; label?: string }) {
+export function SkeletonGroup({
+  children,
+  className = '',
+  label = 'Loading',
+}: {
+  children: ReactNode;
+  className?: string;
+  label?: string;
+}) {
   return (
     <div role="status" aria-busy="true" className={className}>
       <span className="sr-only">{label}…</span>
@@ -81,7 +89,9 @@ export function TableSkeleton({ rows = 6, cols = 5 }: { rows?: number; cols?: nu
                 <Skeleton key={c} className="ml-auto h-5 w-16 !rounded-full" />
               ) : (
                 <div key={c} className="flex-1 space-y-1.5">
-                  <Skeleton className={`h-3 ${(r + c) % 3 === 0 ? 'w-4/5' : (r + c) % 3 === 1 ? 'w-3/5' : 'w-2/3'}`} />
+                  <Skeleton
+                    className={`h-3 ${(r + c) % 3 === 0 ? 'w-4/5' : (r + c) % 3 === 1 ? 'w-3/5' : 'w-2/3'}`}
+                  />
                   {c === 0 && <Skeleton className="h-2 w-2/5" />}
                 </div>
               ),
@@ -119,7 +129,9 @@ export function FormSkeleton({ fields = 4, className = '' }: { fields?: number; 
 
 /** Faint candle silhouettes behind the chart until history arrives. */
 export function ChartSkeleton() {
-  const bars = [38, 52, 44, 60, 55, 70, 62, 48, 58, 66, 74, 68, 80, 72, 64, 76, 84, 78, 70, 82, 88, 76, 68, 74];
+  const bars = [
+    38, 52, 44, 60, 55, 70, 62, 48, 58, 66, 74, 68, 80, 72, 64, 76, 84, 78, 70, 82, 88, 76, 68, 74,
+  ];
   return (
     <SkeletonGroup label="Loading chart" className="absolute inset-0 flex flex-col bg-ink-800 p-4">
       <div className="flex min-h-0 flex-1 items-end gap-[3%] pr-14">

@@ -15,7 +15,10 @@ const placeSchema = z.object({
   direction: z.enum(['UP', 'DOWN']),
   // stake arrives in dollars from the UI and is stored in cents
   amount: z.number().positive().max(100000),
-  durationSec: z.number().int().refine((d) => (DURATIONS as readonly number[]).includes(d), 'Unsupported expiry'),
+  durationSec: z
+    .number()
+    .int()
+    .refine((d) => (DURATIONS as readonly number[]).includes(d), 'Unsupported expiry'),
   accountType: z.enum(['DEMO', 'REAL', 'TOURNAMENT']),
   tournamentId: z.string().optional(),
 });
@@ -41,7 +44,9 @@ router.post(
     const entry = trade.entryId
       ? await prisma.tournamentEntry.findUnique({ where: { id: trade.entryId }, select: { balance: true } })
       : null;
-    res.status(201).json({ trade: publicTrade(trade), balances: user, tournamentBalance: entry?.balance ?? null });
+    res
+      .status(201)
+      .json({ trade: publicTrade(trade), balances: user, tournamentBalance: entry?.balance ?? null });
   }),
 );
 

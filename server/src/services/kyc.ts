@@ -25,7 +25,8 @@ export async function submitKyc(input: KycInput): Promise<KycSubmission> {
   const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { kycStatus: true } });
   if (!user) throw notFound('Account not found');
   if (user.kycStatus === 'APPROVED') throw conflict('Your identity is already verified', 'already_verified');
-  if (user.kycStatus === 'PENDING') throw conflict('A verification request is already under review', 'already_pending');
+  if (user.kycStatus === 'PENDING')
+    throw conflict('A verification request is already under review', 'already_pending');
 
   const [submission] = await prisma.$transaction([
     prisma.kycSubmission.create({

@@ -29,6 +29,8 @@ describe('promo bonuses', () => {
     expect(describePromo({ kind: 'DEPOSIT_BONUS_PCT', value: 30, minDeposit: 5000, maxBonus: 10000 })).toBe(
       '30% deposit bonus, min deposit $50.00, up to $100.00',
     );
-    expect(describePromo({ kind: 'FIXED_CREDIT', value: 1000, minDeposit: 0, maxBonus: 0 })).toBe('$10.00 credit');
+    expect(describePromo({ kind: 'FIXED_CREDIT', value: 1000, minDeposit: 0, maxBonus: 0 })).toBe(
+      '$10.00 credit',
+    );
   });
 });

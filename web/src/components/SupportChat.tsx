@@ -23,7 +23,9 @@ export function SupportChat() {
 
   const load = async () => {
     try {
-      const { tickets: list } = await api.get<{ tickets: SupportTicket[]; unread: number }>('/support/tickets');
+      const { tickets: list } = await api.get<{ tickets: SupportTicket[]; unread: number }>(
+        '/support/tickets',
+      );
       setTickets(list);
       setActiveId((current) => current ?? list[0]?.id ?? null);
       setComposing(list.length === 0);
@@ -72,7 +74,9 @@ export function SupportChat() {
     api
       .get<{ ticket: SupportTicket }>(`/support/tickets/${activeId}`)
       .then(({ ticket }) => {
-        setTickets((current) => current.map((t) => (t.id === ticket.id ? { ...ticket, unreadByUser: 0 } : t)));
+        setTickets((current) =>
+          current.map((t) => (t.id === ticket.id ? { ...ticket, unreadByUser: 0 } : t)),
+        );
       })
       .catch(() => undefined);
   }, [open, activeId]);
@@ -185,20 +189,21 @@ export function SupportChat() {
               </SkeletonGroup>
             ) : composing || !active ? (
               <p className="rounded-lg bg-ink-700/60 p-3 text-xs leading-relaxed text-slate-400">
-                Tell us what you need — deposits, withdrawals, verification or trading. An agent replies right here.
+                Tell us what you need — deposits, withdrawals, verification or trading. An agent replies right
+                here.
               </p>
             ) : (
               active.messages.map((message) => (
                 <div
                   key={message.id}
                   className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed ${
-                    message.fromSupport
-                      ? 'bg-ink-700 text-slate-200'
-                      : 'ml-auto bg-accent text-white'
+                    message.fromSupport ? 'bg-ink-700 text-slate-200' : 'ml-auto bg-accent text-white'
                   }`}
                 >
                   <p className="whitespace-pre-wrap break-words">{message.body}</p>
-                  <p className={`mt-1 text-[9px] ${message.fromSupport ? 'text-slate-500' : 'text-white/70'}`}>
+                  <p
+                    className={`mt-1 text-[9px] ${message.fromSupport ? 'text-slate-500' : 'text-white/70'}`}
+                  >
                     {message.fromSupport ? 'Support · ' : ''}
                     {dateTime(message.createdAt)}
                   </p>
@@ -231,7 +236,11 @@ export function SupportChat() {
                 placeholder="Write a message…"
                 className="field max-h-24 flex-1 resize-none !py-2 !text-xs"
               />
-              <button type="submit" disabled={busy || !draft.trim()} className="btn-primary !px-3 !py-2 text-xs">
+              <button
+                type="submit"
+                disabled={busy || !draft.trim()}
+                className="btn-primary !px-3 !py-2 text-xs"
+              >
                 Send
               </button>
             </div>

@@ -3,7 +3,13 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../store/auth';
 import { Skeleton, SkeletonGroup } from './Skeleton';
 
-export function ProtectedRoute({ children, adminOnly = false }: { children: ReactNode; adminOnly?: boolean }) {
+export function ProtectedRoute({
+  children,
+  adminOnly = false,
+}: {
+  children: ReactNode;
+  adminOnly?: boolean;
+}) {
   const { user, ready } = useAuth();
   const location = useLocation();
 

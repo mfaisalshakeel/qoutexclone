@@ -73,8 +73,8 @@ export function Tournaments() {
       <div className="mb-4">
         <h1 className="text-lg font-bold">Tournaments</h1>
         <p className="text-xs text-slate-500">
-          Trade a fixed stack of tournament chips against everyone else. The biggest stacks split the prize pool in
-          real money.
+          Trade a fixed stack of tournament chips against everyone else. The biggest stacks split the prize
+          pool in real money.
         </p>
       </div>
 
@@ -99,10 +99,14 @@ export function Tournaments() {
                 >
                   <span className="flex items-center gap-2 text-sm font-bold">
                     {tournament.name}
-                    <span className={`chip ${STATUS_TONE[tournament.status]}`}>{tournament.status.toLowerCase()}</span>
+                    <span className={`chip ${STATUS_TONE[tournament.status]}`}>
+                      {tournament.status.toLowerCase()}
+                    </span>
                   </span>
                   {tournament.description && (
-                    <span className="mt-0.5 block truncate text-[11px] text-slate-500">{tournament.description}</span>
+                    <span className="mt-0.5 block truncate text-[11px] text-slate-500">
+                      {tournament.description}
+                    </span>
                   )}
                   <span className="mt-1 block text-[11px] text-slate-500">
                     {tournament.entrants} entrants
@@ -157,7 +161,8 @@ export function Tournaments() {
                 <div className="border-t border-ink-600">
                   {tournament.joined && live && (
                     <p className="bg-accent-soft px-4 py-2 text-[11px] text-accent">
-                      You are in. Switch the terminal to this tournament from the account selector to trade your chips.
+                      You are in. Switch the terminal to this tournament from the account selector to trade
+                      your chips.
                     </p>
                   )}
                   {!board ? (
@@ -177,7 +182,10 @@ export function Tournaments() {
                       </thead>
                       <tbody className="divide-y divide-ink-700">
                         {board.map((row) => (
-                          <tr key={row.id} className={row.userId === user?.id ? 'bg-accent-soft/40' : undefined}>
+                          <tr
+                            key={row.id}
+                            className={row.userId === user?.id ? 'bg-accent-soft/40' : undefined}
+                          >
                             <td className="px-4 py-2.5 text-xs font-bold text-slate-400">{row.place}</td>
                             <td className="px-4 py-2.5 text-xs font-semibold">{row.name}</td>
                             <td className="tabular px-4 py-2.5 text-right text-xs">

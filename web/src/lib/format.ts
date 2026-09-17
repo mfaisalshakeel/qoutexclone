@@ -2,14 +2,20 @@
 export function money(cents: number, options: { sign?: boolean; currency?: boolean } = {}): string {
   const { sign = false, currency = true } = options;
   const value = cents / 100;
-  const text = Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const text = Math.abs(value).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
   const prefix = value < 0 ? '-' : sign ? '+' : '';
   return `${prefix}${currency ? '$' : ''}${text}`;
 }
 
 export function price(value: number | null | undefined, precision = 2): string {
   if (value == null) return '—';
-  return value.toLocaleString('en-US', { minimumFractionDigits: precision, maximumFractionDigits: precision });
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: precision,
+    maximumFractionDigits: precision,
+  });
 }
 
 export function percent(value: number, digits = 2): string {

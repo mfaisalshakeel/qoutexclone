@@ -21,7 +21,9 @@ export class ChainWatcher {
   start(): void {
     if (this.timer) return;
     if (env.mockChainWatcher) {
-      console.warn('[chain] MOCK watcher enabled — pending deposits auto-confirm. Disable with MOCK_CHAIN_WATCHER=false.');
+      console.warn(
+        '[chain] MOCK watcher enabled — pending deposits auto-confirm. Disable with MOCK_CHAIN_WATCHER=false.',
+      );
     }
     this.timer = setInterval(() => void this.tick(), POLL_MS);
     this.timer.unref?.();
@@ -40,7 +42,10 @@ export class ChainWatcher {
       if (!env.mockChainWatcher) return;
 
       const awaiting = await prisma.deposit.findMany({
-        where: { status: 'AWAITING_PAYMENT', createdAt: { lte: new Date(Date.now() - env.mockChainConfirmMs) } },
+        where: {
+          status: 'AWAITING_PAYMENT',
+          createdAt: { lte: new Date(Date.now() - env.mockChainConfirmMs) },
+        },
         take: 50,
       });
       for (const deposit of awaiting) {

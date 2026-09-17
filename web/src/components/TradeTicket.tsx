@@ -32,7 +32,7 @@ export function TradeTicket({ asset, onPlaced }: Props) {
     return <div className="card h-full animate-pulse bg-ink-800/60" />;
   }
 
-  const balance = tournamentId ? tournamentBalance ?? 0 : activeBalance(user);
+  const balance = tournamentId ? (tournamentBalance ?? 0) : activeBalance(user);
   const stake = Math.round(amount * 100);
   const profit = Math.floor((stake * asset.payoutPct) / 100);
   const tooSmall = stake < asset.minStake;
@@ -87,25 +87,27 @@ export function TradeTicket({ asset, onPlaced }: Props) {
         </div>
       </div>
 
-      <div>
-        <label className="label">Expiry</label>
+      <fieldset>
+        <legend className="label">Expiry</legend>
         <div className="grid grid-cols-4 gap-1.5">
           {durations.slice(0, 8).map((seconds) => (
             <button
               key={seconds}
               onClick={() => setDurationSec(seconds)}
               className={`rounded-lg py-2 text-xs font-semibold transition ${
-                durationSec === seconds ? 'bg-accent text-white' : 'bg-ink-700 text-slate-300 hover:bg-ink-600'
+                durationSec === seconds
+                  ? 'bg-accent text-white'
+                  : 'bg-ink-700 text-slate-300 hover:bg-ink-600'
               }`}
             >
               {fmtDuration(seconds)}
             </button>
           ))}
         </div>
-      </div>
+      </fieldset>
 
-      <div>
-        <label className="label">Investment</label>
+      <fieldset>
+        <legend className="label">Investment</legend>
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setAmount((v) => Math.max(asset.minStake / 100, Math.round((v - 10) * 100) / 100))}
@@ -147,7 +149,7 @@ export function TradeTicket({ asset, onPlaced }: Props) {
             </button>
           ))}
         </div>
-      </div>
+      </fieldset>
 
       {blocked && (
         <p className="rounded-lg bg-down-soft px-3 py-2 text-xs text-down">
@@ -160,7 +162,11 @@ export function TradeTicket({ asset, onPlaced }: Props) {
       )}
 
       <div className="mt-auto grid grid-cols-2 gap-2 md:grid-cols-1">
-        <button onClick={() => void place('UP')} disabled={blocked || busy !== null} className="btn-up !py-3.5 text-base">
+        <button
+          onClick={() => void place('UP')}
+          disabled={blocked || busy !== null}
+          className="btn-up !py-3.5 text-base"
+        >
           <IconArrowUp className="h-5 w-5" />
           Higher
         </button>

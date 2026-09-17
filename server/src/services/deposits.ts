@@ -84,7 +84,8 @@ export async function createDeposit(input: CreateDepositInput): Promise<Deposit>
 export async function markSeen(depositId: string, txHash: string, cryptoAmount?: string): Promise<Deposit> {
   const deposit = await prisma.deposit.findUnique({ where: { id: depositId } });
   if (!deposit) throw notFound('Deposit not found');
-  if (deposit.status !== 'AWAITING_PAYMENT') throw conflict('Deposit is no longer awaiting payment', 'bad_status');
+  if (deposit.status !== 'AWAITING_PAYMENT')
+    throw conflict('Deposit is no longer awaiting payment', 'bad_status');
 
   const updated = await prisma.deposit.update({
     where: { id: depositId },
@@ -143,7 +144,10 @@ export async function completeDeposit(
       refId: deposit.id,
       note: `${amount} ${deposit.currency} (${deposit.network})`,
     });
-    await tx.user.update({ where: { id: deposit.userId }, data: { totalDeposited: { increment: credited } } });
+    await tx.user.update({
+      where: { id: deposit.userId },
+      data: { totalDeposited: { increment: credited } },
+    });
 
     // bonus and partner commission ride on the same transaction as the credit
     const bonus = deposit.promoCode
@@ -190,5 +194,9 @@ export async function expireStaleDeposits(): Promise<number> {
 }
 
 export function listDeposits(userId: string, limit = 50) {
-  return prisma.deposit.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: Math.min(limit, 200) });
+  return prisma.deposit.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    take: Math.min(limit, 200),
+  });
 }

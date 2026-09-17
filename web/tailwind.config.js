@@ -21,8 +21,14 @@ export default {
         mono: ['JetBrains Mono', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       keyframes: {
-        'fade-up': { '0%': { opacity: '0', transform: 'translateY(6px)' }, '100%': { opacity: '1', transform: 'none' } },
-        pulseRing: { '0%': { boxShadow: '0 0 0 0 rgba(61,123,255,0.45)' }, '100%': { boxShadow: '0 0 0 12px rgba(61,123,255,0)' } },
+        'fade-up': {
+          '0%': { opacity: '0', transform: 'translateY(6px)' },
+          '100%': { opacity: '1', transform: 'none' },
+        },
+        pulseRing: {
+          '0%': { boxShadow: '0 0 0 0 rgba(61,123,255,0.45)' },
+          '100%': { boxShadow: '0 0 0 12px rgba(61,123,255,0)' },
+        },
       },
       animation: {
         'fade-up': 'fade-up 0.25s ease-out',

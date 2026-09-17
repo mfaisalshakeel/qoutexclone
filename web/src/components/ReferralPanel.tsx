@@ -17,7 +17,10 @@ export function ReferralPanel() {
   const [state, setState] = useState<ReferralState | null>(null);
 
   useEffect(() => {
-    api.get<ReferralState>('/me/referrals').then(setState).catch(() => undefined);
+    api
+      .get<ReferralState>('/me/referrals')
+      .then(setState)
+      .catch(() => undefined);
   }, []);
 
   if (!state) {
@@ -64,7 +67,9 @@ export function ReferralPanel() {
       <div>
         <p className="label">Your invite link</p>
         <div className="flex items-center gap-2">
-          <code className="min-w-0 flex-1 truncate rounded-lg bg-ink-700 px-3 py-2.5 font-mono text-[11px]">{link}</code>
+          <code className="min-w-0 flex-1 truncate rounded-lg bg-ink-700 px-3 py-2.5 font-mono text-[11px]">
+            {link}
+          </code>
           <CopyButton value={link} />
         </div>
       </div>

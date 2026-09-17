@@ -21,7 +21,9 @@ describe('binary option settlement', () => {
       profit: -5000,
       credit: 0,
     });
-    expect(resolveOutcome({ ...base, direction: 'DOWN', entryPrice: 100, exitPrice: 101 }).status).toBe('LOST');
+    expect(resolveOutcome({ ...base, direction: 'DOWN', entryPrice: 100, exitPrice: 101 }).status).toBe(
+      'LOST',
+    );
   });
 
   it('refunds the stake when price is unchanged at expiry', () => {

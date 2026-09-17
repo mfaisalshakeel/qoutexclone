@@ -74,7 +74,10 @@ router.get(
   '/users',
   wrap(async (req, res) => {
     const query = z
-      .object({ search: z.string().max(120).optional(), limit: z.coerce.number().int().min(1).max(200).default(50) })
+      .object({
+        search: z.string().max(120).optional(),
+        limit: z.coerce.number().int().min(1).max(200).default(50),
+      })
       .parse(req.query);
     const users = await prisma.user.findMany({
       where: query.search
@@ -166,7 +169,11 @@ router.post(
   '/deposits/:id/confirm',
   wrap(async (req, res) => {
     const body = z
-      .object({ txHash: z.string().max(120).optional(), cryptoAmount: z.string().max(40).optional(), note: z.string().max(200).optional() })
+      .object({
+        txHash: z.string().max(120).optional(),
+        cryptoAmount: z.string().max(40).optional(),
+        note: z.string().max(200).optional(),
+      })
       .parse(req.body ?? {});
     const deposit = await completeDeposit(req.params.id, body);
     await audit(req.user!.id, 'deposit.confirm', 'deposit', deposit.id);
@@ -205,7 +212,13 @@ router.post(
   wrap(async (req, res) => {
     const body = z.object({ note: z.string().max(200).optional() }).parse(req.body ?? {});
     const withdrawal = await approveWithdrawal(req.params.id, req.user!.id, body.note);
-    await audit(req.user!.id, 'withdrawal.approve', 'withdrawal', withdrawal.id, withdrawal.txHash ?? undefined);
+    await audit(
+      req.user!.id,
+      'withdrawal.approve',
+      'withdrawal',
+      withdrawal.id,
+      withdrawal.txHash ?? undefined,
+    );
     res.json({ withdrawal: publicWithdrawal(withdrawal) });
   }),
 );

@@ -1,0 +1,12 @@
+dist
+node_modules
+server/prisma/migrations
+mockups
+docs/screenshots
+package-lock.json
+*.tsbuildinfo
+playwright-report
+e2e-results
+
+# owner-authored docs keep their own formatting
+*.md
