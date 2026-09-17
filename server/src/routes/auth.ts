@@ -8,13 +8,15 @@ import { badRequest, unauthorized, wrap } from '../lib/errors.js';
 import { createRefreshToken, hashRefreshToken, signAccessToken } from '../lib/jwt.js';
 import { publicUser } from '../lib/serialize.js';
 import { requireAuth } from '../middleware/auth.js';
+import { settings } from '../services/settings.js';
 import { completeReset, requestReset } from '../services/password-reset.js';
 
 const router = Router();
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 40,
+  // read per request, so an operator can change it without a restart
+  limit: () => settings.get('security.authAttemptsPer15Min'),
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: { code: 'rate_limited', message: 'Too many attempts, try again later' } },

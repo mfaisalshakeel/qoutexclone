@@ -71,6 +71,7 @@ router.get(
       openTickets,
       liveTournaments,
       feedProvider: marketFeed.provider,
+      providers: marketFeed.providerHealth(),
     });
   }),
 );

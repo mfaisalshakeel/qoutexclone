@@ -155,6 +155,15 @@ export const SETTINGS = {
     public: true,
   }),
 
+  'security.authAttemptsPer15Min': define({
+    schema: z.number().int().min(5).max(1000),
+    // development runs the e2e suite repeatedly, which legitimately registers
+    // and logs in many times from one address
+    default: env.nodeEnv === 'production' ? 40 : 500,
+    group: 'security',
+    label: 'Sign-in and sign-up attempts per 15 minutes',
+    help: 'Per IP address. Keep this low in production.',
+  }),
   'security.sessionDays': define({
     schema: z.number().int().min(1).max(365),
     default: env.refreshTokenDays,

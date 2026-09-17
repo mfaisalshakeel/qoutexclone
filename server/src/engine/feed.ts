@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { env } from '../env.js';
 import { log } from '../lib/logger.js';
 import { initialState, nextTick, resolveParams, type OtcParams, type OtcState } from './otc.js';
+import { providerRegistry, type ProviderHealth } from './providers/index.js';
 
 export interface Tick {
   symbol: string;
@@ -21,6 +22,7 @@ export interface Candle {
 export interface AssetSpec {
   symbol: string;
   feedSymbol: string;
+  assetClass?: string;
   basePrice: number;
   volatility: number;
   precision: number;
@@ -104,8 +106,6 @@ interface SymbolState {
 export class MarketFeed extends EventEmitter {
   private states = new Map<string, SymbolState>();
   private timer: NodeJS.Timeout | null = null;
-  private socket: import('ws').WebSocket | null = null;
-  private liveConnected = false;
   private running = false;
   /**
    * Answers whether a market is inside its trading session. A closed exchange
@@ -130,8 +130,21 @@ export class MarketFeed extends EventEmitter {
     this.now = clock;
   }
 
+  /** Overall feed description, e.g. "binance + broker" or "broker". */
   get provider(): string {
-    return env.feedProvider === 'binance' && this.liveConnected ? 'binance' : 'simulated';
+    const live = [...new Set(this.symbols.map((symbol) => providerRegistry.sourceFor(symbol)))]
+      .filter((source) => source !== 'broker')
+      .sort();
+    return live.length ? `${live.join(' + ')} + broker` : 'broker';
+  }
+
+  /** Where a single market's price is coming from right now. */
+  sourceFor(symbol: string): string {
+    return providerRegistry.sourceFor(symbol);
+  }
+
+  providerHealth(): ProviderHealth[] {
+    return providerRegistry.health();
   }
 
   get symbols(): string[] {
@@ -237,7 +250,7 @@ export class MarketFeed extends EventEmitter {
   start(): void {
     if (this.running) return;
     this.running = true;
-    if (env.feedProvider === 'binance') this.connectLive();
+    void this.connectProviders();
     this.timer = setInterval(() => this.onInterval(), env.feedTickMs);
     this.timer.unref?.();
   }
@@ -246,17 +259,15 @@ export class MarketFeed extends EventEmitter {
     this.running = false;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
-    this.socket?.close();
-    this.socket = null;
-    this.liveConnected = false;
+    providerRegistry.stop();
   }
 
   private onInterval(): void {
-    // When a live socket is driving prices the simulator stays out of the way.
-    if (this.liveConnected) return;
     const now = this.now();
     for (const state of this.states.values()) {
       if (!this.isTradeable(state.spec.symbol)) continue; // market closed: price is frozen
+      // a live provider owns this market's price; the engine only fills gaps
+      if (providerRegistry.isLive(state.spec.symbol)) continue;
       this.stepMarket(state, now);
     }
   }
@@ -277,43 +288,29 @@ export class MarketFeed extends EventEmitter {
     this.publish(state, state.engine.price, now);
   }
 
-  private async connectLive(): Promise<void> {
-    try {
-      const { WebSocket } = await import('ws');
-      const streams = [...this.states.values()]
-        .map((s) => `${s.spec.feedSymbol.toLowerCase()}@trade`)
-        .join('/');
-      const socket = new WebSocket(`${env.binanceWsUrl}?streams=${streams}`);
-      this.socket = socket;
-      const byFeed = new Map([...this.states.values()].map((s) => [s.spec.feedSymbol.toUpperCase(), s]));
-
-      socket.on('open', () => {
-        this.liveConnected = true;
-        log.feed.info({ provider: 'binance' }, 'live market data connected');
-      });
-      socket.on('message', (raw: Buffer) => {
-        try {
-          const msg = JSON.parse(raw.toString());
-          const data = msg.data ?? msg;
-          const state = byFeed.get(String(data.s ?? '').toUpperCase());
-          const price = Number(data.p);
-          if (state && Number.isFinite(price)) this.publish(state, price, data.T ?? this.now());
-        } catch {
-          /* ignore malformed frame */
-        }
-      });
-      const degrade = (reason: string) => {
-        if (this.liveConnected) log.feed.warn({ reason }, 'live data lost, using simulated prices');
-        this.liveConnected = false;
-        this.socket = null;
-        if (this.running) setTimeout(() => this.connectLive(), 15000).unref?.();
-      };
-      socket.on('close', () => degrade('closed'));
-      socket.on('error', (err: Error) => degrade(err.message));
-    } catch (err) {
-      log.feed.warn({ err }, 'live data unavailable, using simulated prices');
-      this.liveConnected = false;
+  /**
+   * Hands every market to the provider registry. Providers push ticks straight
+   * into `publish`; anything they cannot price (or stop pricing) is simulated.
+   */
+  private async connectProviders(): Promise<void> {
+    // live data is opt-in; `simulated` keeps every market on the broker engine
+    if (env.feedProvider === 'simulated') {
+      log.feed.info('feed provider is "simulated": every market is broker-priced');
+      return;
     }
+
+    const markets = [...this.states.values()].map((state) => ({
+      symbol: state.spec.symbol,
+      feedSymbol: state.spec.feedSymbol,
+      assetClass: state.spec.assetClass ?? 'CRYPTO',
+      isOtc: Boolean(state.spec.isOtc),
+      precision: state.spec.precision,
+    }));
+
+    await providerRegistry.start(markets, (tick) => {
+      const state = this.states.get(tick.symbol);
+      if (state) this.publish(state, tick.price, tick.ts);
+    });
   }
 
   private publish(state: SymbolState, rawPrice: number, ts: number): void {

@@ -50,6 +50,10 @@ const schema = z.object({
   FEED_PROVIDER: z.enum(['simulated', 'binance']).default('simulated'),
   FEED_TICK_MS: int(250, 50, 5000),
   BINANCE_WS_URL: z.string().url().default('wss://stream.binance.com:9443/stream'),
+  // delayed forex/stock/index quotes; without a key those markets stay simulated
+  MARKET_DATA_URL: z.string().url().default('https://api.twelvedata.com/price'),
+  MARKET_DATA_KEY: z.string().default(''),
+  MARKET_DATA_POLL_MS: int(15000, 1000, 600000),
 
   SETTLEMENT_INTERVAL_MS: int(200, 50, 5000),
   MAX_OPEN_TRADES: int(25, 1, 500),
@@ -136,6 +140,9 @@ function load() {
     feedProvider: raw.FEED_PROVIDER,
     feedTickMs: raw.FEED_TICK_MS,
     binanceWsUrl: raw.BINANCE_WS_URL,
+    marketDataUrl: raw.MARKET_DATA_URL,
+    marketDataKey: raw.MARKET_DATA_KEY,
+    marketDataPollMs: raw.MARKET_DATA_POLL_MS,
 
     settlementIntervalMs: raw.SETTLEMENT_INTERVAL_MS,
     maxOpenTradesPerUser: raw.MAX_OPEN_TRADES,

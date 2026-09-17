@@ -37,6 +37,7 @@ router.get(
           maxStake: asset.maxStake,
           precision: asset.precision,
           price: marketFeed.getPrice(asset.symbol),
+          priceSource: marketFeed.sourceFor(asset.symbol),
           changePct: Math.round(marketFeed.getChangePct(asset.symbol) * 100) / 100,
           isOpen: session.isOpen,
           nextOpen: session.nextOpen,

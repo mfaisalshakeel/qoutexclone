@@ -33,6 +33,7 @@ async function main() {
       basePrice: asset.basePrice,
       volatility: asset.volatility,
       precision: asset.precision,
+      assetClass: asset.assetClass,
       isOtc: asset.isOtc,
       otcConfig: (asset.otcConfig as Partial<OtcParams> | null) ?? null,
       // an OTC market may track its spot twin while that market is open

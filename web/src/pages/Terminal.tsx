@@ -14,6 +14,14 @@ import { TradeTicket } from '../components/TradeTicket';
 import { ChartSkeleton, Skeleton, SkeletonGroup } from '../components/Skeleton';
 import type { Trade } from '../lib/types';
 
+/** Traders should always know where a quote comes from. */
+function sourceLabel(source: string): { text: string; title: string } {
+  if (source === 'broker') {
+    return { text: 'broker price', title: 'Priced by Quantex, not an exchange feed' };
+  }
+  return { text: `live · ${source}`, title: `Live market data from ${source}` };
+}
+
 const STUDIES = [
   { key: 'sma' as const, label: 'SMA 20', color: '#f6c445' },
   { key: 'ema' as const, label: 'EMA 50', color: '#3d7bff' },
@@ -93,7 +101,7 @@ export function Terminal() {
       )}
 
       <section className="flex min-h-0 flex-1 flex-col gap-2">
-        <header className="card flex shrink-0 items-center gap-3 p-2.5">
+        <header className="card flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 p-2.5">
           {!asset ? (
             <SkeletonGroup label="Loading market" className="flex items-center gap-3">
               <Skeleton className="h-9 w-9 !rounded-full" />
@@ -113,12 +121,21 @@ export function Terminal() {
                 className="flex items-center gap-2 rounded-lg px-1 py-0.5 text-left md:pointer-events-none"
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-600 text-[10px] font-bold text-slate-300">
-                  {asset?.base ?? '—'}
+                  {asset?.icon ?? asset?.base ?? '—'}
                 </span>
-                <span>
-                  <span className="block text-sm font-bold">{asset?.name ?? symbol}</span>
-                  <span className="block text-[10px] text-slate-500">
-                    {symbol} · payout {asset?.payoutPct ?? 0}%
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1.5 text-sm font-bold">
+                    <span className="truncate">{asset?.name.replace(' (OTC)', '') ?? symbol}</span>
+                    {asset?.isOtc && <span className="chip bg-accent-soft text-accent">OTC</span>}
+                  </span>
+                  <span className="block truncate text-[10px] text-slate-500">
+                    {asset?.pair.replace(' (OTC)', '') ?? symbol} · payout {asset?.payoutPct ?? 0}%
+                    {asset && (
+                      <span title={sourceLabel(asset.priceSource).title}>
+                        {' · '}
+                        {sourceLabel(asset.priceSource).text}
+                      </span>
+                    )}
                   </span>
                 </span>
                 <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-500 md:hidden" fill="currentColor">
@@ -143,7 +160,8 @@ export function Terminal() {
             </>
           )}
 
-          <div className="ml-auto flex items-center gap-1">
+          {/* the toolbar scrolls inside its own box rather than widening the page */}
+          <div className="-mx-1 flex w-full min-w-0 items-center gap-1 overflow-x-auto px-1 md:ml-auto md:w-auto md:overflow-visible">
             <div className="hidden gap-1 sm:flex">
               {timeframes.map((tf) => (
                 <button

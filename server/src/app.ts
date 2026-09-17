@@ -135,7 +135,14 @@ export function createApp() {
     };
 
     const ok = Object.values(checks).every((check) => check.ok);
-    res.status(ok ? 200 : 503).json({ ok, provider: marketFeed.provider, symbols, checks });
+    res.status(ok ? 200 : 503).json({
+      ok,
+      provider: marketFeed.provider,
+      symbols,
+      checks,
+      // a provider falling back to the broker engine is degraded, not unready
+      providers: marketFeed.providerHealth(),
+    });
   });
 
   app.use('/api/auth', authRoutes);

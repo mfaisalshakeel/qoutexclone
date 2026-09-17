@@ -20,6 +20,7 @@ interface Overview {
   openTickets: number;
   liveTournaments: number;
   feedProvider: string;
+  providers: { name: string; status: string; symbols: number; lastTickAt: number | null; detail?: string }[];
 }
 
 export function AdminDashboard() {
@@ -96,6 +97,28 @@ export function AdminDashboard() {
         <Queue label="Withdrawals to review" count={overview.pendingWithdrawals} to="/admin/withdrawals" />
         <Queue label="Verifications waiting" count={overview.pendingKyc} to="/admin/kyc" />
         <Queue label="Unread support" count={overview.openTickets} to="/admin/support" />
+      </div>
+
+      <h2 className="mb-2 mt-6 text-sm font-semibold">Market data</h2>
+      <div className="card mb-4 divide-y divide-ink-700">
+        {(overview.providers ?? []).length === 0 && (
+          <p className="p-4 text-xs text-slate-500">
+            Every market is priced by the broker engine. Set FEED_PROVIDER to enable live data.
+          </p>
+        )}
+        {(overview.providers ?? []).map((provider) => (
+          <div key={provider.name} className="flex flex-wrap items-center gap-3 p-3.5">
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs font-semibold">{provider.name}</span>
+              <span className="block text-[11px] text-slate-500">
+                {provider.symbols} markets
+                {provider.detail ? ` · ${provider.detail}` : ''}
+                {provider.lastTickAt ? ` · last tick ${dateTime(new Date(provider.lastTickAt))}` : ''}
+              </span>
+            </span>
+            <StatusPill status={provider.status} />
+          </div>
+        ))}
       </div>
 
       <h2 className="mb-2 mt-6 text-sm font-semibold">Latest withdrawals</h2>

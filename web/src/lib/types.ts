@@ -91,6 +91,8 @@ export interface Asset {
   maxStake: number;
   precision: number;
   price: number | null;
+  /** `binance`, `httpquotes` or `broker` — shown next to the price. */
+  priceSource: string;
   changePct: number;
   isOpen: boolean;
   nextOpen: string | null;
