@@ -12,6 +12,7 @@ import { listKycSubmissions, reviewKyc } from '../services/kyc.js';
 import { PROMO_KINDS, describe } from '../services/promos.js';
 import { finishTournament, leaderboard, startTournament } from '../services/tournaments.js';
 import { listAllTickets, postMessage, readTicket, setTicketStatus } from '../services/support.js';
+import { SETTINGS, settings } from '../services/settings.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -414,6 +415,44 @@ router.post(
     const body = z.object({ status: z.enum(['OPEN', 'ANSWERED', 'CLOSED']) }).parse(req.body);
     const ticket = await setTicketStatus(req.params.id, body.status);
     res.json({ ticket });
+  }),
+);
+
+/* -------------------------------- settings -------------------------------- */
+
+router.get(
+  '/settings',
+  wrap(async (_req, res) => {
+    res.json({ settings: settings.describe() });
+  }),
+);
+
+router.patch(
+  '/settings',
+  wrap(async (req, res) => {
+    const known = Object.keys(SETTINGS);
+    const body = z.record(z.unknown()).parse(req.body);
+
+    const unknownKeys = Object.keys(body).filter((key) => !known.includes(key));
+    if (unknownKeys.length)
+      throw badRequest(`Unknown settings: ${unknownKeys.join(', ')}`, 'unknown_setting');
+
+    const applied = await settings.setMany(body);
+    for (const [key, value] of Object.entries(applied)) {
+      await audit(req.user!.id, 'setting.update', 'setting', key, JSON.stringify(value));
+    }
+    res.json({ settings: settings.describe(), applied });
+  }),
+);
+
+router.post(
+  '/settings/:key/reset',
+  wrap(async (req, res) => {
+    const key = req.params.key as keyof typeof SETTINGS;
+    if (!SETTINGS[key]) throw badRequest(`Unknown setting: ${req.params.key}`, 'unknown_setting');
+    const value = await settings.reset(key);
+    await audit(req.user!.id, 'setting.reset', 'setting', req.params.key);
+    res.json({ key, value, settings: settings.describe() });
   }),
 );
 

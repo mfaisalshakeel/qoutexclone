@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma.js';
 import { env } from '../env.js';
 import { badRequest } from '../lib/errors.js';
+import { logger } from '../lib/logger.js';
 
 export interface ResetRequest {
   /** present only while EXPOSE_RESET_TOKEN is on (no mailer configured) */
@@ -34,7 +35,7 @@ export async function requestReset(email: string): Promise<ResetRequest | null> 
 
   if (!env.exposeResetToken) {
     // hand off to your mailer here; the token never leaves the server otherwise
-    console.log(`[reset] token issued for ${user.email} (delivery not configured)`);
+    logger.info({ component: 'auth', userId: user.id }, 'password reset token issued (no mailer configured)');
     return { expiresAt };
   }
   return { token, expiresAt };

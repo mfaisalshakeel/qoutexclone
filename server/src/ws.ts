@@ -7,7 +7,9 @@ import { depositEvents } from './services/deposits.js';
 import { withdrawalEvents } from './services/withdrawals.js';
 import { supportEvents } from './services/support.js';
 import { tournamentEvents } from './services/tournaments.js';
+import { settingsEvents } from './services/settings.js';
 import { publicDeposit, publicTrade, publicWithdrawal } from './lib/serialize.js';
+import { log } from './lib/logger.js';
 
 interface ClientState {
   userId?: string;
@@ -60,6 +62,7 @@ export function attachWebsocket(server: Server) {
   wss.on('connection', (socket, req) => {
     const state: ClientState = { timeframe: '1m', alive: true };
     clients.set(socket, state);
+    log.ws.debug({ clients: clients.size }, 'client connected');
 
     // Token may ride on the query string or arrive in an auth frame.
     const url = new URL(req.url ?? '/ws', 'http://localhost');
@@ -131,6 +134,7 @@ export function attachWebsocket(server: Server) {
         if (set && set.size === 0) byUser.delete(current.userId);
       }
       clients.delete(socket);
+      log.ws.debug({ clients: clients.size }, 'client disconnected');
     });
   });
 
@@ -152,6 +156,7 @@ export function attachWebsocket(server: Server) {
   const heartbeat = setInterval(() => {
     for (const [socket, state] of clients) {
       if (!state.alive) {
+        log.ws.debug('terminating unresponsive client');
         socket.terminate();
         continue;
       }
@@ -190,6 +195,11 @@ export function attachWebsocket(server: Server) {
   });
   supportEvents.on('ticket', (ticket) => {
     toAdmins({ type: 'support:ticket', ticket });
+  });
+
+  // a public setting change reaches every open client immediately
+  settingsEvents.on('changed', ({ key, value, isPublic }) => {
+    if (isPublic) toEveryone({ type: 'settings:changed', key, value });
   });
 
   tournamentEvents.on('updated', (tournament) => {

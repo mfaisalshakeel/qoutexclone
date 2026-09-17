@@ -1,7 +1,7 @@
 import type { KycSubmission } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { conflict, notFound } from '../lib/errors.js';
-import { env } from '../env.js';
+import { settings } from './settings.js';
 
 export const DOCUMENT_TYPES = ['PASSPORT', 'ID_CARD', 'DRIVING_LICENCE'] as const;
 
@@ -75,9 +75,9 @@ export async function reviewKyc(
  * status. A threshold of 0 means every withdrawal needs verification.
  */
 export function kycBlocksWithdrawal(kycStatus: string, amountCents: number): boolean {
-  if (!env.requireKycForWithdrawal) return false;
+  if (!settings.get('compliance.requireKycForWithdrawal')) return false;
   if (kycStatus === 'APPROVED') return false;
-  const threshold = Math.round(env.kycWithdrawalThresholdUsd * 100);
+  const threshold = Math.round(settings.get('compliance.kycWithdrawalThresholdUsd') * 100);
   return amountCents > threshold;
 }
 

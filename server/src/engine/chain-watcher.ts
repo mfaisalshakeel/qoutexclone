@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { env } from '../env.js';
 import { mockTxHash } from '../lib/crypto-networks.js';
 import { completeDeposit, depositEvents, expireStaleDeposits, markSeen } from '../services/deposits.js';
+import { log } from '../lib/logger.js';
 
 const POLL_MS = 5000;
 
@@ -21,8 +22,8 @@ export class ChainWatcher {
   start(): void {
     if (this.timer) return;
     if (env.mockChainWatcher) {
-      console.warn(
-        '[chain] MOCK watcher enabled — pending deposits auto-confirm. Disable with MOCK_CHAIN_WATCHER=false.',
+      log.chain.warn(
+        'mock watcher enabled: pending deposits auto-confirm (MOCK_CHAIN_WATCHER=false to disable)',
       );
     }
     this.timer = setInterval(() => void this.tick(), POLL_MS);
@@ -64,7 +65,7 @@ export class ChainWatcher {
         }
       }
     } catch (err) {
-      console.error('[chain] watcher pass failed:', err);
+      log.chain.error({ err }, 'watcher pass failed');
     } finally {
       this.busy = false;
     }

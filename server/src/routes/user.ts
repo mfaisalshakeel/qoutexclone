@@ -9,13 +9,14 @@ import { applyLedger } from '../services/wallet.js';
 import { tradingStats } from '../services/trading.js';
 import { DOCUMENT_TYPES, latestKycSubmission, submitKyc } from '../services/kyc.js';
 import { referralSummary } from '../services/referrals.js';
-import { env } from '../env.js';
+import { settings } from '../services/settings.js';
 
 // mounted at /api/me — every route here needs a signed-in user
 const router = Router();
 router.use(requireAuth);
 
-const DEMO_START = 1000000; // $10,000.00
+// the practice starting balance is operator-configurable
+const practiceStart = () => settings.get('trading.practiceStartBalance');
 
 router.get(
   '/',
@@ -82,7 +83,7 @@ router.post(
         select: { demoBalance: true },
       });
       if (!current) throw notFound('Account not found');
-      const delta = DEMO_START - current.demoBalance;
+      const delta = practiceStart() - current.demoBalance;
       if (delta !== 0) {
         await applyLedger(tx, {
           userId: req.user!.id,
@@ -121,8 +122,8 @@ router.get(
     res.json({
       status: user?.kycStatus ?? 'NOT_SUBMITTED',
       reviewedAt: user?.kycReviewedAt ?? null,
-      required: env.requireKycForWithdrawal,
-      thresholdUsd: env.kycWithdrawalThresholdUsd,
+      required: settings.get('compliance.requireKycForWithdrawal'),
+      thresholdUsd: settings.get('compliance.kycWithdrawalThresholdUsd'),
       submission: submission
         ? {
             id: submission.id,

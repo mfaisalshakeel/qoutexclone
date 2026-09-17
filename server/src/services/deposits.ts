@@ -1,7 +1,6 @@
 import type { Deposit } from '@prisma/client';
 import { EventEmitter } from 'node:events';
 import { prisma } from '../lib/prisma.js';
-import { env } from '../env.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { centsToCrypto, cryptoToCents, usdToCents } from '../lib/money.js';
 import { findNetwork, mockTxHash } from '../lib/crypto-networks.js';
@@ -10,6 +9,7 @@ import { usdRate } from './rates.js';
 import { applyLedger } from './wallet.js';
 import { previewPromo, redeemPromo } from './promos.js';
 import { payReferralCommission } from './referrals.js';
+import { settings } from './settings.js';
 
 export const depositEvents = new EventEmitter();
 
@@ -43,7 +43,7 @@ export async function createDeposit(input: CreateDepositInput): Promise<Deposit>
   const spec = findNetwork(input.currency, input.network);
   if (!spec) throw badRequest('Unsupported currency/network combination', 'unsupported_network');
 
-  const minUsd = Math.max(spec.minDepositUsd, env.minDepositUsd);
+  const minUsd = Math.max(spec.minDepositUsd, settings.get('wallet.minDepositUsd'));
   if (!(input.usdAmount >= minUsd)) {
     throw badRequest(`Minimum deposit for ${input.currency} (${spec.label}) is $${minUsd}`, 'below_minimum');
   }
@@ -72,7 +72,7 @@ export async function createDeposit(input: CreateDepositInput): Promise<Deposit>
       requiredConf: spec.confirmations,
       promoCode,
       status: 'AWAITING_PAYMENT',
-      expiresAt: new Date(Date.now() + env.depositWindowMinutes * 60 * 1000),
+      expiresAt: new Date(Date.now() + settings.get('wallet.depositWindowMinutes') * 60 * 1000),
       adminNote: memo ? `memo:${memo}` : null,
     },
   });

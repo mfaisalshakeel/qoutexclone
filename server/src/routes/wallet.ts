@@ -16,6 +16,7 @@ import {
 } from '../services/withdrawals.js';
 import { usdRate } from '../services/rates.js';
 import { previewPromo } from '../services/promos.js';
+import { settings } from '../services/settings.js';
 import { mockTxHash } from '../lib/crypto-networks.js';
 
 const router = Router();
@@ -30,12 +31,12 @@ router.get('/methods', (_req, res) => {
       label: spec.label,
       decimals: spec.decimals,
       confirmations: spec.confirmations,
-      minDepositUsd: Math.max(spec.minDepositUsd, env.minDepositUsd),
-      minWithdrawUsd: Math.max(spec.minWithdrawUsd, env.minWithdrawUsd),
-      networkFeeUsd: spec.networkFeeUsd + env.withdrawFlatFeeUsd,
+      minDepositUsd: Math.max(spec.minDepositUsd, settings.get('wallet.minDepositUsd')),
+      minWithdrawUsd: Math.max(spec.minWithdrawUsd, settings.get('wallet.minWithdrawUsd')),
+      networkFeeUsd: spec.networkFeeUsd + settings.get('wallet.withdrawFlatFeeUsd'),
       rate: usdRate(spec.currency),
     })),
-    withdrawFeePct: env.withdrawFeePct,
+    withdrawFeePct: settings.get('wallet.withdrawFeePct'),
     mockChain: env.mockChainWatcher,
   });
 });

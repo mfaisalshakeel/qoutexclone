@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { env } from '../env.js';
 import { settleTrade } from '../services/trading.js';
+import { log } from '../lib/logger.js';
 import { finishDueTournaments } from '../services/tournaments.js';
 
 /**
@@ -23,6 +24,16 @@ export class SettlementEngine {
   stop(): void {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+  }
+
+  /** Stops the loop and waits for a pass that is already running to finish. */
+  async drain(timeoutMs = 5000): Promise<void> {
+    this.stop();
+    const deadline = Date.now() + timeoutMs;
+    while (this.busy && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    if (this.busy) log.settlement.warn('drain timed out while a pass was still running');
   }
 
   async tick(): Promise<number> {
@@ -48,7 +59,7 @@ export class SettlementEngine {
       }
       return settled;
     } catch (err) {
-      console.error('[settlement] pass failed:', err);
+      log.settlement.error({ err }, 'settlement pass failed');
       return 0;
     } finally {
       this.busy = false;

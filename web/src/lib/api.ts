@@ -2,14 +2,45 @@ const BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 const ACCESS_KEY = 'qx.access';
 const REFRESH_KEY = 'qx.refresh';
 
+/** Network-level retries only apply to reads; writes must never be replayed. */
+const RETRYABLE_METHODS = new Set(['GET', 'HEAD']);
+const MAX_RETRIES = 2;
+const BASE_BACKOFF_MS = 300;
+
+export type ApiErrorCode =
+  | 'network_error'
+  | 'unauthorized'
+  | 'forbidden'
+  | 'not_found'
+  | 'validation_error'
+  | 'rate_limited'
+  | 'insufficient_funds'
+  | 'conflict'
+  | 'internal_error'
+  | (string & {});
+
 export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
-    public code = 'error',
+    public code: ApiErrorCode = 'error',
     public details?: unknown,
   ) {
     super(message);
+    this.name = 'ApiError';
+  }
+
+  /** True when the request never reached the server. */
+  get isNetwork(): boolean {
+    return this.status === 0;
+  }
+
+  get isAuth(): boolean {
+    return this.status === 401 || this.status === 403;
+  }
+
+  get isValidation(): boolean {
+    return this.code === 'validation_error';
   }
 }
 
@@ -32,7 +63,11 @@ export const tokens = {
 
 let refreshing: Promise<boolean> | null = null;
 
-/** Exchanges the refresh token once, sharing the flight between callers. */
+/**
+ * Exchanges the refresh token. Concurrent 401s share one flight, so a burst of
+ * requests cannot trigger a storm of refreshes (and rotate the token out from
+ * under each other).
+ */
 async function refreshSession(): Promise<boolean> {
   if (!tokens.refresh) return false;
   if (!refreshing) {
@@ -51,6 +86,7 @@ async function refreshSession(): Promise<boolean> {
         tokens.set(data.accessToken, data.refreshToken);
         return true;
       } catch {
+        // a network failure is not a bad token, so the session is left alone
         return false;
       } finally {
         refreshing = null;
@@ -60,35 +96,77 @@ async function refreshSession(): Promise<boolean> {
   return refreshing;
 }
 
-async function request<T>(method: string, path: string, body?: unknown, retry = true): Promise<T> {
-  const res = await fetch(`${BASE}/api${path}`, {
-    method,
-    headers: {
-      'content-type': 'application/json',
-      ...(tokens.access ? { authorization: `Bearer ${tokens.access}` } : {}),
-    },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  if (res.status === 401 && retry && tokens.refresh) {
-    if (await refreshSession()) return request<T>(method, path, body, false);
+interface RequestOptions {
+  /** Skip the Authorization header (used by the refresh call itself). */
+  anonymous?: boolean;
+  signal?: AbortSignal;
+}
+
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  options: RequestOptions = {},
+  attempt = 0,
+  refreshed = false,
+): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/api${path}`, {
+      method,
+      headers: {
+        'content-type': 'application/json',
+        ...(!options.anonymous && tokens.access ? { authorization: `Bearer ${tokens.access}` } : {}),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: options.signal,
+    });
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') throw err;
+    // offline, DNS failure, server restarting: retry reads with backoff
+    if (RETRYABLE_METHODS.has(method) && attempt < MAX_RETRIES) {
+      await sleep(BASE_BACKOFF_MS * 2 ** attempt);
+      return request<T>(method, path, body, options, attempt + 1, refreshed);
+    }
+    throw new ApiError(0, 'Cannot reach the server. Check your connection and try again.', 'network_error');
+  }
+
+  if (res.status === 401 && !refreshed && !options.anonymous && tokens.refresh) {
+    if (await refreshSession()) return request<T>(method, path, body, options, attempt, true);
+  }
+
+  // 502/503/504 mean the instance is restarting or behind a proxy hiccup
+  if (res.status >= 502 && res.status <= 504 && RETRYABLE_METHODS.has(method) && attempt < MAX_RETRIES) {
+    await sleep(BASE_BACKOFF_MS * 2 ** attempt);
+    return request<T>(method, path, body, options, attempt + 1, refreshed);
   }
 
   const payload = await res.json().catch(() => ({}));
   if (!res.ok) {
     const error = payload?.error ?? {};
-    throw new ApiError(res.status, error.message ?? 'Request failed', error.code, error.details);
+    throw new ApiError(res.status, error.message ?? 'Request failed', error.code ?? 'error', error.details);
   }
   return payload as T;
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>('GET', path),
-  post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
-  patch: <T>(path: string, body: unknown) => request<T>('PATCH', path, body),
+  get: <T>(path: string, options?: RequestOptions) => request<T>('GET', path, undefined, options),
+  post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
+    request<T>('POST', path, body ?? {}, options),
+  patch: <T>(path: string, body: unknown, options?: RequestOptions) =>
+    request<T>('PATCH', path, body, options),
+  del: <T>(path: string, options?: RequestOptions) => request<T>('DELETE', path, undefined, options),
+
   wsUrl(): string {
     if (BASE) return `${BASE.replace(/^http/, 'ws')}/ws`;
     const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
     return `${protocol}://${location.host}/ws`;
+  },
+
+  /** Test seam: clears the in-flight refresh between specs. */
+  _resetRefresh() {
+    refreshing = null;
   },
 };

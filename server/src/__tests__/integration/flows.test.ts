@@ -239,3 +239,56 @@ suite('money flows', () => {
     expect(payouts).toHaveLength(1);
   });
 });
+
+/** Settings persistence needs a database, so it lives with the money flows. */
+suite('runtime settings', () => {
+  let prisma: (typeof import('../../lib/prisma.js'))['prisma'];
+  let settings: (typeof import('../../services/settings.js'))['settings'];
+  let events: (typeof import('../../services/settings.js'))['settingsEvents'];
+
+  beforeAll(async () => {
+    prisma = (await import('../../lib/prisma.js')).prisma;
+    const module = await import('../../services/settings.js');
+    settings = module.settings;
+    events = module.settingsEvents;
+  });
+
+  afterAll(async () => {
+    await prisma.setting.deleteMany({ where: { key: { startsWith: 'wallet.' } } });
+    settings._clear();
+  });
+
+  it('persists an override, serves it from cache and announces it', async () => {
+    const changes: { key: string; value: unknown; isPublic: boolean }[] = [];
+    events.on('changed', (event) => changes.push(event));
+
+    await settings.set('wallet.withdrawFeePct', 2.5);
+    expect(settings.get('wallet.withdrawFeePct')).toBe(2.5);
+
+    const row = await prisma.setting.findUnique({ where: { key: 'wallet.withdrawFeePct' } });
+    expect(row?.value).toBe('2.5');
+    expect(changes.at(-1)).toMatchObject({ key: 'wallet.withdrawFeePct', value: 2.5, isPublic: true });
+
+    // a fresh process picks the override up from the database
+    settings._clear();
+    expect(settings.get('wallet.withdrawFeePct')).not.toBe(2.5);
+    await settings.load();
+    expect(settings.get('wallet.withdrawFeePct')).toBe(2.5);
+
+    // and the fee quote uses it without a restart
+    const { quoteWithdrawal } = await import('../../services/withdrawals.js');
+    const quote = quoteWithdrawal('USDT', 'TRC20', 10000);
+    expect(quote.fee).toBe(200 + Math.round((10000 * 2.5) / 100));
+
+    await settings.reset('wallet.withdrawFeePct');
+    expect(await prisma.setting.findUnique({ where: { key: 'wallet.withdrawFeePct' } })).toBeNull();
+  });
+
+  it('ignores a stored key that no longer exists in the registry', async () => {
+    await prisma.setting.create({ data: { key: 'wallet.removedKey', value: '42' } });
+    settings._clear();
+    await expect(settings.load()).resolves.toBeUndefined();
+    expect(settings.isLoaded).toBe(true);
+    await prisma.setting.deleteMany({ where: { key: 'wallet.removedKey' } });
+  });
+});

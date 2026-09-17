@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { notFound, wrap } from '../lib/errors.js';
 import { TIMEFRAMES, marketFeed } from '../engine/feed.js';
-import { DURATIONS } from '../services/trading.js';
+import { durations } from '../services/trading.js';
+import { settings } from '../services/settings.js';
 
 const router = Router();
 
@@ -25,7 +26,7 @@ router.get(
         price: marketFeed.getPrice(asset.symbol),
         changePct: Math.round(marketFeed.getChangePct(asset.symbol) * 100) / 100,
       })),
-      durations: DURATIONS,
+      durations: durations(),
       timeframes: Object.keys(TIMEFRAMES),
       provider: marketFeed.provider,
     });
@@ -57,6 +58,11 @@ router.get(
 
 router.get('/prices', (_req, res) => {
   res.json({ prices: marketFeed.getPrices(), provider: marketFeed.provider, ts: Date.now() });
+});
+
+/** Public runtime configuration the client renders from. */
+router.get('/settings', (_req, res) => {
+  res.json({ settings: settings.publicValues() });
 });
 
 export default router;

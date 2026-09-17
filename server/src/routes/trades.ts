@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { notFound, wrap } from '../lib/errors.js';
 import { publicTrade } from '../lib/serialize.js';
 import { requireActiveUser, requireAuth } from '../middleware/auth.js';
-import { DURATIONS, listTrades, placeTrade } from '../services/trading.js';
+import { durations, listTrades, placeTrade } from '../services/trading.js';
 import { marketFeed } from '../engine/feed.js';
 
 const router = Router();
@@ -15,10 +15,11 @@ const placeSchema = z.object({
   direction: z.enum(['UP', 'DOWN']),
   // stake arrives in dollars from the UI and is stored in cents
   amount: z.number().positive().max(100000),
+  // the allowed list is runtime configuration, so it is read per request
   durationSec: z
     .number()
     .int()
-    .refine((d) => (DURATIONS as readonly number[]).includes(d), 'Unsupported expiry'),
+    .refine((value) => durations().includes(value), 'Unsupported expiry'),
   accountType: z.enum(['DEMO', 'REAL', 'TOURNAMENT']),
   tournamentId: z.string().optional(),
 });

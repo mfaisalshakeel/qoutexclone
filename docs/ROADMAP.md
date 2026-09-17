@@ -18,12 +18,12 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **Error boundaries.** A route-level boundary on every page shows a friendly error with a "reload" button and logs the error. The terminal chart gets its own boundary, so a chart failure never blanks the page. Test: throw inside a child and assert the boundary renders.
 - [x] **Lint and format.** ESLint (typescript-eslint, react-hooks, jsx-a11y) plus Prettier, with `npm run lint` at the root, zero warnings, run in CI.
 - [x] **E2E harness.** Playwright is in the repo with specs for register → login → place a practice trade → settles → appears in history, deposit invoice flow, admin approve withdrawal. Runs in CI against MySQL service. Also `npm run e2e`.
-- [ ] **Env validation.** The server validates env with zod at boot and fails fast with a clear message.
-- [ ] **Structured logging.** pino with request ids, logs for HTTP, settlement and ws events, and no secrets in logs.
-- [ ] **Runtime settings service.** A typed settings registry over the `Setting` table. Each key has a zod schema and a default, reads are cached, and writes invalidate the cache and broadcast over ws. Every "configurable" item in this roadmap reads from here.
-- [ ] **Health and readiness.** `/api/health` (liveness) and `/api/ready` (DB and feed ok). Graceful shutdown drains HTTP, ws and the settlement loop.
-- [ ] **React Router future flags** set (`v7_startTransition`, `v7_relativeSplatPath`), with no console warnings.
-- [ ] **API client.** Typed errors, retry with backoff on network failure for GETs, and auth refresh single-flight (no refresh storms).
+- [x] **Env validation.** The server validates env with zod at boot and fails fast with a clear message.
+- [x] **Structured logging.** pino with request ids, logs for HTTP, settlement and ws events, and no secrets in logs.
+- [x] **Runtime settings service.** A typed settings registry over the `Setting` table. Each key has a zod schema and a default, reads are cached, and writes invalidate the cache and broadcast over ws. Every "configurable" item in this roadmap reads from here.
+- [x] **Health and readiness.** `/api/health` (liveness) and `/api/ready` (DB and feed ok). Graceful shutdown drains HTTP, ws and the settlement loop.
+- [x] **React Router future flags** set (`v7_startTransition`, `v7_relativeSplatPath`), with no console warnings.
+- [x] **API client.** Typed errors, retry with backoff on network failure for GETs, and auth refresh single-flight (no refresh storms).
 
 ## Phase 1 — Markets, asset pairs and the OTC engine
 

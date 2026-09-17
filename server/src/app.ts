@@ -7,6 +7,9 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { env } from './env.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
+import { requestLog } from './middleware/request-log.js';
+import { log } from './lib/logger.js';
+import { prisma } from './lib/prisma.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/user.js';
 import marketRoutes from './routes/market.js';
@@ -37,13 +40,17 @@ function serveWebClient(app: express.Express): void {
   app.get(/^(?!\/api).*/, (_req, res) => {
     res.sendFile(path.join(dist, 'index.html'));
   });
-  console.log(`[boot] serving web client from ${dist}`);
+  log.boot.info({ dist }, 'serving web client');
 }
+
+/** A feed quieter than this means the price engine has stalled. */
+const FEED_STALE_MS = 10_000;
 
 export function createApp() {
   const app = express();
 
   app.set('trust proxy', 1);
+  app.use(requestLog);
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -89,14 +96,46 @@ export function createApp() {
     }),
   );
 
+  // liveness: the process is up and serving
   app.get('/api/health', (_req, res) => {
     res.json({
       ok: true,
-      service: 'quotex-clone-api',
-      feed: marketFeed.provider,
-      symbols: marketFeed.symbols.length,
+      service: 'quantex-api',
+      version: process.env.npm_package_version ?? 'dev',
       uptime: Math.round(process.uptime()),
     });
+  });
+
+  /**
+   * Readiness: only true when this instance can actually serve traffic — the
+   * database answers and the feed is ticking. Load balancers should gate on
+   * this, not on liveness.
+   */
+  app.get('/api/ready', async (_req, res) => {
+    const checks: Record<string, { ok: boolean; detail?: string }> = {};
+
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      checks.database = { ok: true };
+    } catch (err) {
+      checks.database = { ok: false, detail: (err as Error).message };
+    }
+
+    const symbols = marketFeed.symbols.length;
+    const tickAge = marketFeed.lastTickAge();
+    const feedFresh = tickAge !== null && tickAge < FEED_STALE_MS;
+    checks.feed = {
+      ok: symbols > 0 && feedFresh,
+      detail:
+        symbols === 0
+          ? 'no markets loaded'
+          : tickAge === null
+            ? 'no ticks yet'
+            : `last tick ${tickAge}ms ago`,
+    };
+
+    const ok = Object.values(checks).every((check) => check.ok);
+    res.status(ok ? 200 : 503).json({ ok, provider: marketFeed.provider, symbols, checks });
   });
 
   app.use('/api/auth', authRoutes);

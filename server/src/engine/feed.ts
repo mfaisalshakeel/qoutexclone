@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { env } from '../env.js';
+import { log } from '../lib/logger.js';
 
 export interface Tick {
   symbol: string;
@@ -196,7 +197,7 @@ export class MarketFeed extends EventEmitter {
 
       socket.on('open', () => {
         this.liveConnected = true;
-        console.log('[feed] live market data connected');
+        log.feed.info({ provider: 'binance' }, 'live market data connected');
       });
       socket.on('message', (raw: Buffer) => {
         try {
@@ -210,7 +211,7 @@ export class MarketFeed extends EventEmitter {
         }
       });
       const degrade = (reason: string) => {
-        if (this.liveConnected) console.warn(`[feed] live data lost (${reason}); using simulated prices`);
+        if (this.liveConnected) log.feed.warn({ reason }, 'live data lost, using simulated prices');
         this.liveConnected = false;
         this.socket = null;
         if (this.running) setTimeout(() => this.connectLive(), 15000).unref?.();
@@ -218,7 +219,7 @@ export class MarketFeed extends EventEmitter {
       socket.on('close', () => degrade('closed'));
       socket.on('error', (err: Error) => degrade(err.message));
     } catch (err) {
-      console.warn('[feed] live data unavailable, using simulated prices:', (err as Error).message);
+      log.feed.warn({ err }, 'live data unavailable, using simulated prices');
       this.liveConnected = false;
     }
   }
@@ -255,6 +256,16 @@ export class MarketFeed extends EventEmitter {
 
   getPrice(symbol: string): number | null {
     return this.states.get(symbol)?.price ?? null;
+  }
+
+  /** Age in ms of the newest tick across all symbols, or null if none yet. */
+  lastTickAge(): number | null {
+    let newest = 0;
+    for (const state of this.states.values()) {
+      const tick = state.ticks[state.ticks.length - 1];
+      if (tick && tick.ts > newest) newest = tick.ts;
+    }
+    return newest ? Date.now() - newest : null;
   }
 
   getPrices(): Record<string, number> {

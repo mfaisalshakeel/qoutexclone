@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import { env } from '../env.js';
+import { settings } from './settings.js';
 import { applyLedger, type TxClient } from './wallet.js';
 
 /**
@@ -11,7 +11,7 @@ export async function payReferralCommission(
   tx: TxClient,
   params: { referredId: string; depositId: string; depositCents: number },
 ): Promise<number> {
-  const rate = env.referralCommissionPct;
+  const rate = settings.get('growth.referralCommissionPct');
   if (!(rate > 0)) return 0;
 
   const referred = await tx.user.findUnique({
@@ -70,7 +70,7 @@ export async function referralSummary(userId: string) {
   return {
     code: user?.referralCode ?? '',
     earnings: user?.referralEarnings ?? 0,
-    commissionPct: env.referralCommissionPct,
+    commissionPct: settings.get('growth.referralCommissionPct'),
     // only the display name is exposed — a referrer never sees a referral's email
     referrals: referrals.map((r) => ({
       id: r.id,

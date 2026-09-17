@@ -1,7 +1,6 @@
 import type { Withdrawal } from '@prisma/client';
 import { EventEmitter } from 'node:events';
 import { prisma } from '../lib/prisma.js';
-import { env } from '../env.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { centsToCrypto, usdToCents } from '../lib/money.js';
 import { findNetwork, isValidAddress } from '../lib/crypto-networks.js';
@@ -9,6 +8,7 @@ import { custody } from './custody.js';
 import { usdRate } from './rates.js';
 import { holdFunds, releaseHold, settleHold } from './wallet.js';
 import { kycBlocksWithdrawal } from './kyc.js';
+import { settings } from './settings.js';
 
 export const withdrawalEvents = new EventEmitter();
 
@@ -28,9 +28,9 @@ export function quoteWithdrawal(currency: string, network: string, amountCents: 
   const spec = findNetwork(currency, network);
   if (!spec) throw badRequest('Unsupported currency/network combination', 'unsupported_network');
 
-  const minAmount = usdToCents(Math.max(spec.minWithdrawUsd, env.minWithdrawUsd));
-  const flatFee = usdToCents(spec.networkFeeUsd + env.withdrawFlatFeeUsd);
-  const pctFee = Math.round((amountCents * env.withdrawFeePct) / 100);
+  const minAmount = usdToCents(Math.max(spec.minWithdrawUsd, settings.get('wallet.minWithdrawUsd')));
+  const flatFee = usdToCents(spec.networkFeeUsd + settings.get('wallet.withdrawFlatFeeUsd'));
+  const pctFee = Math.round((amountCents * settings.get('wallet.withdrawFeePct')) / 100);
   const fee = flatFee + pctFee;
   const netAmount = amountCents - fee;
   const rate = usdRate(currency);
@@ -84,7 +84,9 @@ export async function createWithdrawal(input: CreateWithdrawalInput): Promise<Wi
   const pending = await prisma.withdrawal.count({
     where: { userId: input.userId, status: { in: ['PENDING', 'APPROVED', 'PROCESSING'] } },
   });
-  if (pending >= 3) throw conflict('You already have withdrawals in progress', 'too_many_pending');
+  if (pending >= settings.get('wallet.maxPendingWithdrawals')) {
+    throw conflict('You already have withdrawals in progress', 'too_many_pending');
+  }
 
   const withdrawal = await prisma.$transaction(async (tx) => {
     const created = await tx.withdrawal.create({
@@ -109,7 +111,9 @@ export async function createWithdrawal(input: CreateWithdrawalInput): Promise<Wi
 
   withdrawalEvents.emit('created', withdrawal);
 
-  if (env.autoApproveWithdrawals) return approveWithdrawal(withdrawal.id, null, 'Auto-approved');
+  if (settings.get('wallet.autoApproveWithdrawals')) {
+    return approveWithdrawal(withdrawal.id, null, 'Auto-approved');
+  }
   return withdrawal;
 }
 

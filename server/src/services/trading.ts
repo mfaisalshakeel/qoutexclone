@@ -6,10 +6,12 @@ import { winProfit } from '../lib/money.js';
 import { marketFeed } from '../engine/feed.js';
 import { applyLedger, type AccountType } from './wallet.js';
 import { activeEntry, adjustEntryBalance } from './tournaments.js';
-import { env } from '../env.js';
+import { settings } from './settings.js';
 
-/** Expiries offered on the terminal, in seconds. */
-export const DURATIONS = [30, 60, 120, 300, 900, 1800, 3600] as const;
+/** Expiries offered on the terminal, in seconds. Operators change this at runtime. */
+export function durations(): number[] {
+  return settings.get('trading.durations');
+}
 
 export const tradeEvents = new EventEmitter();
 
@@ -25,7 +27,7 @@ export interface PlaceTradeInput {
 }
 
 export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
-  if (!DURATIONS.includes(input.durationSec as (typeof DURATIONS)[number])) {
+  if (!durations().includes(input.durationSec)) {
     throw badRequest('Unsupported expiry time', 'invalid_duration');
   }
 
@@ -40,7 +42,7 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
   }
 
   const openCount = await prisma.trade.count({ where: { userId: input.userId, status: 'OPEN' } });
-  if (openCount >= env.maxOpenTradesPerUser) {
+  if (openCount >= settings.get('trading.maxOpenTrades')) {
     throw conflict('You have too many open positions', 'too_many_open_trades');
   }
 

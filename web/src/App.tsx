@@ -8,6 +8,7 @@ import { Account } from './pages/Account';
 import { AdminDashboard } from './pages/admin/Dashboard';
 import { AdminDeposits, AdminWithdrawals } from './pages/admin/Money';
 import { AdminAssets, AdminAudit, AdminPromos, AdminTournaments } from './pages/admin/Platform';
+import { AdminSettings } from './pages/admin/Settings';
 import { AdminSupport } from './pages/admin/Support';
 import { AdminKyc, AdminUsers } from './pages/admin/Traders';
 import { History } from './pages/History';
@@ -28,7 +29,7 @@ export default function App() {
   }, [bootstrap]);
 
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <ErrorBoundary>
         <Routes>
           <Route path="/" element={ready && user ? <Navigate to="/trade" replace /> : <Landing />} />
@@ -69,6 +70,7 @@ export default function App() {
             <Route path="tournaments" element={<AdminTournaments />} />
             <Route path="promos" element={<AdminPromos />} />
             <Route path="assets" element={<AdminAssets />} />
+            <Route path="settings" element={<AdminSettings />} />
             <Route path="audit" element={<AdminAudit />} />
           </Route>
 
