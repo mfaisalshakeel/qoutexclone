@@ -39,11 +39,11 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **Real feeds.** Keep the Binance adapter for crypto. Add a provider interface for forex/stocks/indices, with one free/delayed implementation or a documented stub that falls back to OTC-style simulation, clearly labelled. Auto-fallback and reconnect with backoff.
 - [x] **Candle storage.** Ticks go to rolling candles at 5s, 10s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m, 30m, 1h, 4h, 1d, persisted with retention per timeframe. The history endpoint is paginated backwards for infinite scroll. The chart never shows a gap after a restart.
 - [x] **Payout engine.** Each asset has a base payout. Adjustments can come from time-of-day, volatility, or schedule (e.g. lower on news hours), each rule configurable. A user status bonus is added (Phase 4). The payout is locked at the moment the trade opens and is shown live on the ticket.
-- [ ] **Risk limits.** Per asset: max stake per trade, max open stake per user, and max total open exposure per direction. Beyond a limit, *new* trades are rejected with a clear message. Admin sees live exposure. (Never alters price.)
+- [x] **Risk limits.** Per asset: max stake per trade, max open stake per user, and max total open exposure per direction. Beyond a limit, *new* trades are rejected with a clear message. Admin sees live exposure. (Never alters price.)
 
 ## Phase 2 — Trading terminal parity
 
-- [ ] **Expiry modes.** (a) *Duration*: 5s, 10s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m, 30m, 1h, 4h (configurable per asset). (b) *Clock time*: expiry at the next valid candle boundaries (e.g. 12:05, 12:10), with a configurable purchase cut-off before expiry and a live "time to purchase" countdown. Server validates both.
+- [x] **Expiry modes.** (a) *Duration*: 5s, 10s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m, 30m, 1h, 4h (configurable per asset). (b) *Clock time*: expiry at the next valid candle boundaries (e.g. 12:05, 12:10), with a configurable purchase cut-off before expiry and a live "time to purchase" countdown. Server validates both.
 - [ ] **Pending trades.** Open when the price reaches a level, or at a set time. They're cancellable and listed separately. The server executes them from the feed with the same idempotency guarantees.
 - [ ] **Ticket UX.** Amount with presets, ± steps, balance-percentage shortcuts, per-asset min/max enforced, live payout % and profit, and "double up" (repeat the same trade) from an open position if allowed by settings.
 - [ ] **Hotkeys.** Configurable shortcuts for up, down, amount ±, expiry ±, and next/previous asset, with a help overlay (`?`). Can be turned off in settings.

@@ -9,10 +9,50 @@ import { activeEntry, adjustEntryBalance } from './tournaments.js';
 import { settings } from './settings.js';
 import { marketHours, otcAlternative } from './market-hours.js';
 import { payouts } from './payouts.js';
+import { assessStake } from './risk.js';
+import {
+  clockSlots,
+  validateAgainstClose,
+  validateClockExpiry,
+  validateDuration,
+  type ClockConfig,
+  type ClockSlot,
+  type ExpiryMode,
+} from '../engine/expiry.js';
 
 /** Expiries offered on the terminal, in seconds. Operators change this at runtime. */
 export function durations(): number[] {
   return settings.get('trading.durations');
+}
+
+/** The durations one market offers: its own list, or the platform's. */
+export function durationsFor(asset: { durations?: unknown }): number[] {
+  const own = asset.durations;
+  if (Array.isArray(own)) {
+    const allowed = new Set(durations());
+    // a market may narrow the platform list, never widen it
+    const narrowed = own.filter((value): value is number => typeof value === 'number' && allowed.has(value));
+    if (narrowed.length) return [...narrowed].sort((a, b) => a - b);
+  }
+  return durations();
+}
+
+export function expiryModes(): ExpiryMode[] {
+  return settings.get('trading.expiryModes');
+}
+
+export function clockConfig(): ClockConfig {
+  return {
+    steps: settings.get('trading.clockSteps'),
+    cutoffSec: settings.get('trading.clockCutoffSec'),
+    horizonSec: settings.get('trading.clockHorizonSec'),
+  };
+}
+
+/** The clock boundaries a trader may buy right now. */
+export function clockExpiries(at = Date.now()): ClockSlot[] {
+  if (!expiryModes().includes('CLOCK')) return [];
+  return clockSlots(at, clockConfig());
 }
 
 export const tradeEvents = new EventEmitter();
@@ -23,14 +63,20 @@ export interface PlaceTradeInput {
   accountType: AccountType;
   direction: 'UP' | 'DOWN';
   stake: number; // cents
-  durationSec: number;
+  /** DURATION: a length from now. CLOCK: `expiresAt` is the boundary bought. */
+  expiryMode?: ExpiryMode;
+  /** Required in duration mode. */
+  durationSec?: number;
+  /** Required in clock mode: the boundary, in epoch milliseconds. */
+  expiresAt?: number;
   /** required when accountType is TOURNAMENT */
   tournamentId?: string;
 }
 
 export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
-  if (!durations().includes(input.durationSec)) {
-    throw badRequest('Unsupported expiry time', 'invalid_duration');
+  const mode: ExpiryMode = input.expiryMode ?? 'DURATION';
+  if (!expiryModes().includes(mode)) {
+    throw badRequest('That expiry mode is not offered', 'invalid_expiry');
   }
 
   const asset = await prisma.asset.findUnique({ where: { symbol: input.symbol } });
@@ -48,12 +94,6 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
       'market_closed',
       { nextOpen: session.nextOpen, holiday: session.holiday, otcAlternative: alternative },
     );
-  }
-  if (input.stake < asset.minStake) {
-    throw badRequest(`Minimum stake is $${(asset.minStake / 100).toFixed(2)}`, 'stake_too_low');
-  }
-  if (input.stake > asset.maxStake) {
-    throw badRequest(`Maximum stake is $${(asset.maxStake / 100).toFixed(2)}`, 'stake_too_high');
   }
 
   const openCount = await prisma.trade.count({ where: { userId: input.userId, status: 'OPEN' } });
@@ -73,7 +113,28 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
   }
 
   const openedAt = new Date();
-  const expiresAt = new Date(openedAt.getTime() + input.durationSec * 1000);
+
+  // Resolve the expiry against this market's own offer, then against its
+  // session: a position that outlives the close has no tick to be priced from.
+  let expiresAt: Date;
+  let durationSec: number;
+  if (mode === 'CLOCK') {
+    const rejection = validateClockExpiry(openedAt.getTime(), input.expiresAt ?? Number.NaN, clockConfig());
+    if (rejection) throw badRequest(rejection.message, rejection.code);
+    expiresAt = new Date(input.expiresAt!);
+    durationSec = Math.round((expiresAt.getTime() - openedAt.getTime()) / 1000);
+  } else {
+    const rejection = validateDuration(input.durationSec ?? Number.NaN, durationsFor(asset));
+    if (rejection) throw badRequest(rejection.message, rejection.code);
+    durationSec = input.durationSec!;
+    expiresAt = new Date(openedAt.getTime() + durationSec * 1000);
+  }
+
+  const closeRejection = validateAgainstClose(
+    expiresAt.getTime(),
+    session.nextClose ? new Date(session.nextClose).getTime() : null,
+  );
+  if (closeRejection) throw conflict(closeRejection.message, closeRejection.code);
 
   // Resolved once, here, and written into the row: whatever the rules do later,
   // this position pays what it was quoted. The status bonus arrives in Phase 4.
@@ -89,6 +150,24 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
   );
 
   const trade = await prisma.$transaction(async (tx) => {
+    // Risk is checked here, inside the transaction, so the aggregate it reads
+    // and the position it guards are one unit of work. It rejects a *new*
+    // stake and nothing else: the price and the payout above are already
+    // settled and cannot be influenced by what anyone holds.
+    const rejection = await assessStake(tx, {
+      assetId: asset.id,
+      userId: input.userId,
+      accountType: input.accountType,
+      direction: input.direction,
+      stake: input.stake,
+      asset,
+    });
+    if (rejection) {
+      throw rejection.code === 'stake_too_low' || rejection.code === 'stake_too_high'
+        ? badRequest(rejection.message, rejection.code)
+        : conflict(rejection.message, rejection.code, { remaining: rejection.remaining });
+    }
+
     const created = await tx.trade.create({
       data: {
         userId: input.userId,
@@ -96,10 +175,11 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
         symbol: asset.symbol,
         accountType: input.accountType,
         direction: input.direction,
+        expiryMode: mode,
         stake: input.stake,
         payoutPct: payout.pct,
         entryPrice,
-        durationSec: input.durationSec,
+        durationSec,
         openedAt,
         expiresAt,
         status: 'OPEN',

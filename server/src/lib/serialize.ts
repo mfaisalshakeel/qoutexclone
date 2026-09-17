@@ -33,6 +33,7 @@ export function publicTrade(trade: Trade) {
     entryPrice: trade.entryPrice,
     exitPrice: trade.exitPrice,
     durationSec: trade.durationSec,
+    expiryMode: trade.expiryMode,
     openedAt: trade.openedAt,
     expiresAt: trade.expiresAt,
     settledAt: trade.settledAt,

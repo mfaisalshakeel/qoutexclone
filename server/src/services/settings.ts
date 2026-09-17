@@ -56,9 +56,44 @@ export const SETTINGS = {
 
   'trading.durations': define({
     schema: z.array(z.number().int().min(5).max(86400)).min(1).max(20),
-    default: [30, 60, 120, 300, 900, 1800, 3600],
+    default: [5, 10, 15, 30, 60, 120, 180, 300, 600, 900, 1800, 3600, 14400],
     group: 'trading',
     label: 'Expiry durations (seconds)',
+    help: 'The platform list. A market can offer a narrower set of its own.',
+    public: true,
+  }),
+  'trading.expiryModes': define({
+    schema: z
+      .array(z.enum(['DURATION', 'CLOCK']))
+      .min(1)
+      .max(2),
+    default: ['DURATION', 'CLOCK'],
+    group: 'trading',
+    label: 'Expiry modes offered',
+    help: 'DURATION is a fixed length from purchase; CLOCK expires on the next boundary.',
+    public: true,
+  }),
+  'trading.clockSteps': define({
+    schema: z.array(z.number().int().min(30).max(86400)).min(1).max(10),
+    default: [60, 300, 900, 1800, 3600],
+    group: 'trading',
+    label: 'Clock-time boundaries (seconds between them)',
+    help: '300 offers 12:05, 12:10, 12:15 and so on.',
+    public: true,
+  }),
+  'trading.clockCutoffSec': define({
+    schema: z.number().int().min(0).max(600),
+    default: 30,
+    group: 'trading',
+    label: 'Purchase cut-off before a clock expiry (seconds)',
+    help: 'A boundary stops accepting positions this long before it lands.',
+    public: true,
+  }),
+  'trading.clockHorizonSec': define({
+    schema: z.number().int().min(60).max(86400),
+    default: 4 * 3600,
+    group: 'trading',
+    label: 'How far ahead clock expiries are offered (seconds)',
     public: true,
   }),
   'trading.maxOpenTrades': define({
@@ -98,6 +133,23 @@ export const SETTINGS = {
     group: 'trading',
     label: 'Maximum payout (%)',
     help: 'The ceiling for a base payout plus every adjustment and bonus.',
+    public: true,
+  }),
+
+  'risk.maxOpenStakePerUser': define({
+    schema: money,
+    default: 0,
+    group: 'trading',
+    label: 'Default max open stake per trader, per market (cents)',
+    help: '0 means no limit. A market can override this with its own figure.',
+    public: true,
+  }),
+  'risk.maxExposurePerDirection': define({
+    schema: money,
+    default: 0,
+    group: 'trading',
+    label: 'Default max open exposure per direction, per market (cents)',
+    help: 'Counts live-money positions only. 0 means no limit. Rejects new stakes; never changes a price.',
     public: true,
   }),
 

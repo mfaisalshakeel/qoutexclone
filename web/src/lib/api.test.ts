@@ -111,6 +111,38 @@ describe('api client', () => {
     expect(tokens.refresh).toBeNull();
   });
 
+  it('keeps the session when the refresh is rate limited, not rejected', async () => {
+    // a 429 from the limiter is a temporary failure; signing someone out over
+    // it loses a perfectly good session
+    tokens.set('stale', 'good-refresh');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        String(url).endsWith('/api/auth/refresh')
+          ? Promise.resolve(json({ error: { code: 'rate_limited', message: 'slow down' } }, 429))
+          : Promise.resolve(json({ error: { code: 'unauthorized', message: 'nope' } }, 401)),
+      ) as unknown as typeof fetch,
+    );
+
+    await expect(api.get('/me')).rejects.toBeInstanceOf(ApiError);
+    expect(tokens.refresh).toBe('good-refresh');
+  });
+
+  it('keeps the session when the refresh hits a restarting instance', async () => {
+    tokens.set('stale', 'good-refresh');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        String(url).endsWith('/api/auth/refresh')
+          ? Promise.resolve(json({ error: { message: 'bad gateway' } }, 502))
+          : Promise.resolve(json({ error: { code: 'unauthorized', message: 'nope' } }, 401)),
+      ) as unknown as typeof fetch,
+    );
+
+    await expect(api.get('/me')).rejects.toBeInstanceOf(ApiError);
+    expect(tokens.refresh).toBe('good-refresh');
+  });
+
   it('keeps the session on a network failure during refresh', async () => {
     tokens.set('stale', 'good-refresh');
     vi.stubGlobal(

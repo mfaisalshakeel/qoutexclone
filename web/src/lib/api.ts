@@ -79,7 +79,11 @@ async function refreshSession(): Promise<boolean> {
           body: JSON.stringify({ refreshToken: tokens.refresh }),
         });
         if (!res.ok) {
-          tokens.clear();
+          // Only a refusal of the token itself ends the session. A 429 from the
+          // rate limiter or a 5xx from a restarting instance is a temporary
+          // failure, and signing someone out over it loses their session for no
+          // reason — the same reasoning as the network case below.
+          if (res.status === 401 || res.status === 403) tokens.clear();
           return false;
         }
         const data = await res.json();

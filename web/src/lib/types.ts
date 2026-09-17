@@ -89,6 +89,8 @@ export interface Asset {
   payoutPct: number;
   basePayoutPct?: number;
   payoutAdjustments?: { name: string; kind: string; adjustment: number }[];
+  /** Durations this market offers, in seconds. */
+  durations?: number[];
   minStake: number;
   maxStake: number;
   precision: number;
@@ -123,6 +125,7 @@ export interface Trade {
   exitPrice: number | null;
   currentPrice?: number | null;
   durationSec: number;
+  expiryMode?: 'DURATION' | 'CLOCK';
   openedAt: string;
   expiresAt: string;
   settledAt: string | null;
@@ -224,4 +227,18 @@ export interface Balances {
   realBalance: number;
   lockedBalance: number;
   activeAccount: AccountType;
+}
+
+/** One buyable clock boundary, as the server resolved it. */
+export interface ClockSlot {
+  expiresAt: number;
+  stepSec: number;
+  closesAt: number;
+  secondsToClose: number;
+  durationSec: number;
+}
+
+export interface ExpiryConfig {
+  modes: ('DURATION' | 'CLOCK')[];
+  clock: { steps: number[]; cutoffSec: number; horizonSec: number; slots: ClockSlot[] };
 }

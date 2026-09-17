@@ -4,25 +4,31 @@ import { prisma } from '../lib/prisma.js';
 import { notFound, wrap } from '../lib/errors.js';
 import { publicTrade } from '../lib/serialize.js';
 import { requireActiveUser, requireAuth } from '../middleware/auth.js';
-import { durations, listTrades, placeTrade } from '../services/trading.js';
+import { clockExpiries, listTrades, placeTrade } from '../services/trading.js';
 import { marketFeed } from '../engine/feed.js';
 
 const router = Router();
 router.use(requireAuth);
 
-const placeSchema = z.object({
-  symbol: z.string().min(3).max(20),
-  direction: z.enum(['UP', 'DOWN']),
-  // stake arrives in dollars from the UI and is stored in cents
-  amount: z.number().positive().max(100000),
-  // the allowed list is runtime configuration, so it is read per request
-  durationSec: z
-    .number()
-    .int()
-    .refine((value) => durations().includes(value), 'Unsupported expiry'),
-  accountType: z.enum(['DEMO', 'REAL', 'TOURNAMENT']),
-  tournamentId: z.string().optional(),
-});
+const placeSchema = z
+  .object({
+    symbol: z.string().min(3).max(20),
+    direction: z.enum(['UP', 'DOWN']),
+    // stake arrives in dollars from the UI and is stored in cents
+    amount: z.number().positive().max(100000),
+    expiryMode: z.enum(['DURATION', 'CLOCK']).default('DURATION'),
+    // the durations a market offers are runtime configuration, so the value is
+    // checked against the market in the service rather than pinned here
+    durationSec: z.number().int().min(1).max(86400).optional(),
+    /** Clock mode: the boundary being bought, in epoch milliseconds. */
+    expiresAt: z.number().int().positive().optional(),
+    accountType: z.enum(['DEMO', 'REAL', 'TOURNAMENT']),
+    tournamentId: z.string().optional(),
+  })
+  .refine((body) => (body.expiryMode === 'CLOCK' ? body.expiresAt != null : body.durationSec != null), {
+    message: 'A duration expiry needs durationSec; a clock expiry needs expiresAt',
+    path: ['expiryMode'],
+  });
 
 router.post(
   '/',
@@ -34,7 +40,9 @@ router.post(
       symbol: body.symbol.toUpperCase(),
       direction: body.direction,
       stake: Math.round(body.amount * 100),
+      expiryMode: body.expiryMode,
       durationSec: body.durationSec,
+      expiresAt: body.expiresAt,
       accountType: body.accountType,
       tournamentId: body.tournamentId,
     });
@@ -68,6 +76,18 @@ router.get(
         currentPrice: trade.status === 'OPEN' ? marketFeed.getPrice(trade.symbol) : trade.exitPrice,
       })),
     });
+  }),
+);
+
+/**
+ * The clock boundaries buyable right now, with the countdown to each one's
+ * cut-off. Resolved server-side so the terminal's countdown and the validation
+ * that accepts the trade come from the same clock.
+ */
+router.get(
+  '/expiries',
+  wrap(async (_req, res) => {
+    res.json({ slots: clockExpiries(), serverTime: Date.now() });
   }),
 );
 

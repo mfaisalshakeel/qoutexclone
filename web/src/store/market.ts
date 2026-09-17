@@ -1,11 +1,14 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
+import type { ExpiryConfig } from '../lib/types';
 import { realtime } from '../lib/ws';
 import type { Asset } from '../lib/types';
 
 interface MarketState {
   assets: Asset[];
   durations: number[];
+  /** What expiry modes the platform offers, and the clock boundaries on offer. */
+  expiry: ExpiryConfig;
   timeframes: string[];
   prices: Record<string, number>;
   symbol: string;
@@ -30,6 +33,7 @@ const LAST_SYMBOL_KEY = 'qx.symbol';
 export const useMarket = create<MarketState>((set, get) => ({
   assets: [],
   durations: [30, 60, 120, 300, 900],
+  expiry: { modes: ['DURATION'], clock: { steps: [], cutoffSec: 30, horizonSec: 14400, slots: [] } },
   timeframes: ['5s', '10s', '15s', '30s', '1m', '2m', '3m', '5m', '10m', '15m', '30m', '1h', '4h', '1d'],
   prices: {},
   // the catalogue's lead market; `load` corrects a stored symbol that no longer exists
@@ -39,13 +43,17 @@ export const useMarket = create<MarketState>((set, get) => ({
   loaded: false,
 
   async load() {
-    const data = await api.get<{ assets: Asset[]; durations: number[]; timeframes: string[] }>(
-      '/market/assets',
-    );
+    const data = await api.get<{
+      assets: Asset[];
+      durations: number[];
+      expiry: ExpiryConfig;
+      timeframes: string[];
+    }>('/market/assets');
     const symbol = data.assets.some((a) => a.symbol === get().symbol) ? get().symbol : data.assets[0]?.symbol;
     set({
       assets: data.assets,
       durations: data.durations,
+      expiry: data.expiry,
       timeframes: data.timeframes,
       prices: Object.fromEntries(data.assets.map((a) => [a.symbol, a.price ?? 0])),
       symbol: symbol ?? get().symbol,

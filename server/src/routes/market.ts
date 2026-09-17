@@ -5,7 +5,7 @@ import { badRequest, notFound, wrap } from '../lib/errors.js';
 import { marketFeed } from '../engine/feed.js';
 import { TIMEFRAME_KEYS, isTimeframe } from '../engine/timeframes.js';
 import { candleStore } from '../services/candles.js';
-import { durations } from '../services/trading.js';
+import { clockConfig, clockExpiries, durations, durationsFor, expiryModes } from '../services/trading.js';
 import { settings } from '../services/settings.js';
 import { marketHours } from '../services/market-hours.js';
 import { payouts } from '../services/payouts.js';
@@ -54,6 +54,7 @@ router.get(
             kind: rule.kind,
             adjustment: rule.adjustment,
           })),
+          durations: durationsFor(asset),
           minStake: asset.minStake,
           maxStake: asset.maxStake,
           precision: asset.precision,
@@ -69,6 +70,11 @@ router.get(
         };
       }),
       durations: durations(),
+      // expiry is resolved server-side; the terminal renders what it is told
+      expiry: {
+        modes: expiryModes(),
+        clock: { ...clockConfig(), slots: clockExpiries(now.getTime()) },
+      },
       timeframes: TIMEFRAME_KEYS,
       provider: marketFeed.provider,
     });

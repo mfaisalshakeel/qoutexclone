@@ -19,6 +19,7 @@ import { describeWindows } from '../lib/sessions.js';
 import { DEFAULT_OTC_PARAMS, initialState, nextTick, resolveParams } from '../engine/otc.js';
 import { resolvePayout } from '../engine/payout.js';
 import { RULE_KINDS, parseRuleConfig, payouts } from '../services/payouts.js';
+import { exposureByMarket } from '../services/risk.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -895,5 +896,77 @@ router.delete(
     await payouts.load();
     await audit(req.user!.id, 'payout.rule.delete', 'payoutRule', existing.id, existing.name);
     res.json({ ok: true });
+  }),
+);
+
+/* -------------------------------- risk book ------------------------------- */
+
+/**
+ * Live exposure per market, plus the limits capping it.
+ *
+ * Read on an interval by the Risk screen. Limits reject new stakes; they never
+ * touch a price, a payout or an outcome, which is why this sits beside the
+ * book rather than anywhere near the engine.
+ */
+router.get(
+  '/risk',
+  wrap(async (_req, res) => {
+    const markets = await exposureByMarket();
+    const totals = markets.reduce(
+      (sum, market) => ({
+        up: sum.up + market.up,
+        down: sum.down + market.down,
+        openPositions: sum.openPositions + market.openPositions,
+        liability: sum.liability + Math.max(market.liabilityUp, market.liabilityDown),
+      }),
+      { up: 0, down: 0, openPositions: 0, liability: 0 },
+    );
+
+    res.json({
+      markets,
+      totals: { ...totals, net: totals.up - totals.down },
+      defaults: {
+        maxOpenStakePerUser: settings.get('risk.maxOpenStakePerUser'),
+        maxExposurePerDirection: settings.get('risk.maxExposurePerDirection'),
+      },
+    });
+  }),
+);
+
+router.put(
+  '/risk/:symbol',
+  wrap(async (req, res) => {
+    const symbol = req.params.symbol.toUpperCase();
+    const body = z
+      .object({
+        minStake: z.number().int().min(1).max(100_000_000),
+        maxStake: z.number().int().min(1).max(100_000_000),
+        // 0 means "use the runtime default", which itself may mean no limit
+        maxOpenStakePerUser: z.number().int().min(0).max(1_000_000_000),
+        maxExposurePerDirection: z.number().int().min(0).max(1_000_000_000),
+      })
+      .refine((value) => value.maxStake >= value.minStake, {
+        message: 'The maximum stake cannot be below the minimum',
+      })
+      .parse(req.body);
+
+    const asset = await prisma.asset.findUnique({ where: { symbol } });
+    if (!asset) throw notFound('Market not found');
+
+    const updated = await prisma.asset.update({ where: { id: asset.id }, data: body });
+    await audit(
+      req.user!.id,
+      'risk.limits',
+      'asset',
+      asset.id,
+      `${symbol} stake ${body.minStake}-${body.maxStake} user ${body.maxOpenStakePerUser} side ${body.maxExposurePerDirection}`,
+    );
+    res.json({
+      symbol: updated.symbol,
+      minStake: updated.minStake,
+      maxStake: updated.maxStake,
+      maxOpenStakePerUser: updated.maxOpenStakePerUser,
+      maxExposurePerDirection: updated.maxExposurePerDirection,
+    });
   }),
 );

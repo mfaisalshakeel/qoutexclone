@@ -789,3 +789,409 @@ suite('payout rules', () => {
     expect(trade.payoutPct).toBe(settings.get('trading.minPayoutPct'));
   });
 });
+
+/** Risk limits reject new stakes, and touch nothing else. */
+suite('risk limits', () => {
+  let prisma: (typeof import('../../lib/prisma.js'))['prisma'];
+  let trading: typeof import('../../services/trading.js');
+  let risk: typeof import('../../services/risk.js');
+  let settings: (typeof import('../../services/settings.js'))['settings'];
+  let feed: (typeof import('../../engine/feed.js'))['marketFeed'];
+
+  const symbol = `RISKUSD_${Date.now()}`;
+  const made = { users: [] as string[], assets: [] as string[] };
+  let assetId = '';
+
+  beforeAll(async () => {
+    prisma = (await import('../../lib/prisma.js')).prisma;
+    trading = await import('../../services/trading.js');
+    risk = await import('../../services/risk.js');
+    settings = (await import('../../services/settings.js')).settings;
+    feed = (await import('../../engine/feed.js')).marketFeed;
+    await settings.load();
+
+    const asset = await prisma.asset.create({
+      data: {
+        symbol,
+        name: 'Risk Coin',
+        pair: 'RISK/USD',
+        assetClass: 'CRYPTO',
+        base: 'RISK',
+        quote: 'USD',
+        feedSymbol: symbol,
+        basePrice: 100,
+        volatility: 0.001,
+        precision: 2,
+        pipSize: 0.01,
+        payoutPct: 80,
+        minStake: 100,
+        maxStake: 100_000,
+        maxOpenStakePerUser: 30_000,
+        maxExposurePerDirection: 50_000,
+      },
+    });
+    assetId = asset.id;
+    made.assets.push(asset.id);
+    feed.load([{ symbol, feedSymbol: symbol, basePrice: 100, volatility: 0.001, precision: 2 }]);
+  });
+
+  afterAll(async () => {
+    if (!prisma) return;
+    await prisma.trade.deleteMany({ where: { symbol } });
+    await prisma.user.deleteMany({ where: { id: { in: made.users } } });
+    await prisma.asset.deleteMany({ where: { id: { in: made.assets } } });
+    await prisma.$disconnect();
+  });
+
+  const makeTrader = async (balance = 10_000_000) => {
+    const user = await prisma.user.create({
+      data: {
+        email: `risk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.dev`,
+        name: 'Risk Trader',
+        passwordHash: 'x',
+        referralCode: `RSK${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+        realBalance: balance,
+        demoBalance: balance,
+      },
+    });
+    made.users.push(user.id);
+    return user;
+  };
+
+  const open = (userId: string, stake: number, accountType = 'REAL', direction: 'UP' | 'DOWN' = 'UP') =>
+    trading.placeTrade({
+      userId,
+      symbol,
+      direction,
+      stake,
+      durationSec: 3600,
+      accountType: accountType as 'REAL' | 'DEMO',
+    });
+
+  it('accepts a stake inside every limit', async () => {
+    const user = await makeTrader();
+    const trade = await open(user.id, 10_000);
+    expect(trade.stake).toBe(10_000);
+  });
+
+  it('refuses a stake above the market maximum', async () => {
+    const user = await makeTrader();
+    await expect(open(user.id, 100_001)).rejects.toMatchObject({ code: 'stake_too_high' });
+  });
+
+  it('refuses what would take one trader past their own limit, and says what is left', async () => {
+    const user = await makeTrader();
+    await open(user.id, 20_000);
+    // 30,000 is the per-trader cap on this market, so 10,000 fits and 10,001 does not
+    await expect(open(user.id, 10_001)).rejects.toMatchObject({
+      code: 'user_exposure_limit',
+      details: { remaining: 10_000 },
+    });
+    const allowed = await open(user.id, 10_000);
+    expect(allowed.stake).toBe(10_000);
+
+    // and the rejection left no trace: no position, no money moved
+    const open_ = await prisma.trade.count({ where: { userId: user.id, status: 'OPEN' } });
+    expect(open_).toBe(2);
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(after.realBalance).toBe(10_000_000 - 30_000);
+  });
+
+  it('refuses what would take the house past its limit on that side', async () => {
+    // the earlier traders hold 40,000 of the 50,000 this side allows
+    const before = await risk.openStakes(prisma, {
+      assetId,
+      userId: 'nobody',
+      accountType: 'REAL',
+      direction: 'UP',
+    });
+    expect(before.directionExposure).toBe(40_000);
+
+    const user = await makeTrader();
+    // the last 10,000 of room is available, and nothing beyond it
+    const fill = await open(user.id, 10_000);
+    expect(fill.stake).toBe(10_000);
+    await expect(open(user.id, 1_000)).rejects.toMatchObject({ code: 'market_exposure_limit' });
+
+    // the other side is untouched, which is the point of a per-direction cap
+    const down = await open(user.id, 10_000, 'REAL', 'DOWN');
+    expect(down.direction).toBe('DOWN');
+  });
+
+  it('never counts practice money against the house', async () => {
+    // the UP side is full of live money, and a practice trade still goes through
+    const user = await makeTrader();
+    const trade = await open(user.id, 20_000, 'DEMO');
+    expect(trade.accountType).toBe('DEMO');
+    expect(trade.stake).toBe(20_000);
+
+    const exposure = await risk.exposureByMarket();
+    const market = exposure.find((row) => row.symbol === symbol);
+    // 50,000 live on UP, and the practice position is not in the book
+    expect(market?.up).toBe(50_000);
+  });
+
+  it('reports the book the back office shows', async () => {
+    const market = (await risk.exposureByMarket()).find((row) => row.symbol === symbol);
+    expect(market).toBeDefined();
+    expect(market?.up).toBe(50_000);
+    expect(market?.down).toBe(10_000);
+    expect(market?.net).toBe(40_000);
+    // the house's worst case on a side is the payout, not the stake
+    expect(market?.liabilityUp).toBe(Math.floor((50_000 * 80) / 100));
+    expect(market?.roomUp).toBe(0);
+    expect(market?.roomDown).toBe(40_000);
+    expect(market?.utilisation).toBe(1);
+  });
+
+  it('falls back to the platform default when a market sets no limit of its own', async () => {
+    const plain = await prisma.asset.create({
+      data: {
+        symbol: `${symbol}_PLAIN`,
+        name: 'Plain Coin',
+        pair: 'PLAIN/USD',
+        assetClass: 'CRYPTO',
+        base: 'PLAIN',
+        quote: 'USD',
+        feedSymbol: `${symbol}_PLAIN`,
+        basePrice: 100,
+        volatility: 0.001,
+        precision: 2,
+        pipSize: 0.01,
+        payoutPct: 80,
+        minStake: 100,
+        maxStake: 100_000,
+      },
+    });
+    made.assets.push(plain.id);
+
+    // with the default at zero the market is unrestricted beyond its stake bounds
+    const unlimited = risk.limitsFor(plain);
+    expect(unlimited.maxOpenStakePerUser).toBe(settings.get('risk.maxOpenStakePerUser'));
+
+    await settings.set('risk.maxOpenStakePerUser', 25_000);
+    try {
+      const applied = risk.limitsFor(plain);
+      expect(applied.maxOpenStakePerUser).toBe(25_000);
+      // the market's own figure still wins where it has one
+      const own = risk.limitsFor(await prisma.asset.findUniqueOrThrow({ where: { id: assetId } }));
+      expect(own.maxOpenStakePerUser).toBe(30_000);
+    } finally {
+      await settings.reset('risk.maxOpenStakePerUser');
+    }
+  });
+});
+
+/** Both expiry modes are validated by the server, not trusted from the client. */
+suite('expiry modes', () => {
+  let prisma: (typeof import('../../lib/prisma.js'))['prisma'];
+  let trading: typeof import('../../services/trading.js');
+  let settings: (typeof import('../../services/settings.js'))['settings'];
+  let feed: (typeof import('../../engine/feed.js'))['marketFeed'];
+
+  const symbol = `EXPUSD_${Date.now()}`;
+  const made = { users: [] as string[], assets: [] as string[] };
+
+  beforeAll(async () => {
+    prisma = (await import('../../lib/prisma.js')).prisma;
+    trading = await import('../../services/trading.js');
+    settings = (await import('../../services/settings.js')).settings;
+    feed = (await import('../../engine/feed.js')).marketFeed;
+    await settings.load();
+
+    const asset = await prisma.asset.create({
+      data: {
+        symbol,
+        name: 'Expiry Coin',
+        pair: 'EXP/USD',
+        assetClass: 'CRYPTO',
+        base: 'EXP',
+        quote: 'USD',
+        feedSymbol: symbol,
+        basePrice: 100,
+        volatility: 0.001,
+        precision: 2,
+        pipSize: 0.01,
+        payoutPct: 80,
+        // this market offers a narrower set than the platform
+        durations: [60, 300],
+      },
+    });
+    made.assets.push(asset.id);
+    feed.load([{ symbol, feedSymbol: symbol, basePrice: 100, volatility: 0.001, precision: 2 }]);
+  });
+
+  afterAll(async () => {
+    if (!prisma) return;
+    await prisma.trade.deleteMany({ where: { symbol } });
+    await prisma.user.deleteMany({ where: { id: { in: made.users } } });
+    await prisma.asset.deleteMany({ where: { id: { in: made.assets } } });
+    await prisma.$disconnect();
+  });
+
+  const makeTrader = async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: `exp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.dev`,
+        name: 'Expiry Trader',
+        passwordHash: 'x',
+        referralCode: `EXP${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+        demoBalance: 1_000_000,
+      },
+    });
+    made.users.push(user.id);
+    return user;
+  };
+
+  it('opens a duration position and records the mode', async () => {
+    const user = await makeTrader();
+    const trade = await trading.placeTrade({
+      userId: user.id,
+      symbol,
+      direction: 'UP',
+      stake: 5_000,
+      durationSec: 300,
+      accountType: 'DEMO',
+    });
+    expect(trade.expiryMode).toBe('DURATION');
+    expect(trade.durationSec).toBe(300);
+    expect(trade.expiresAt.getTime() - trade.openedAt.getTime()).toBeGreaterThanOrEqual(299_000);
+  });
+
+  it('refuses a duration this market does not offer, even when the platform does', async () => {
+    expect(trading.durations()).toContain(30);
+    expect(trading.durationsFor({ durations: [60, 300] })).toEqual([60, 300]);
+
+    const user = await makeTrader();
+    await expect(
+      trading.placeTrade({
+        userId: user.id,
+        symbol,
+        direction: 'UP',
+        stake: 5_000,
+        durationSec: 30,
+        accountType: 'DEMO',
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_duration' });
+  });
+
+  it('never lets a market widen the platform list', async () => {
+    // 7 seconds is not a platform duration, so it cannot be offered
+    expect(trading.durationsFor({ durations: [7, 60] })).toEqual([60]);
+    // and a list with nothing usable falls back to the platform's
+    expect(trading.durationsFor({ durations: [7] })).toEqual(trading.durations());
+    expect(trading.durationsFor({ durations: 'nonsense' })).toEqual(trading.durations());
+  });
+
+  it('opens a clock position on a boundary the server offered', async () => {
+    const [slot] = trading.clockExpiries();
+    expect(slot).toBeDefined();
+
+    const user = await makeTrader();
+    const trade = await trading.placeTrade({
+      userId: user.id,
+      symbol,
+      direction: 'DOWN',
+      stake: 5_000,
+      expiryMode: 'CLOCK',
+      expiresAt: slot.expiresAt,
+      accountType: 'DEMO',
+    });
+    expect(trade.expiryMode).toBe('CLOCK');
+    expect(trade.expiresAt.getTime()).toBe(slot.expiresAt);
+    // the length is derived from the boundary, not sent by the client
+    expect(trade.durationSec).toBeGreaterThan(0);
+    expect(trade.durationSec).toBeLessThanOrEqual(slot.durationSec + 1);
+  });
+
+  it('refuses an instant that is not a boundary', async () => {
+    const user = await makeTrader();
+    await expect(
+      trading.placeTrade({
+        userId: user.id,
+        symbol,
+        direction: 'UP',
+        stake: 5_000,
+        expiryMode: 'CLOCK',
+        // deliberately 17 seconds past a minute
+        expiresAt: Math.floor(Date.now() / 60_000) * 60_000 + 137_000,
+        accountType: 'DEMO',
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_expiry' });
+  });
+
+  it('refuses a boundary inside its purchase cut-off', async () => {
+    const cutoff = settings.get('trading.clockCutoffSec');
+    // the boundary immediately after now is inside the cut-off by construction
+    const soon = Math.floor((Date.now() + 1_000) / 60_000) * 60_000 + 60_000;
+    const insideCutoff = soon - Date.now() <= cutoff * 1000;
+
+    const user = await makeTrader();
+    const attempt = trading.placeTrade({
+      userId: user.id,
+      symbol,
+      direction: 'UP',
+      stake: 5_000,
+      expiryMode: 'CLOCK',
+      expiresAt: soon,
+      accountType: 'DEMO',
+    });
+
+    if (insideCutoff) await expect(attempt).rejects.toMatchObject({ code: 'expiry_closed' });
+    else expect((await attempt).expiresAt.getTime()).toBe(soon);
+  });
+
+  it('refuses a boundary already in the past', async () => {
+    const user = await makeTrader();
+    await expect(
+      trading.placeTrade({
+        userId: user.id,
+        symbol,
+        direction: 'UP',
+        stake: 5_000,
+        expiryMode: 'CLOCK',
+        expiresAt: Math.floor((Date.now() - 600_000) / 60_000) * 60_000,
+        accountType: 'DEMO',
+      }),
+    ).rejects.toMatchObject({ code: 'expiry_closed' });
+  });
+
+  it('offers only boundaries it will accept', async () => {
+    // the contract between the list a trader sees and the validation
+    const user = await makeTrader();
+    for (const slot of trading.clockExpiries().slice(0, 3)) {
+      const trade = await trading.placeTrade({
+        userId: user.id,
+        symbol,
+        direction: 'UP',
+        stake: 1_000,
+        expiryMode: 'CLOCK',
+        expiresAt: slot.expiresAt,
+        accountType: 'DEMO',
+      });
+      expect(trade.expiresAt.getTime()).toBe(slot.expiresAt);
+    }
+  });
+
+  it('refuses a mode the platform has turned off', async () => {
+    await settings.set('trading.expiryModes', ['DURATION']);
+    try {
+      const [slot] = trading.clockExpiries();
+      expect(slot).toBeUndefined();
+      const user = await makeTrader();
+      await expect(
+        trading.placeTrade({
+          userId: user.id,
+          symbol,
+          direction: 'UP',
+          stake: 5_000,
+          expiryMode: 'CLOCK',
+          expiresAt: Math.floor(Date.now() / 60_000) * 60_000 + 300_000,
+          accountType: 'DEMO',
+        }),
+      ).rejects.toMatchObject({ code: 'invalid_expiry' });
+    } finally {
+      await settings.reset('trading.expiryModes');
+    }
+  });
+});

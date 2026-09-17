@@ -80,6 +80,16 @@ model Asset {
   minStake  Int @default(100) // $1.00
   maxStake  Int @default(500000) // $5,000.00
 
+  /// Risk limits on *new* positions, in cents. 0 falls back to the runtime
+  /// setting, which in turn may be 0 for no limit. These reject a stake; they
+  /// never move a price or a payout.
+  maxOpenStakePerUser     Int @default(0)
+  maxExposurePerDirection Int @default(0)
+
+  /// Expiry durations offered on this market, in seconds. Null uses the
+  /// platform list from settings.
+  durations Json?
+
   precision Int     @default(2) // decimals shown and quoted
   pipSize   Float   @default(0.01) // smallest meaningful move for this market
   icon      String? // short label or emoji for the market list
@@ -119,6 +129,8 @@ model Trade {
   entryId      String?
   tournamentId String?
   direction    String // UP | DOWN
+  /// DURATION (a fixed length from purchase) | CLOCK (the next boundary)
+  expiryMode   String @default("DURATION")
   stake        Int
   payoutPct    Int
   entryPrice   Float
@@ -135,6 +147,8 @@ model Trade {
 
   @@index([userId, status])
   @@index([status, expiresAt])
+  /// live exposure per market and side, read on every new position
+  @@index([assetId, status, direction])
 }
 
 model Transaction {
