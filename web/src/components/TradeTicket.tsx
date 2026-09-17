@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
-import { duration as fmtDuration, money } from '../lib/format';
+import { duration as fmtDuration, dateTime, money, untilShort } from '../lib/format';
 import { useAuth, activeBalance } from '../store/auth';
 import { useTradingAccount } from '../store/tradingAccount';
 import { useMarket } from '../store/market';
@@ -20,6 +20,7 @@ export function TradeTicket({ asset, onPlaced }: Props) {
   const { user, patchBalance } = useAuth();
   const { tournamentId, tournamentName, tournamentBalance, setBalance } = useTradingAccount();
   const durations = useMarket((s) => s.durations);
+  const selectSymbol = useMarket((s) => s.selectSymbol);
   const [amount, setAmount] = useState(10);
   const [durationSec, setDurationSec] = useState(60);
   const [busy, setBusy] = useState<'UP' | 'DOWN' | null>(null);
@@ -35,10 +36,11 @@ export function TradeTicket({ asset, onPlaced }: Props) {
   const balance = tournamentId ? (tournamentBalance ?? 0) : activeBalance(user);
   const stake = Math.round(amount * 100);
   const profit = Math.floor((stake * asset.payoutPct) / 100);
+  const marketClosed = !asset.isOpen;
   const tooSmall = stake < asset.minStake;
   const tooLarge = stake > asset.maxStake;
   const insufficient = stake > balance;
-  const blocked = tooSmall || tooLarge || insufficient;
+  const blocked = marketClosed || tooSmall || tooLarge || insufficient;
 
   const place = async (direction: 'UP' | 'DOWN') => {
     if (blocked || busy) return;
@@ -73,6 +75,35 @@ export function TradeTicket({ asset, onPlaced }: Props) {
       setBusy(null);
     }
   };
+
+  if (marketClosed) {
+    return (
+      <div className="card flex h-full flex-col items-center justify-center gap-3 p-5 text-center">
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-ink-600 text-slate-400">
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3 2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+        <div>
+          <p className="text-sm font-semibold">{asset.pair.replace(' (OTC)', '')} is closed</p>
+          <p className="mt-1 text-xs text-slate-400">
+            {asset.holiday
+              ? `Closed for a market holiday (${asset.holiday}).`
+              : asset.nextOpen
+                ? `Opens ${untilShort(asset.nextOpen)} — ${dateTime(asset.nextOpen)}`
+                : 'This market is not trading right now.'}
+          </p>
+          {asset.schedule && <p className="mt-1 text-[10px] text-slate-500">{asset.schedule.hours}</p>}
+        </div>
+        {asset.otcAlternative && (
+          <button onClick={() => selectSymbol(asset.otcAlternative!)} className="btn-primary text-xs">
+            Trade the OTC market instead
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="card flex h-full flex-col gap-3 p-3">

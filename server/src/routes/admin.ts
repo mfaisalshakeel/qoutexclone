@@ -13,6 +13,8 @@ import { PROMO_KINDS, describe } from '../services/promos.js';
 import { finishTournament, leaderboard, startTournament } from '../services/tournaments.js';
 import { listAllTickets, postMessage, readTicket, setTicketStatus } from '../services/support.js';
 import { SETTINGS, settings } from '../services/settings.js';
+import { marketHours } from '../services/market-hours.js';
+import { describeWindows } from '../lib/sessions.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -418,6 +420,95 @@ router.post(
   }),
 );
 
+/* ------------------------------- schedules -------------------------------- */
+
+const windowSchema = z.object({
+  dayOfWeek: z.number().int().min(0).max(6),
+  openMinute: z.number().int().min(0).max(1439),
+  closeMinute: z.number().int().min(1).max(2880),
+});
+
+router.get(
+  '/schedules',
+  wrap(async (_req, res) => {
+    const schedules = await prisma.tradingSchedule.findMany({
+      orderBy: { key: 'asc' },
+      include: {
+        windows: { orderBy: [{ dayOfWeek: 'asc' }, { openMinute: 'asc' }] },
+        holidays: { orderBy: { date: 'asc' } },
+        _count: { select: { assets: true } },
+      },
+    });
+    res.json({
+      schedules: schedules.map((schedule) => ({
+        ...schedule,
+        markets: schedule._count.assets,
+        hours: describeWindows(schedule.windows),
+        state: marketHours.stateFor(schedule.id),
+      })),
+    });
+  }),
+);
+
+router.put(
+  '/schedules/:id/windows',
+  wrap(async (req, res) => {
+    const body = z.object({ windows: z.array(windowSchema).max(40) }).parse(req.body);
+    const schedule = await prisma.tradingSchedule.findUnique({ where: { id: req.params.id } });
+    if (!schedule) throw notFound('Schedule not found');
+
+    for (const window of body.windows) {
+      if (window.closeMinute <= window.openMinute) {
+        throw badRequest('Each window must close after it opens', 'invalid_window');
+      }
+    }
+
+    // windows describe one calendar, so they are replaced as a set
+    await prisma.$transaction([
+      prisma.scheduleWindow.deleteMany({ where: { scheduleId: schedule.id } }),
+      prisma.scheduleWindow.createMany({
+        data: body.windows.map((window) => ({ ...window, scheduleId: schedule.id })),
+      }),
+    ]);
+    await marketHours.reload();
+    await audit(req.user!.id, 'schedule.windows', 'schedule', schedule.id, `${body.windows.length} windows`);
+    res.json({ ok: true, hours: describeWindows(body.windows) });
+  }),
+);
+
+router.post(
+  '/schedules/:id/holidays',
+  wrap(async (req, res) => {
+    const body = z
+      .object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD'), name: z.string().min(2).max(80) })
+      .parse(req.body);
+    const schedule = await prisma.tradingSchedule.findUnique({ where: { id: req.params.id } });
+    if (!schedule) throw notFound('Schedule not found');
+
+    const holiday = await prisma.marketHoliday.upsert({
+      where: { scheduleId_date: { scheduleId: schedule.id, date: body.date } },
+      update: { name: body.name },
+      create: { scheduleId: schedule.id, date: body.date, name: body.name },
+    });
+    await marketHours.reload();
+    await audit(req.user!.id, 'schedule.holiday.add', 'schedule', schedule.id, `${body.date} ${body.name}`);
+    res.status(201).json({ holiday });
+  }),
+);
+
+router.delete(
+  '/schedules/:id/holidays/:holidayId',
+  wrap(async (req, res) => {
+    const deleted = await prisma.marketHoliday.deleteMany({
+      where: { id: req.params.holidayId, scheduleId: req.params.id },
+    });
+    if (deleted.count === 0) throw notFound('Holiday not found');
+    await marketHours.reload();
+    await audit(req.user!.id, 'schedule.holiday.remove', 'schedule', req.params.id, req.params.holidayId);
+    res.json({ ok: true });
+  }),
+);
+
 /* -------------------------------- settings -------------------------------- */
 
 router.get(
@@ -460,9 +551,32 @@ router.post(
 
 router.get(
   '/assets',
-  wrap(async (_req, res) => {
-    const assets = await prisma.asset.findMany({ orderBy: { sortOrder: 'asc' } });
-    res.json({ assets: assets.map((a) => ({ ...a, price: marketFeed.getPrice(a.symbol) })) });
+  wrap(async (req, res) => {
+    const query = z
+      .object({ assetClass: z.string().optional(), search: z.string().max(60).optional() })
+      .parse(req.query);
+
+    const assets = await prisma.asset.findMany({
+      where: {
+        ...(query.assetClass ? { assetClass: query.assetClass } : {}),
+        ...(query.search
+          ? { OR: [{ symbol: { contains: query.search } }, { name: { contains: query.search } }] }
+          : {}),
+      },
+      orderBy: { sortOrder: 'asc' },
+    });
+    res.json({
+      assets: assets.map((asset) => {
+        const session = marketHours.stateFor(asset.scheduleId);
+        return {
+          ...asset,
+          price: marketFeed.getPrice(asset.symbol),
+          isOpen: session.isOpen,
+          nextOpen: session.nextOpen,
+          schedule: marketHours.describe(asset.scheduleId),
+        };
+      }),
+    });
   }),
 );
 
@@ -476,6 +590,7 @@ router.patch(
         maxStake: z.number().int().min(100).optional(),
         enabled: z.boolean().optional(),
         sortOrder: z.number().int().optional(),
+        scheduleId: z.string().nullable().optional(),
       })
       .parse(req.body);
     const asset = await prisma.asset.update({ where: { id: req.params.id }, data: body });

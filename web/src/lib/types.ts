@@ -92,6 +92,12 @@ export interface Asset {
   precision: number;
   price: number | null;
   changePct: number;
+  isOpen: boolean;
+  nextOpen: string | null;
+  nextClose: string | null;
+  holiday: string | null;
+  schedule: { key: string; name: string; hours: string } | null;
+  otcAlternative: string | null;
 }
 
 export interface Candle {

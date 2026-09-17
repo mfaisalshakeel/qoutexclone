@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMarket } from '../store/market';
-import { percent, price } from '../lib/format';
+import { percent, price, untilShort } from '../lib/format';
 import { RowSkeletons } from './Skeleton';
 
 interface Props {
@@ -46,7 +46,7 @@ export function AssetPicker({ onPicked }: Props) {
               }}
               className={`mb-1 block w-full rounded-lg px-2.5 py-2 text-left transition ${
                 active ? 'bg-accent-soft ring-1 ring-accent/40' : 'hover:bg-ink-700'
-              }`}
+              } ${asset.isOpen ? '' : 'opacity-60'}`}
             >
               <span className="flex items-center gap-2">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-600 text-[9px] font-bold text-slate-300">
@@ -57,11 +57,20 @@ export function AssetPicker({ onPicked }: Props) {
                   {asset.pair.replace(' (OTC)', '')}
                 </span>
                 {asset.isOtc && <span className="chip shrink-0 bg-accent-soft text-accent">OTC</span>}
-                <span className="chip shrink-0 bg-up-soft text-up">{asset.payoutPct}%</span>
+                {!asset.isOpen && <span className="chip shrink-0 bg-ink-600 text-slate-400">closed</span>}
+                <span
+                  className={`chip shrink-0 ${asset.isOpen ? 'bg-up-soft text-up' : 'bg-ink-600 text-slate-500'}`}
+                >
+                  {asset.payoutPct}%
+                </span>
               </span>
               <span className="mt-1 flex items-baseline gap-2 pl-9">
                 <span className="min-w-0 flex-1 truncate text-[10px] text-slate-500">
-                  {asset.name.replace(' (OTC)', '')}
+                  {asset.isOpen
+                    ? asset.name.replace(' (OTC)', '')
+                    : asset.nextOpen
+                      ? `Opens ${untilShort(asset.nextOpen)}`
+                      : 'Closed'}
                 </span>
                 <span className="tabular text-xs font-semibold text-slate-100">
                   {price(live, asset.precision)}

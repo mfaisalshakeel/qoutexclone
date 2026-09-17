@@ -29,7 +29,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 
 - [x] **Asset model.** Assets have `class` (CURRENCY, CRYPTO, COMMODITY, STOCK, INDEX), `base`, `quote`, display `pair` (e.g. `EUR/USD`, `BTC/USDT`, `XAU/USD`), `isOtc`, `precision`, `pipSize`, `minStake`, `maxStake`, `enabled`, `sortOrder`, `icon`. Migration included, with the existing assets migrated.
 - [x] **Market catalogue seed.** At least 20 currency pairs (majors and crosses), 12 crypto pairs vs USDT, gold/silver/oil, 10 large-cap stocks and 5 indices. Every currency pair and a selection of the others also exist as an `(OTC)` variant.
-- [ ] **Trading sessions.** Non-OTC assets have weekly schedules and holidays (admin-editable). A closed market can't be traded, is shown as closed with its next open time, and the OTC variant is suggested. OTC trades 24/7.
+- [x] **Trading sessions.** Non-OTC assets have weekly schedules and holidays (admin-editable). A closed market can't be traded, is shown as closed with its next open time, and the OTC variant is suggested. OTC trades 24/7.
 - [ ] **OTC price engine.** This is a broker-generated feed per OTC asset, replacing the single random walk:
   - seeded, deterministic per asset and continuous across restarts (persist the last state)
   - realistic microstructure: volatility clustering (GARCH-like), trend and range regimes with random durations, mean reversion to a slowly drifting anchor, occasional spikes within configured bounds, and no impossible gaps

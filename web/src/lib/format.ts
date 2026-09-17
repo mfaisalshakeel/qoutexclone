@@ -38,6 +38,18 @@ export function countdown(target: string | Date): string {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
+/** "in 2h 15m" / "in 3d", for a market's next open. */
+export function untilShort(target: string | Date): string {
+  const ms = new Date(target).getTime() - Date.now();
+  if (ms <= 0) return 'now';
+  const minutes = Math.round(ms / 60000);
+  if (minutes < 60) return `in ${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `in ${hours}h ${minutes % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `in ${days}d ${hours % 24}h`;
+}
+
 export function dateTime(value: string | Date): string {
   return new Date(value).toLocaleString('en-GB', {
     day: '2-digit',

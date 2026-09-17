@@ -102,6 +102,17 @@ export class MarketFeed extends EventEmitter {
   private socket: import('ws').WebSocket | null = null;
   private liveConnected = false;
   private running = false;
+  /**
+   * Answers whether a market is inside its trading session. A closed exchange
+   * must not print new prices, so the simulator skips it and the last tick
+   * stands until it reopens. OTC and crypto have no session and always tick.
+   */
+  private isTradeable: (symbol: string) => boolean = () => true;
+
+  /** Wired at boot to the market-hours service. */
+  setSessionResolver(resolver: (symbol: string) => boolean): void {
+    this.isTradeable = resolver;
+  }
 
   get provider(): string {
     return env.feedProvider === 'binance' && this.liveConnected ? 'binance' : 'simulated';
@@ -177,7 +188,10 @@ export class MarketFeed extends EventEmitter {
     // When a live socket is driving prices the simulator stays out of the way.
     if (this.liveConnected) return;
     const now = Date.now();
-    for (const state of this.states.values()) this.publish(state, this.nextSimulatedPrice(state), now);
+    for (const state of this.states.values()) {
+      if (!this.isTradeable(state.spec.symbol)) continue; // market closed: price is frozen
+      this.publish(state, this.nextSimulatedPrice(state), now);
+    }
   }
 
   private nextSimulatedPrice(state: SymbolState): number {
@@ -262,6 +276,11 @@ export class MarketFeed extends EventEmitter {
 
   getPrice(symbol: string): number | null {
     return this.states.get(symbol)?.price ?? null;
+  }
+
+  /** Whether this market is currently printing prices. */
+  isLive(symbol: string): boolean {
+    return this.states.has(symbol) && this.isTradeable(symbol);
   }
 
   /** Age in ms of the newest tick across all symbols, or null if none yet. */

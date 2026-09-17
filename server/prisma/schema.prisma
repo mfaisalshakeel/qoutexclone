@@ -89,13 +89,18 @@ model Asset {
   enabled    Boolean @default(true)
   sortOrder  Int     @default(0)
 
+  // null means always open, which is how OTC and crypto markets trade
+  scheduleId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  trades Trade[]
+  trades   Trade[]
+  schedule TradingSchedule? @relation(fields: [scheduleId], references: [id])
 
   @@index([assetClass, enabled, sortOrder])
   @@index([isOtc, enabled])
+  @@index([scheduleId])
 }
 
 model Trade {
@@ -381,4 +386,47 @@ model SupportMessage {
   sender User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([ticketId, createdAt])
+}
+
+/// A reusable set of weekly opening hours, shared by every market that trades
+/// on the same exchange calendar (forex, US equities, metals…).
+model TradingSchedule {
+  id        String   @id @default(cuid())
+  key       String   @unique // forex-24-5, us-equities
+  name      String
+  note      String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  windows  ScheduleWindow[]
+  holidays MarketHoliday[]
+  assets   Asset[]
+}
+
+/// One opening window. Times are minutes from midnight UTC on `dayOfWeek`
+/// (0 = Sunday); `closeMinute` may exceed 1440 to run into the next day.
+model ScheduleWindow {
+  id          String @id @default(cuid())
+  scheduleId  String
+  dayOfWeek   Int // 0-6, Sunday first
+  openMinute  Int // 0-1439
+  closeMinute Int // 1-2880
+
+  schedule TradingSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId, dayOfWeek])
+}
+
+/// A full-day closure (UTC date) for every market on the schedule.
+model MarketHoliday {
+  id         String   @id @default(cuid())
+  scheduleId String
+  date       String // YYYY-MM-DD in UTC
+  name       String
+  createdAt  DateTime @default(now())
+
+  schedule TradingSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleId, date])
+  @@index([date])
 }

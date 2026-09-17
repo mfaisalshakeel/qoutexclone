@@ -17,7 +17,8 @@ export const badRequest = (msg: string, code = 'bad_request', details?: unknown)
 export const unauthorized = (msg = 'Authentication required') => new AppError(401, msg, 'unauthorized');
 export const forbidden = (msg = 'Not allowed') => new AppError(403, msg, 'forbidden');
 export const notFound = (msg = 'Not found') => new AppError(404, msg, 'not_found');
-export const conflict = (msg: string, code = 'conflict') => new AppError(409, msg, code);
+export const conflict = (msg: string, code = 'conflict', details?: unknown) =>
+  new AppError(409, msg, code, details);
 
 /** Wraps an async route handler so rejected promises reach the error middleware. */
 export function wrap(

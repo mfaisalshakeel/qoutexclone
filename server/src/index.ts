@@ -8,6 +8,7 @@ import { settlementEngine } from './engine/settlement.js';
 import { chainWatcher } from './engine/chain-watcher.js';
 import { attachWebsocket } from './ws.js';
 import { settings } from './services/settings.js';
+import { marketHours } from './services/market-hours.js';
 
 /** How long a shutdown may take before in-flight work is abandoned. */
 const SHUTDOWN_GRACE_MS = 15_000;
@@ -15,6 +16,7 @@ const SHUTDOWN_GRACE_MS = 15_000;
 async function main() {
   // runtime configuration first: services read it synchronously afterwards
   await settings.load();
+  await marketHours.load();
 
   const assets = await prisma.asset.findMany({ where: { enabled: true }, orderBy: { sortOrder: 'asc' } });
   if (assets.length === 0) {
@@ -30,6 +32,9 @@ async function main() {
       precision: asset.precision,
     })),
   );
+  // a closed exchange stops printing prices; OTC and crypto never close
+  const sessionByAsset = new Map(assets.map((asset) => [asset.symbol, asset.scheduleId]));
+  marketFeed.setSessionResolver((symbol) => marketHours.stateFor(sessionByAsset.get(symbol) ?? null).isOpen);
   marketFeed.start();
   settlementEngine.start();
   chainWatcher.start();

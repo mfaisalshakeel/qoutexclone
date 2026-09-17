@@ -7,6 +7,7 @@ import { marketFeed } from '../engine/feed.js';
 import { applyLedger, type AccountType } from './wallet.js';
 import { activeEntry, adjustEntryBalance } from './tournaments.js';
 import { settings } from './settings.js';
+import { marketHours, otcAlternative } from './market-hours.js';
 
 /** Expiries offered on the terminal, in seconds. Operators change this at runtime. */
 export function durations(): number[] {
@@ -34,6 +35,19 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
   const asset = await prisma.asset.findUnique({ where: { symbol: input.symbol } });
   if (!asset) throw notFound('Unknown asset');
   if (!asset.enabled) throw conflict('Trading on this asset is closed', 'asset_disabled');
+
+  // exchange-traded markets only accept positions inside their session
+  const session = marketHours.stateFor(asset.scheduleId);
+  if (!session.isOpen) {
+    const alternative = await otcAlternative(asset.symbol);
+    throw conflict(
+      alternative
+        ? `${asset.pair} is closed right now. The OTC market trades 24/7.`
+        : `${asset.pair} is closed right now.`,
+      'market_closed',
+      { nextOpen: session.nextOpen, holiday: session.holiday, otcAlternative: alternative },
+    );
+  }
   if (input.stake < asset.minStake) {
     throw badRequest(`Minimum stake is $${(asset.minStake / 100).toFixed(2)}`, 'stake_too_low');
   }

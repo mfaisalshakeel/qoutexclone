@@ -64,3 +64,21 @@ describe('market feed', () => {
     expect(feed.getCandles('NOPEUSD', '1m')).toEqual([]);
   });
 });
+
+describe('session gating', () => {
+  it('stops printing prices for a market outside its session', () => {
+    const feed = feedWithHistory();
+    feed.setSessionResolver(() => false);
+
+    const before = feed.getPrice('TESTUSD');
+    for (let i = 0; i < 50; i += 1) feed['onInterval']();
+    expect(feed.getPrice('TESTUSD')).toBe(before);
+    expect(feed.isLive('TESTUSD')).toBe(false);
+
+    // reopening resumes the walk from the frozen price
+    feed.setSessionResolver(() => true);
+    for (let i = 0; i < 50; i += 1) feed['onInterval']();
+    expect(feed.getPrice('TESTUSD')).not.toBe(before);
+    expect(feed.isLive('TESTUSD')).toBe(true);
+  });
+});

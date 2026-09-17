@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { realtime } from '../lib/ws';
-import { percent, price } from '../lib/format';
+import { percent, price, untilShort } from '../lib/format';
 import { assetOf, useMarket } from '../store/market';
 import { useAuth } from '../store/auth';
 import { useTradingAccount } from '../store/tradingAccount';
+import { DESKTOP_QUERY, useMediaQuery } from '../hooks/useMediaQuery';
 import { AssetPicker } from '../components/AssetPicker';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { PriceChart, type ChartType, type IndicatorSettings } from '../components/PriceChart';
@@ -34,6 +35,7 @@ export function Terminal() {
     bollinger: false,
   });
   const [studiesOpen, setStudiesOpen] = useState(false);
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
 
   const asset = useMemo(() => assetOf(symbol, assets), [symbol, assets]);
   const livePrice = prices[symbol] ?? asset?.price ?? null;
@@ -84,9 +86,11 @@ export function Terminal() {
   return (
     <div className="flex flex-col gap-2 p-2 md:h-[calc(100dvh-3.5rem)] md:flex-row">
       {/* markets — rail on desktop, sheet on mobile */}
-      <aside className="card hidden w-60 shrink-0 md:block">
-        <AssetPicker />
-      </aside>
+      {isDesktop && (
+        <aside className="card w-60 shrink-0">
+          <AssetPicker />
+        </aside>
+      )}
 
       <section className="flex min-h-0 flex-1 flex-col gap-2">
         <header className="card flex shrink-0 items-center gap-3 p-2.5">
@@ -126,9 +130,15 @@ export function Terminal() {
                 <span className="tabular block text-lg font-bold leading-tight">
                   {price(livePrice, asset?.precision ?? 2)}
                 </span>
-                <span className={`tabular block text-[11px] ${changePct >= 0 ? 'text-up' : 'text-down'}`}>
-                  {percent(changePct)}
-                </span>
+                {asset && !asset.isOpen ? (
+                  <span className="block text-[11px] text-slate-400">
+                    Closed{asset.nextOpen ? ` · opens ${untilShort(asset.nextOpen)}` : ''}
+                  </span>
+                ) : (
+                  <span className={`tabular block text-[11px] ${changePct >= 0 ? 'text-up' : 'text-down'}`}>
+                    {percent(changePct)}
+                  </span>
+                )}
               </div>
             </>
           )}
@@ -213,37 +223,43 @@ export function Terminal() {
           )}
         </div>
 
-        {/* mobile: ticket / positions switch */}
-        <div className="grid shrink-0 grid-cols-2 gap-1 md:hidden">
-          {(['trade', 'positions'] as const).map((panel) => (
-            <button
-              key={panel}
-              onClick={() => setMobilePanel(panel)}
-              className={`rounded-lg py-2 text-xs font-semibold capitalize transition ${
-                mobilePanel === panel ? 'bg-ink-600 text-white' : 'bg-ink-800 text-slate-400'
-              }`}
-            >
-              {panel === 'trade' ? 'Trade' : `Positions (${openTrades.length})`}
-            </button>
-          ))}
-        </div>
-        <div className="md:hidden">
-          {mobilePanel === 'trade' ? (
-            <TradeTicket asset={asset} onPlaced={(trade) => setOpenTrades((c) => [trade, ...c])} />
-          ) : (
-            <Positions open={openTrades} closed={closedTrades} loading={!tradesLoaded} />
-          )}
-        </div>
+        {/* narrow viewports swap between the ticket and the positions list */}
+        {!isDesktop && (
+          <>
+            <div className="grid shrink-0 grid-cols-2 gap-1">
+              {(['trade', 'positions'] as const).map((panel) => (
+                <button
+                  key={panel}
+                  onClick={() => setMobilePanel(panel)}
+                  className={`rounded-lg py-2 text-xs font-semibold capitalize transition ${
+                    mobilePanel === panel ? 'bg-ink-600 text-white' : 'bg-ink-800 text-slate-400'
+                  }`}
+                >
+                  {panel === 'trade' ? 'Trade' : `Positions (${openTrades.length})`}
+                </button>
+              ))}
+            </div>
+            <div>
+              {mobilePanel === 'trade' ? (
+                <TradeTicket asset={asset} onPlaced={(trade) => setOpenTrades((c) => [trade, ...c])} />
+              ) : (
+                <Positions open={openTrades} closed={closedTrades} loading={!tradesLoaded} />
+              )}
+            </div>
+          </>
+        )}
       </section>
 
-      <aside className="hidden w-72 shrink-0 flex-col gap-2 md:flex">
-        <div className="shrink-0">
-          <TradeTicket asset={asset} onPlaced={(trade) => setOpenTrades((c) => [trade, ...c])} />
-        </div>
-        <div className="min-h-0 flex-1">
-          <Positions open={openTrades} closed={closedTrades} loading={!tradesLoaded} />
-        </div>
-      </aside>
+      {isDesktop && (
+        <aside className="flex w-72 shrink-0 flex-col gap-2">
+          <div className="shrink-0">
+            <TradeTicket asset={asset} onPlaced={(trade) => setOpenTrades((c) => [trade, ...c])} />
+          </div>
+          <div className="min-h-0 flex-1">
+            <Positions open={openTrades} closed={closedTrades} loading={!tradesLoaded} />
+          </div>
+        </aside>
+      )}
 
       {marketsOpen && (
         <div className="fixed inset-0 z-50 flex flex-col md:hidden">

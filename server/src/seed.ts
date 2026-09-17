@@ -3,8 +3,34 @@ import './lib/load-env.js';
 import bcrypt from 'bcryptjs';
 import { prisma } from './lib/prisma.js';
 import { MARKETS, MARKET_COUNTS } from './data/markets.js';
+import { SCHEDULES, scheduleKeyFor } from './data/schedules.js';
 
 async function main() {
+  // schedules first: markets reference them
+  const scheduleIds = new Map<string, string>();
+  for (const seed of SCHEDULES) {
+    const schedule = await prisma.tradingSchedule.upsert({
+      where: { key: seed.key },
+      update: { name: seed.name, note: seed.note },
+      create: { key: seed.key, name: seed.name, note: seed.note },
+    });
+    scheduleIds.set(seed.key, schedule.id);
+
+    // windows are replaced wholesale: they describe one calendar, not a history
+    await prisma.scheduleWindow.deleteMany({ where: { scheduleId: schedule.id } });
+    await prisma.scheduleWindow.createMany({
+      data: seed.windows.map((window) => ({ ...window, scheduleId: schedule.id })),
+    });
+
+    for (const holiday of seed.holidays) {
+      await prisma.marketHoliday.upsert({
+        where: { scheduleId_date: { scheduleId: schedule.id, date: holiday.date } },
+        update: { name: holiday.name },
+        create: { scheduleId: schedule.id, date: holiday.date, name: holiday.name },
+      });
+    }
+  }
+
   for (const [index, market] of MARKETS.entries()) {
     const shared = {
       name: market.name,
@@ -21,6 +47,7 @@ async function main() {
       volatility: market.volatility,
       icon: market.icon,
       sortOrder: index,
+      scheduleId: scheduleIds.get(scheduleKeyFor(market) ?? '') ?? null,
     };
 
     // upsert keeps operator edits to stake limits and enabled flags intact
@@ -69,6 +96,7 @@ async function main() {
     .map(([assetClass, count]) => `${assetClass.toLowerCase()} ${count}`)
     .join(', ');
   console.log(`Seeded ${MARKET_COUNTS.total} markets (${byClass}; ${MARKET_COUNTS.otc} OTC).`);
+  console.log(`Seeded ${SCHEDULES.length} trading schedules.`);
   console.log(`Admin:  ${adminEmail} / ${adminPassword}`);
   console.log(`Trader: ${demoEmail} / Trader123!`);
 }

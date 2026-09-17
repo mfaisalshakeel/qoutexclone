@@ -5,6 +5,13 @@ import { toast } from '../../store/toast';
 import { Empty, Loading, PageHead, StatusPill, Table, Td } from '../../components/admin/ui';
 import type { Asset, LeaderboardRow } from '../../lib/types';
 
+type AdminAsset = Asset & {
+  enabled: boolean;
+  minStake: number;
+  maxStake: number;
+  scheduleId: string | null;
+};
+
 interface AdminTournament {
   id: string;
   name: string;
@@ -446,15 +453,27 @@ export function AdminPromos() {
 }
 
 export function AdminAssets() {
-  const [rows, setRows] = useState<(Asset & { enabled: boolean })[] | null>(null);
+  const [rows, setRows] = useState<AdminAsset[] | null>(null);
+  const [assetClass, setAssetClass] = useState<string>('ALL');
+  const [search, setSearch] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const { assets } = await api.get<{ assets: (Asset & { enabled: boolean })[] }>('/admin/assets');
-    setRows(assets);
-  }, []);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (assetClass !== 'ALL') params.set('assetClass', assetClass);
+      if (search) params.set('search', search);
+      const { assets } = await api.get<{ assets: AdminAsset[] }>(`/admin/assets?${params}`);
+      setRows(assets);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not load markets');
+    }
+  }, [assetClass, search]);
 
   useEffect(() => {
-    void load();
+    const id = window.setTimeout(() => void load(), 200);
+    return () => window.clearTimeout(id);
   }, [load]);
 
   const patch = async (id: string, data: Record<string, unknown>, message: string) => {
@@ -467,57 +486,309 @@ export function AdminAssets() {
     }
   };
 
+  const CLASSES = ['ALL', 'CURRENCY', 'CRYPTO', 'COMMODITY', 'STOCK', 'INDEX'];
+
+  return (
+    <>
+      <PageHead
+        title="Markets"
+        subtitle={rows ? `${rows.length} markets · payouts, stake limits and sessions` : undefined}
+        action={
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search symbol or name"
+            className="field !w-56 !py-2 !text-xs"
+          />
+        }
+      />
+
+      <div className="mb-3 flex gap-1 overflow-x-auto rounded-lg border border-ink-600 bg-ink-800 p-1">
+        {CLASSES.map((option) => (
+          <button
+            key={option}
+            onClick={() => setAssetClass(option)}
+            className={`whitespace-nowrap rounded-md px-3 py-1.5 text-[11px] font-semibold capitalize transition ${
+              assetClass === option ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {option.toLowerCase()}
+          </button>
+        ))}
+      </div>
+
+      {error ? (
+        <div className="card p-8 text-center">
+          <p className="text-sm text-slate-300">{error}</p>
+          <button onClick={() => void load()} className="btn-ghost mt-3 text-xs">
+            Try again
+          </button>
+        </div>
+      ) : !rows ? (
+        <Loading />
+      ) : rows.length === 0 ? (
+        <Empty text="No markets match" />
+      ) : (
+        <Table head={['Market', 'Price', 'Payout', 'Stake range', 'Session', 'Actions']}>
+          {rows.map((asset) => (
+            <tr key={asset.id}>
+              <Td>
+                <span className="block text-xs font-semibold">
+                  {asset.pair}
+                  {asset.isOtc && <span className="chip ml-2 bg-accent-soft text-accent">OTC</span>}
+                </span>
+                <span className="block text-[11px] text-slate-500">
+                  {asset.symbol} · {asset.assetClass.toLowerCase()}
+                </span>
+              </Td>
+              <Td className="tabular text-xs">{asset.price?.toLocaleString() ?? '—'}</Td>
+              <Td className="tabular text-xs font-semibold text-up">{asset.payoutPct}%</Td>
+              <Td className="tabular text-[11px] text-slate-400">
+                {money(asset.minStake)} – {money(asset.maxStake)}
+              </Td>
+              <Td>
+                <StatusPill status={asset.isOpen ? 'open' : 'closed'} />
+                <span className="mt-1 block text-[10px] text-slate-500">
+                  {asset.schedule ? asset.schedule.hours : '24/7'}
+                </span>
+                {!asset.isOpen && asset.nextOpen && (
+                  <span className="block text-[10px] text-slate-500">opens {dateTime(asset.nextOpen)}</span>
+                )}
+              </Td>
+              <Td className="text-right">
+                <span className="flex justify-end gap-2">
+                  <button
+                    onClick={() => {
+                      const raw = window.prompt(`Payout % for ${asset.pair}`, String(asset.payoutPct));
+                      const value = Number(raw);
+                      if (raw && Number.isFinite(value)) {
+                        void patch(asset.id, { payoutPct: Math.round(value) }, 'Payout updated');
+                      }
+                    }}
+                    className="btn-ghost !px-3 !py-1.5 text-xs"
+                  >
+                    Payout
+                  </button>
+                  <button
+                    onClick={() =>
+                      void patch(
+                        asset.id,
+                        { enabled: !asset.enabled },
+                        asset.enabled ? 'Market delisted' : 'Market listed',
+                      )
+                    }
+                    className="btn-ghost !px-3 !py-1.5 text-xs"
+                  >
+                    {asset.enabled ? 'Delist' : 'List'}
+                  </button>
+                </span>
+              </Td>
+            </tr>
+          ))}
+        </Table>
+      )}
+    </>
+  );
+}
+
+interface Schedule {
+  id: string;
+  key: string;
+  name: string;
+  note: string | null;
+  hours: string;
+  markets: number;
+  state: { isOpen: boolean; nextOpen: string | null; nextClose: string | null; holiday?: string };
+  windows: { id: string; dayOfWeek: number; openMinute: number; closeMinute: number }[];
+  holidays: { id: string; date: string; name: string }[];
+}
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const asTime = (minutes: number) =>
+  `${String(Math.floor((minutes % 1440) / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+
+/** Opening hours and holidays per exchange calendar. */
+export function AdminSchedules() {
+  const [rows, setRows] = useState<Schedule[] | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [holiday, setHoliday] = useState({ date: '', name: '' });
+
+  const load = useCallback(async () => {
+    const { schedules } = await api.get<{ schedules: Schedule[] }>('/admin/schedules');
+    setRows(schedules);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const addHoliday = async (schedule: Schedule) => {
+    try {
+      await api.post(`/admin/schedules/${schedule.id}/holidays`, holiday);
+      setHoliday({ date: '', name: '' });
+      await load();
+      toast.success('Holiday added', `${schedule.name} closes that day`);
+    } catch (err) {
+      toast.error('Could not add', err instanceof ApiError ? err.message : undefined);
+    }
+  };
+
+  const removeHoliday = async (schedule: Schedule, holidayId: string) => {
+    try {
+      await api.del(`/admin/schedules/${schedule.id}/holidays/${holidayId}`);
+      await load();
+      toast.info('Holiday removed');
+    } catch (err) {
+      toast.error('Could not remove', err instanceof ApiError ? err.message : undefined);
+    }
+  };
+
+  const editWindow = async (schedule: Schedule, windowId: string) => {
+    const target = schedule.windows.find((window) => window.id === windowId);
+    if (!target) return;
+    const raw = window.prompt(
+      `${DAY_NAMES[target.dayOfWeek]} hours in UTC (HH:MM-HH:MM)`,
+      `${asTime(target.openMinute)}-${asTime(target.closeMinute)}`,
+    );
+    if (!raw) return;
+
+    const match = raw.match(/^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/);
+    if (!match) {
+      toast.error('Use the HH:MM-HH:MM format');
+      return;
+    }
+    const openMinute = Number(match[1]) * 60 + Number(match[2]);
+    const closeMinuteRaw = Number(match[3]) * 60 + Number(match[4]);
+    // a close earlier than the open means the session runs past midnight
+    const closeMinute = closeMinuteRaw <= openMinute ? closeMinuteRaw + 1440 : closeMinuteRaw;
+
+    try {
+      await api.put(`/admin/schedules/${schedule.id}/windows`, {
+        windows: schedule.windows.map((window) =>
+          window.id === windowId
+            ? { dayOfWeek: window.dayOfWeek, openMinute, closeMinute }
+            : { dayOfWeek: window.dayOfWeek, openMinute: window.openMinute, closeMinute: window.closeMinute },
+        ),
+      });
+      await load();
+      toast.success('Hours updated', 'Markets on this calendar follow it immediately');
+    } catch (err) {
+      toast.error('Could not save', err instanceof ApiError ? err.message : undefined);
+    }
+  };
+
   if (!rows) return <Loading />;
 
   return (
     <>
-      <PageHead title="Markets" subtitle="Payouts and stake limits per instrument" />
-      <Table head={['Market', 'Price', 'Payout', 'Stake range', 'State', 'Actions']}>
-        {rows.map((asset) => (
-          <tr key={asset.id}>
-            <Td>
-              <span className="block text-xs font-semibold">{asset.name}</span>
-              <span className="block text-[11px] text-slate-500">{asset.symbol}</span>
-            </Td>
-            <Td className="tabular text-xs">{asset.price?.toLocaleString() ?? '—'}</Td>
-            <Td className="tabular text-xs font-semibold text-up">{asset.payoutPct}%</Td>
-            <Td className="tabular text-[11px] text-slate-400">
-              {money(asset.minStake)} – {money(asset.maxStake)}
-            </Td>
-            <Td>
-              <StatusPill status={asset.enabled ? 'active' : 'closed'} />
-            </Td>
-            <Td className="text-right">
-              <span className="flex justify-end gap-2">
-                <button
-                  onClick={() => {
-                    const raw = window.prompt(`Payout % for ${asset.symbol}`, String(asset.payoutPct));
-                    const value = Number(raw);
-                    if (raw && Number.isFinite(value)) {
-                      void patch(asset.id, { payoutPct: Math.round(value) }, 'Payout updated');
-                    }
-                  }}
-                  className="btn-ghost !px-3 !py-1.5 text-xs"
-                >
-                  Payout
-                </button>
-                <button
-                  onClick={() =>
-                    void patch(
-                      asset.id,
-                      { enabled: !asset.enabled },
-                      asset.enabled ? 'Market closed' : 'Market opened',
-                    )
-                  }
-                  className="btn-ghost !px-3 !py-1.5 text-xs"
-                >
-                  {asset.enabled ? 'Close' : 'Open'}
-                </button>
-              </span>
-            </Td>
-          </tr>
+      <PageHead title="Trading sessions" subtitle="Opening hours and holidays per exchange calendar" />
+
+      <div className="space-y-3">
+        {rows.map((schedule) => (
+          <div key={schedule.id} className="card overflow-hidden">
+            <div className="flex flex-wrap items-center gap-3 p-4">
+              <button
+                onClick={() => setOpenId(openId === schedule.id ? null : schedule.id)}
+                className="min-w-0 flex-1 text-left"
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold">
+                  {schedule.name}
+                  <StatusPill status={schedule.state.isOpen ? 'open' : 'closed'} />
+                </span>
+                <span className="mt-0.5 block text-[11px] text-slate-500">{schedule.hours}</span>
+                <span className="block text-[11px] text-slate-500">
+                  {schedule.markets} markets · {schedule.holidays.length} holidays
+                  {!schedule.state.isOpen && schedule.state.nextOpen
+                    ? ` · opens ${dateTime(schedule.state.nextOpen)}`
+                    : schedule.state.nextClose
+                      ? ` · closes ${dateTime(schedule.state.nextClose)}`
+                      : ''}
+                </span>
+              </button>
+              <button
+                onClick={() => setOpenId(openId === schedule.id ? null : schedule.id)}
+                className="btn-ghost !px-2.5 !py-2 text-xs"
+                aria-label="Toggle schedule detail"
+              >
+                {openId === schedule.id ? '▴' : '▾'}
+              </button>
+            </div>
+
+            {openId === schedule.id && (
+              <div className="grid gap-4 border-t border-ink-600 p-4 lg:grid-cols-2">
+                <div>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Weekly hours (UTC)
+                  </h3>
+                  <ul className="space-y-1">
+                    {schedule.windows.map((window) => (
+                      <li key={window.id} className="flex items-center gap-2 text-xs">
+                        <span className="w-20 text-slate-400">{DAY_NAMES[window.dayOfWeek].slice(0, 3)}</span>
+                        <span className="tabular flex-1">
+                          {asTime(window.openMinute)}–{asTime(window.closeMinute)}
+                          {window.closeMinute > 1440 && <span className="ml-1 text-slate-500">(+1d)</span>}
+                        </span>
+                        <button
+                          onClick={() => void editWindow(schedule, window.id)}
+                          className="btn-ghost !px-2 !py-1 text-[11px]"
+                        >
+                          Edit
+                        </button>
+                      </li>
+                    ))}
+                    {schedule.windows.length === 0 && <li className="text-xs text-slate-500">Open 24/7</li>}
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Holidays
+                  </h3>
+                  <ul className="mb-3 space-y-1">
+                    {schedule.holidays.map((entry) => (
+                      <li key={entry.id} className="flex items-center gap-2 text-xs">
+                        <span className="tabular w-24 text-slate-400">{entry.date}</span>
+                        <span className="flex-1 truncate">{entry.name}</span>
+                        <button
+                          onClick={() => void removeHoliday(schedule, entry.id)}
+                          className="btn-ghost !px-2 !py-1 text-[11px] !text-down"
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                    {schedule.holidays.length === 0 && <li className="text-xs text-slate-500">None</li>}
+                  </ul>
+
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      type="date"
+                      value={holiday.date}
+                      onChange={(event) => setHoliday({ ...holiday, date: event.target.value })}
+                      className="field !w-40 !py-2 !text-xs"
+                      aria-label="Holiday date"
+                    />
+                    <input
+                      value={holiday.name}
+                      onChange={(event) => setHoliday({ ...holiday, name: event.target.value })}
+                      placeholder="Holiday name"
+                      className="field !w-44 !py-2 !text-xs"
+                      aria-label="Holiday name"
+                    />
+                    <button
+                      onClick={() => void addHoliday(schedule)}
+                      disabled={!holiday.date || holiday.name.length < 2}
+                      className="btn-primary !px-3 !py-2 text-xs"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         ))}
-      </Table>
+      </div>
     </>
   );
 }
