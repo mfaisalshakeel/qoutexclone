@@ -73,12 +73,19 @@ export interface SupportTicket {
   user?: { email: string; name: string; realBalance: number };
 }
 
+export type AssetClass = 'CURRENCY' | 'CRYPTO' | 'COMMODITY' | 'STOCK' | 'INDEX';
+
 export interface Asset {
   id: string;
   symbol: string;
   name: string;
+  pair: string;
+  assetClass: AssetClass;
+  isOtc: boolean;
+  icon: string | null;
   base: string;
   quote: string;
+  pipSize: number;
   payoutPct: number;
   minStake: number;
   maxStake: number;

@@ -2,6 +2,9 @@ import { expect, test } from '@playwright/test';
 import { ADMIN, failOnPageErrors, fundAccount, login, newCredentials, register } from './helpers';
 
 test.describe('admin', () => {
+  // this spec drives two complete journeys (fund, request, approve) back to back
+  test.describe.configure({ timeout: 180_000 });
+
   test('approves a withdrawal end to end', async ({ browser }) => {
     const traderContext = await browser.newContext();
     const trader = await traderContext.newPage();

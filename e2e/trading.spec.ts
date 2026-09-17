@@ -8,14 +8,15 @@ test.describe('trading', () => {
     await register(page, newCredentials('trade'));
 
     // a new account starts on practice with $10,000
-    await expect(page.getByText('Practice')).toBeVisible();
-    await expect(page.getByText('$10,000.00')).toBeVisible();
+    const accountButton = page.getByRole('button', { name: /Practice \$/ });
+    await expect(accountButton).toBeVisible();
+    await expect(accountButton).toContainText('$10,000.00');
 
     await placeTrade(page, 'Higher', '30s');
     await expect(page.getByText('Open (1)')).toBeVisible();
 
     // the stake leaves the balance immediately
-    await expect(page.getByText('$10,000.00')).toBeHidden();
+    await expect(accountButton).not.toContainText('$10,000.00');
 
     // settlement happens on the server's expiry sweep
     await expect(page.getByText('Open (0)')).toBeVisible({ timeout: 90_000 });
@@ -24,7 +25,8 @@ test.describe('trading', () => {
     await expect(page.getByText('Win rate')).toBeVisible();
     const rows = page.locator('table tbody tr, ul li');
     await expect(rows.first()).toBeVisible();
-    await expect(page.getByText('BTCUSD').first()).toBeVisible();
+    // the default market depends on the catalogue, so assert on the outcome
+    await expect(page.getByText(/Higher|▲/).first()).toBeVisible();
 
     expect(errors).toEqual([]);
   });

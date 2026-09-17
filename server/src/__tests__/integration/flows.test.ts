@@ -198,12 +198,15 @@ suite('money flows', () => {
       create: {
         symbol: 'ITUSD',
         name: 'Integration Coin',
+        pair: 'IT/USD',
+        assetClass: 'CRYPTO',
         base: 'IT',
         quote: 'USD',
         feedSymbol: 'ITUSDT',
         basePrice: 100,
         volatility: 0.001,
         precision: 2,
+        pipSize: 0.01,
         payoutPct: 80,
       },
     });

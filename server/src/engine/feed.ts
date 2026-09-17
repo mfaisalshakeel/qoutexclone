@@ -46,7 +46,13 @@ const MEAN_REVERSION = 0.0015; // pull back toward the asset's base price
 function tickSigma(spec: AssetSpec): number {
   return spec.volatility * Math.sqrt(env.feedTickMs / 60000);
 }
-const TICK_BUFFER = 8000; // ~33 min of 250ms ticks, enough to price any expiry
+/**
+ * Ticks are only kept long enough to price an expiry at its exact instant,
+ * which settlement does within seconds. 600 ticks is ~2.5 minutes at the
+ * default rate — generous for settlement lag, and small enough to hold for
+ * every market in the catalogue at once.
+ */
+const TICK_BUFFER = 600;
 
 /** Deterministic PRNG so restarts do not reshuffle chart history. */
 function mulberry32(seed: number) {

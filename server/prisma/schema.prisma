@@ -64,23 +64,38 @@ model RefreshToken {
 }
 
 model Asset {
-  id         String   @id @default(cuid())
-  symbol     String   @unique // BTCUSD
-  name       String
-  base       String // BTC
+  id         String @id @default(cuid())
+  symbol     String @unique // EURUSD, BTCUSDT, EURUSD_OTC
+  name       String // Euro / US Dollar
+  pair       String // display form: EUR/USD
+  assetClass String @default("CRYPTO") // CURRENCY | CRYPTO | COMMODITY | STOCK | INDEX
+  base       String // EUR
   quote      String // USD
-  feedSymbol String // BTCUSDT (exchange symbol when a live feed is enabled)
-  payoutPct  Int      @default(85) // profit % on a winning trade
-  minStake   Int      @default(100) // $1.00
-  maxStake   Int      @default(500000) // $5,000.00
-  precision  Int      @default(2)
-  basePrice  Float    @default(100)
-  volatility Float    @default(0.0009)
-  enabled    Boolean  @default(true)
-  sortOrder  Int      @default(0)
-  createdAt  DateTime @default(now())
+  feedSymbol String // provider symbol when a live feed is enabled
+
+  // broker-priced markets trade around the clock and never close
+  isOtc Boolean @default(false)
+
+  payoutPct Int @default(85) // profit % on a winning trade
+  minStake  Int @default(100) // $1.00
+  maxStake  Int @default(500000) // $5,000.00
+
+  precision Int     @default(2) // decimals shown and quoted
+  pipSize   Float   @default(0.01) // smallest meaningful move for this market
+  icon      String? // short label or emoji for the market list
+
+  basePrice  Float   @default(100)
+  volatility Float   @default(0.0009) // per-minute standard deviation of returns
+  enabled    Boolean @default(true)
+  sortOrder  Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   trades Trade[]
+
+  @@index([assetClass, enabled, sortOrder])
+  @@index([isOtc, enabled])
 }
 
 model Trade {
