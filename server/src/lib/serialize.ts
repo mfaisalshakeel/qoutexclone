@@ -1,4 +1,4 @@
-import type { Deposit, Trade, Transaction, User, Withdrawal } from '@prisma/client';
+import type { Deposit, PendingTrade, Trade, Transaction, User, Withdrawal } from '@prisma/client';
 import { findNetwork } from './crypto-networks.js';
 
 export function publicUser(user: User) {
@@ -101,5 +101,30 @@ export function publicWithdrawal(withdrawal: Withdrawal) {
     adminNote: withdrawal.adminNote,
     processedAt: withdrawal.processedAt,
     createdAt: withdrawal.createdAt,
+  };
+}
+
+/** A pending order as its owner sees it. */
+export function publicOrder(order: PendingTrade) {
+  return {
+    id: order.id,
+    symbol: order.symbol,
+    accountType: order.accountType,
+    direction: order.direction,
+    stake: order.stake,
+    trigger: order.trigger,
+    triggerPrice: order.triggerPrice,
+    triggerSide: order.triggerSide,
+    triggerAt: order.triggerAt,
+    expiryMode: order.expiryMode,
+    durationSec: order.durationSec,
+    expiresAt: order.expiresAt,
+    status: order.status,
+    goodUntil: order.goodUntil,
+    tradeId: order.tradeId,
+    failureReason: order.failureReason,
+    triggeredAt: order.triggeredAt,
+    createdAt: order.createdAt,
+    tournamentId: order.tournamentId,
   };
 }

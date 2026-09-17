@@ -33,6 +33,7 @@ model User {
   updatedAt        DateTime  @updatedAt
 
   trades            Trade[]
+  pendingTrades     PendingTrade[]
   transactions      Transaction[]
   deposits          Deposit[]
   withdrawals       Withdrawal[]
@@ -94,7 +95,8 @@ model Asset {
   pipSize   Float   @default(0.01) // smallest meaningful move for this market
   icon      String? // short label or emoji for the market list
 
-  payoutRules PayoutRule[]
+  payoutRules   PayoutRule[]
+  pendingTrades PendingTrade[]
 
   basePrice  Float   @default(100)
   volatility Float   @default(0.0009) // per-minute standard deviation of returns
@@ -130,7 +132,7 @@ model Trade {
   tournamentId String?
   direction    String // UP | DOWN
   /// DURATION (a fixed length from purchase) | CLOCK (the next boundary)
-  expiryMode   String @default("DURATION")
+  expiryMode   String    @default("DURATION")
   stake        Int
   payoutPct    Int
   entryPrice   Float
@@ -449,6 +451,63 @@ model MarketHoliday {
 
   @@unique([scheduleId, date])
   @@index([date])
+}
+
+/// An order that becomes a position when a condition is met.
+///
+/// Two conditions: the price reaching a level, or a set time arriving. The
+/// server executes them from the feed, claiming the row before it places
+/// anything so a restart or two overlapping passes can never open the same
+/// order twice.
+///
+/// No money is held while an order waits — it is not a position yet. Whatever
+/// would refuse the trade at the moment of purchase (balance, a risk limit, a
+/// closed market) refuses it at the moment of triggering, and the reason is
+/// recorded on the order.
+model PendingTrade {
+  id           String  @id @default(cuid())
+  userId       String
+  assetId      String
+  symbol       String
+  accountType  String // DEMO | REAL | TOURNAMENT
+  entryId      String?
+  tournamentId String?
+  direction    String // UP | DOWN
+  stake        Int
+
+  /// PRICE | TIME
+  trigger      String
+  /// PRICE: the level to reach, and which way the price must cross it.
+  triggerPrice Float?
+  /// ABOVE | BELOW, resolved from the price when the order was placed.
+  triggerSide  String?
+  /// TIME: when to open.
+  triggerAt    DateTime?
+
+  /// The expiry the resulting position will carry.
+  expiryMode  String    @default("DURATION")
+  durationSec Int?
+  expiresAt   DateTime?
+
+  /// PENDING | TRIGGERED | CANCELLED | EXPIRED | FAILED
+  status    String   @default("PENDING")
+  /// When the order gives up, so an unreached level does not wait forever.
+  goodUntil DateTime
+
+  /// The position it became, once it has.
+  tradeId       String?   @unique
+  failureReason String?
+  triggeredAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id])
+
+  @@index([userId, status])
+  /// the execution sweep reads by status, then by symbol or by time
+  @@index([status, symbol])
+  @@index([status, triggerAt])
 }
 
 /// A configurable adjustment to a market's payout.

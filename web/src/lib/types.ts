@@ -242,3 +242,26 @@ export interface ExpiryConfig {
   modes: ('DURATION' | 'CLOCK')[];
   clock: { steps: number[]; cutoffSec: number; horizonSec: number; slots: ClockSlot[] };
 }
+
+/** An order waiting on a price level or a time. */
+export interface PendingOrder {
+  id: string;
+  symbol: string;
+  accountType: AccountType;
+  direction: 'UP' | 'DOWN';
+  stake: number;
+  trigger: 'PRICE' | 'TIME';
+  triggerPrice: number | null;
+  triggerSide: 'ABOVE' | 'BELOW' | null;
+  triggerAt: string | null;
+  expiryMode: 'DURATION' | 'CLOCK';
+  durationSec: number | null;
+  expiresAt: string | null;
+  status: 'PENDING' | 'TRIGGERED' | 'CANCELLED' | 'EXPIRED' | 'FAILED';
+  goodUntil: string;
+  tradeId: string | null;
+  failureReason: string | null;
+  triggeredAt: string | null;
+  createdAt: string;
+  tournamentId: string | null;
+}

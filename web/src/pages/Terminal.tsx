@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api } from '../lib/api';
+import { ApiError, api } from '../lib/api';
 import { realtime } from '../lib/ws';
 import { percent, price, untilShort } from '../lib/format';
 import { assetOf, useMarket } from '../store/market';
 import { useAuth } from '../store/auth';
 import { useTradingAccount } from '../store/tradingAccount';
+import { toast } from '../store/toast';
 import { DESKTOP_QUERY, useMediaQuery } from '../hooks/useMediaQuery';
 import { AssetPicker } from '../components/AssetPicker';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -12,7 +13,7 @@ import { PriceChart, type ChartType, type IndicatorSettings } from '../component
 import { Positions } from '../components/Positions';
 import { TradeTicket } from '../components/TradeTicket';
 import { ChartSkeleton, Skeleton, SkeletonGroup } from '../components/Skeleton';
-import type { Trade } from '../lib/types';
+import type { PendingOrder, Trade } from '../lib/types';
 
 /** Traders should always know where a quote comes from. */
 function sourceLabel(source: string): { text: string; title: string } {
@@ -36,6 +37,7 @@ export function Terminal() {
   const user = useAuth((s) => s.user);
   const [openTrades, setOpenTrades] = useState<Trade[]>([]);
   const [closedTrades, setClosedTrades] = useState<Trade[]>([]);
+  const [orders, setOrders] = useState<PendingOrder[]>([]);
   const [tradesLoaded, setTradesLoaded] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<'trade' | 'positions'>('trade');
   const [marketsOpen, setMarketsOpen] = useState(false);
@@ -60,14 +62,37 @@ export function Terminal() {
 
   const loadTrades = useCallback(async () => {
     setTradesLoaded(false);
-    const [open, closed] = await Promise.all([
+    const [open, closed, pending] = await Promise.all([
       api.get<{ trades: Trade[] }>(`/trades?status=OPEN&accountType=${accountType}`),
       api.get<{ trades: Trade[] }>(`/trades?status=CLOSED&accountType=${accountType}&limit=30`),
+      api.get<{ orders: PendingOrder[] }>('/trades/pending?limit=50'),
     ]);
     setOpenTrades(open.trades);
     setClosedTrades(closed.trades);
+    setOrders(pending.orders);
     setTradesLoaded(true);
   }, [accountType]);
+
+  /** Replaces one order in place, whatever its new state. */
+  const patchOrder = useCallback((order: PendingOrder) => {
+    setOrders((current) => {
+      const without = current.filter((row) => row.id !== order.id);
+      return [order, ...without];
+    });
+  }, []);
+
+  const cancelOrder = useCallback(
+    async (orderId: string) => {
+      try {
+        const { order } = await api.del<{ order: PendingOrder }>(`/trades/pending/${orderId}`);
+        patchOrder(order);
+        toast.info('Order cancelled');
+      } catch (err) {
+        toast.error('Could not cancel', err instanceof ApiError ? err.message : 'Please try again');
+      }
+    },
+    [patchOrder],
+  );
 
   useEffect(() => {
     void loadTrades();
@@ -80,6 +105,26 @@ export function Terminal() {
       if (trade.accountType === accountType) setClosedTrades((current) => [trade, ...current].slice(0, 30));
     });
   }, [accountType]);
+
+  // an order changes state on its own — a level is reached, a window closes —
+  // so every transition arrives over the socket
+  useEffect(() => {
+    const offUpdated = realtime.on('order:updated', ({ order }) => patchOrder(order));
+    const offFailed = realtime.on('order:failed', ({ order }) => {
+      patchOrder(order);
+      toast.error('Order could not be opened', order.failureReason ?? undefined);
+    });
+    const offFilled = realtime.on('order:filled', ({ order, trade }) => {
+      patchOrder(order);
+      if (trade.accountType === accountType) setOpenTrades((current) => [trade, ...current]);
+      toast.success('Pending order filled', `${trade.symbol} ${trade.direction} at ${trade.entryPrice}`);
+    });
+    return () => {
+      offUpdated();
+      offFailed();
+      offFilled();
+    };
+  }, [accountType, patchOrder]);
 
   const changePct = asset?.changePct ?? 0;
   const activeStudies = Object.values(indicators).filter(Boolean).length;
@@ -300,9 +345,19 @@ export function Terminal() {
             </div>
             <div>
               {mobilePanel === 'trade' ? (
-                <TradeTicket asset={asset} onPlaced={(trade) => setOpenTrades((c) => [trade, ...c])} />
+                <TradeTicket
+                  asset={asset}
+                  onPlaced={(trade) => setOpenTrades((c) => [trade, ...c])}
+                  onOrdered={patchOrder}
+                />
               ) : (
-                <Positions open={openTrades} closed={closedTrades} loading={!tradesLoaded} />
+                <Positions
+                  open={openTrades}
+                  closed={closedTrades}
+                  pending={orders}
+                  onCancel={cancelOrder}
+                  loading={!tradesLoaded}
+                />
               )}
             </div>
           </>
@@ -312,10 +367,20 @@ export function Terminal() {
       {isDesktop && (
         <aside className="flex w-72 shrink-0 flex-col gap-2">
           <div className="shrink-0">
-            <TradeTicket asset={asset} onPlaced={(trade) => setOpenTrades((c) => [trade, ...c])} />
+            <TradeTicket
+              asset={asset}
+              onPlaced={(trade) => setOpenTrades((c) => [trade, ...c])}
+              onOrdered={patchOrder}
+            />
           </div>
           <div className="min-h-0 flex-1">
-            <Positions open={openTrades} closed={closedTrades} loading={!tradesLoaded} />
+            <Positions
+              open={openTrades}
+              closed={closedTrades}
+              pending={orders}
+              onCancel={cancelOrder}
+              loading={!tradesLoaded}
+            />
           </div>
         </aside>
       )}

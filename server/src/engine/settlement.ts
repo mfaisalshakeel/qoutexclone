@@ -3,6 +3,7 @@ import { env } from '../env.js';
 import { settleTrade } from '../services/trading.js';
 import { log } from '../lib/logger.js';
 import { finishDueTournaments } from '../services/tournaments.js';
+import { sweepOrders } from '../services/orders.js';
 
 /**
  * Sweeps expired positions on a short interval. Settlement is idempotent
@@ -50,6 +51,10 @@ export class SettlementEngine {
         const result = await settleTrade(trade.id);
         if (result) settled += 1;
       }
+
+      // pending orders ride the same loop: both read the feed and both claim a
+      // row before acting, so a restart mid-pass is safe either way
+      await sweepOrders();
 
       // tournaments open and close on their own clock
       const now = Date.now();

@@ -1195,3 +1195,295 @@ suite('expiry modes', () => {
     }
   });
 });
+
+/** Pending orders open exactly once, from the feed, and can be cancelled. */
+suite('pending orders', () => {
+  let prisma: (typeof import('../../lib/prisma.js'))['prisma'];
+  let orders: typeof import('../../services/orders.js');
+  let settings: (typeof import('../../services/settings.js'))['settings'];
+  let feed: (typeof import('../../engine/feed.js'))['marketFeed'];
+
+  const symbol = `PENDUSD_${Date.now()}`;
+  const made = { users: [] as string[], assets: [] as string[] };
+
+  beforeAll(async () => {
+    prisma = (await import('../../lib/prisma.js')).prisma;
+    orders = await import('../../services/orders.js');
+    settings = (await import('../../services/settings.js')).settings;
+    feed = (await import('../../engine/feed.js')).marketFeed;
+    await settings.load();
+
+    const asset = await prisma.asset.create({
+      data: {
+        symbol,
+        name: 'Pending Coin',
+        pair: 'PEND/USD',
+        assetClass: 'CRYPTO',
+        base: 'PEND',
+        quote: 'USD',
+        feedSymbol: symbol,
+        basePrice: 100,
+        volatility: 0.001,
+        precision: 2,
+        pipSize: 0.01,
+        payoutPct: 80,
+      },
+    });
+    made.assets.push(asset.id);
+    feed.load([{ symbol, feedSymbol: symbol, basePrice: 100, volatility: 0.001, precision: 2 }]);
+  });
+
+  afterAll(async () => {
+    if (!prisma) return;
+    await prisma.pendingTrade.deleteMany({ where: { symbol } });
+    await prisma.trade.deleteMany({ where: { symbol } });
+    await prisma.user.deleteMany({ where: { id: { in: made.users } } });
+    await prisma.asset.deleteMany({ where: { id: { in: made.assets } } });
+    await prisma.$disconnect();
+  });
+
+  const makeTrader = async (balance = 1_000_000) => {
+    const user = await prisma.user.create({
+      data: {
+        email: `pend-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.dev`,
+        name: 'Pending Trader',
+        passwordHash: 'x',
+        referralCode: `PND${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+        demoBalance: balance,
+      },
+    });
+    made.users.push(user.id);
+    return user;
+  };
+
+  /** Pins the feed to an exact price, so a level can be crossed on demand. */
+  const setPrice = (price: number) => {
+    feed.resume([
+      {
+        symbol,
+        price,
+        anchor: price,
+        variance: 1e-8,
+        lastShock: 0,
+        regime: 'RANGE',
+        regimeTicks: 10,
+        regimeTicksLeft: 10,
+        trendDirection: 1,
+        rng: 12345,
+        ticks: 1,
+      },
+    ]);
+    return price;
+  };
+
+  const place = (userId: string, over: Record<string, unknown> = {}) =>
+    orders.createOrder({
+      userId,
+      symbol,
+      accountType: 'DEMO',
+      direction: 'UP',
+      stake: 5_000,
+      trigger: 'PRICE',
+      triggerPrice: 110,
+      durationSec: 60,
+      ...over,
+    });
+
+  it('waits until the level is met, then opens exactly one position', async () => {
+    const user = await makeTrader();
+    setPrice(100);
+    const order = await place(user.id, { triggerPrice: 105 });
+    expect(order.status).toBe('PENDING');
+    expect(order.triggerSide).toBe('ABOVE');
+
+    // the market is at 100, so nothing fires
+    expect(await orders.sweepOrders()).toEqual({ filled: 0, expired: 0 });
+    expect((await prisma.pendingTrade.findUniqueOrThrow({ where: { id: order.id } })).status).toBe('PENDING');
+
+    // move the market through the level
+    setPrice(106);
+    expect(feed.getPrice(symbol)).toBe(106);
+
+    const swept = await orders.sweepOrders();
+    expect(swept.filled).toBe(1);
+
+    const filled = await prisma.pendingTrade.findUniqueOrThrow({ where: { id: order.id } });
+    expect(filled.status).toBe('TRIGGERED');
+    expect(filled.tradeId).toBeTruthy();
+
+    const trade = await prisma.trade.findUniqueOrThrow({ where: { id: filled.tradeId! } });
+    expect(trade.stake).toBe(5_000);
+    expect(trade.direction).toBe('UP');
+    expect(trade.durationSec).toBe(60);
+
+    // a second sweep must not open another position
+    expect((await orders.sweepOrders()).filled).toBe(0);
+    expect(await prisma.trade.count({ where: { symbol, userId: user.id } })).toBe(1);
+  });
+
+  it('opens once even when two sweeps run at the same time', async () => {
+    const user = await makeTrader();
+    const price = setPrice(100);
+    // placed above the market, then the market crosses it
+    const order = await place(user.id, { triggerPrice: price + 2 });
+    setPrice(price + 3);
+
+    // the same guarantee settlement has: the row is claimed before anything is
+    // placed, so overlapping passes cannot both fill it
+    const [a, b] = await Promise.all([orders.sweepOrders(), orders.sweepOrders()]);
+    expect(a.filled + b.filled).toBe(1);
+    expect(await prisma.trade.count({ where: { symbol, userId: user.id } })).toBe(1);
+    expect((await prisma.pendingTrade.findUniqueOrThrow({ where: { id: order.id } })).status).toBe(
+      'TRIGGERED',
+    );
+  });
+
+  it('fires a time order when its moment arrives', async () => {
+    const user = await makeTrader();
+    const triggerAt = new Date(Date.now() + 1_500);
+    const order = await orders.createOrder({
+      userId: user.id,
+      symbol,
+      accountType: 'DEMO',
+      direction: 'DOWN',
+      stake: 2_000,
+      trigger: 'TIME',
+      triggerAt,
+      durationSec: 60,
+    });
+    expect(order.triggerAt?.getTime()).toBe(triggerAt.getTime());
+
+    expect((await orders.sweepOrders()).filled).toBe(0);
+    // the sweep takes `now`, so the clock does not have to be waited out
+    expect((await orders.sweepOrders(triggerAt.getTime())).filled).toBe(1);
+
+    const filled = await prisma.pendingTrade.findUniqueOrThrow({ where: { id: order.id } });
+    expect(filled.status).toBe('TRIGGERED');
+  });
+
+  it('can be cancelled while it waits, and not after it fills', async () => {
+    const user = await makeTrader();
+    const order = await place(user.id, { triggerPrice: 5_000 });
+
+    const cancelled = await orders.cancelOrder(user.id, order.id);
+    expect(cancelled.status).toBe('CANCELLED');
+    // a cancelled order never fires
+    expect((await orders.sweepOrders()).filled).toBe(0);
+    await expect(orders.cancelOrder(user.id, order.id)).rejects.toMatchObject({
+      code: 'order_not_pending',
+    });
+  });
+
+  it('belongs to its owner and nobody else', async () => {
+    const owner = await makeTrader();
+    const stranger = await makeTrader();
+    const order = await place(owner.id, { triggerPrice: 5_000 });
+
+    // no IDOR: another trader cannot see or cancel it
+    await expect(orders.cancelOrder(stranger.id, order.id)).rejects.toMatchObject({ status: 404 });
+    const theirs = await orders.listOrders(stranger.id);
+    expect(theirs.find((row) => row.id === order.id)).toBeUndefined();
+    await orders.cancelOrder(owner.id, order.id);
+  });
+
+  it('retires an order that ran out of time without filling', async () => {
+    const user = await makeTrader();
+    const order = await place(user.id, {
+      triggerPrice: 5_000,
+      goodUntil: new Date(Date.now() + 1_000),
+    });
+
+    const swept = await orders.sweepOrders(Date.now() + 2_000);
+    expect(swept.expired).toBeGreaterThanOrEqual(1);
+    expect((await prisma.pendingTrade.findUniqueOrThrow({ where: { id: order.id } })).status).toBe('EXPIRED');
+  });
+
+  it('records why an order could not be opened rather than retrying it', async () => {
+    // a trader with almost no balance: the order is accepted, and fails when it
+    // fires, which is the honest outcome — no money is held while it waits
+    const user = await makeTrader(100);
+    const price = setPrice(100);
+    const order = await place(user.id, { triggerPrice: price + 1, stake: 50_000 });
+
+    setPrice(price + 2);
+    await orders.sweepOrders();
+
+    const failed = await prisma.pendingTrade.findUniqueOrThrow({ where: { id: order.id } });
+    expect(failed.status).toBe('FAILED');
+    expect(failed.failureReason).toBeTruthy();
+    expect(failed.tradeId).toBeNull();
+
+    // and it is not tried again
+    expect((await orders.sweepOrders()).filled).toBe(0);
+    expect(await prisma.trade.count({ where: { userId: user.id } })).toBe(0);
+  });
+
+  it('refuses a level sitting exactly on the market price', async () => {
+    const price = feed.getPrice(symbol)!;
+    const user = await makeTrader();
+    await expect(place(user.id, { triggerPrice: price })).rejects.toMatchObject({
+      code: 'invalid_trigger_price',
+    });
+  });
+
+  it('refuses a start time in the past and a window that closes first', async () => {
+    const user = await makeTrader();
+    await expect(
+      place(user.id, { trigger: 'TIME', triggerAt: new Date(Date.now() - 60_000), triggerPrice: undefined }),
+    ).rejects.toMatchObject({ code: 'invalid_trigger_time' });
+
+    await expect(
+      place(user.id, {
+        trigger: 'TIME',
+        triggerPrice: undefined,
+        triggerAt: new Date(Date.now() + 600_000),
+        goodUntil: new Date(Date.now() + 60_000),
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_trigger_time' });
+  });
+
+  it('lists waiting orders first, and never drops them for old ones', async () => {
+    const user = await makeTrader();
+    setPrice(100);
+
+    // a history of finished orders, then one that is still waiting
+    for (let index = 0; index < 4; index += 1) {
+      const done = await place(user.id, { triggerPrice: 200 + index });
+      await orders.cancelOrder(user.id, done.id);
+    }
+    const waiting = await place(user.id, { triggerPrice: 300 });
+
+    // sorting by the status column would put CANCELLED before PENDING and, with
+    // a tight limit, lose the live order altogether
+    const listed = await orders.listOrders(user.id, { limit: 2 });
+    expect(listed[0].id).toBe(waiting.id);
+    expect(listed[0].status).toBe('PENDING');
+
+    const onlyWaiting = await orders.listOrders(user.id, { status: 'PENDING' });
+    expect(onlyWaiting.map((row) => row.id)).toEqual([waiting.id]);
+
+    const onlyDone = await orders.listOrders(user.id, { status: 'DONE' });
+    expect(onlyDone).toHaveLength(4);
+    expect(onlyDone.every((row) => row.status === 'CANCELLED')).toBe(true);
+
+    await orders.cancelOrder(user.id, waiting.id);
+  });
+
+  it('caps how many orders one trader may have waiting', async () => {
+    const user = await makeTrader();
+    await settings.set('trading.maxPendingOrders', 2);
+    try {
+      await place(user.id, { triggerPrice: 4_001 });
+      await place(user.id, { triggerPrice: 4_002 });
+      await expect(place(user.id, { triggerPrice: 4_003 })).rejects.toMatchObject({
+        code: 'too_many_pending_orders',
+      });
+    } finally {
+      await settings.reset('trading.maxPendingOrders');
+      await prisma.pendingTrade.updateMany({
+        where: { userId: user.id, status: 'PENDING' },
+        data: { status: 'CANCELLED' },
+      });
+    }
+  });
+});

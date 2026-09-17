@@ -2,9 +2,10 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { notFound, wrap } from '../lib/errors.js';
-import { publicTrade } from '../lib/serialize.js';
+import { publicOrder, publicTrade } from '../lib/serialize.js';
 import { requireActiveUser, requireAuth } from '../middleware/auth.js';
 import { clockExpiries, listTrades, placeTrade } from '../services/trading.js';
+import { cancelOrder, createOrder, listOrders } from '../services/orders.js';
 import { marketFeed } from '../engine/feed.js';
 
 const router = Router();
@@ -88,6 +89,81 @@ router.get(
   '/expiries',
   wrap(async (_req, res) => {
     res.json({ slots: clockExpiries(), serverTime: Date.now() });
+  }),
+);
+
+/* ----------------------------- pending orders ----------------------------- */
+
+const orderSchema = z
+  .object({
+    symbol: z.string().min(3).max(20),
+    direction: z.enum(['UP', 'DOWN']),
+    amount: z.number().positive().max(100000),
+    trigger: z.enum(['PRICE', 'TIME']),
+    /** PRICE: the level to wait for. */
+    triggerPrice: z.number().positive().optional(),
+    /** TIME: when to open. */
+    triggerAt: z.string().datetime().optional(),
+    expiryMode: z.enum(['DURATION', 'CLOCK']).default('DURATION'),
+    durationSec: z.number().int().min(1).max(86400).optional(),
+    expiresAt: z.number().int().positive().optional(),
+    /** When the order gives up; the platform caps how far out this may be. */
+    goodUntil: z.string().datetime().optional(),
+    accountType: z.enum(['DEMO', 'REAL', 'TOURNAMENT']),
+    tournamentId: z.string().optional(),
+  })
+  .refine((body) => (body.trigger === 'PRICE' ? body.triggerPrice != null : body.triggerAt != null), {
+    message: 'A price order needs triggerPrice; a time order needs triggerAt',
+    path: ['trigger'],
+  })
+  .refine((body) => (body.expiryMode === 'CLOCK' ? body.expiresAt != null : body.durationSec != null), {
+    message: 'A duration expiry needs durationSec; a clock expiry needs expiresAt',
+    path: ['expiryMode'],
+  });
+
+router.post(
+  '/pending',
+  requireActiveUser,
+  wrap(async (req, res) => {
+    const body = orderSchema.parse(req.body);
+    const order = await createOrder({
+      userId: req.user!.id,
+      symbol: body.symbol.toUpperCase(),
+      direction: body.direction,
+      stake: Math.round(body.amount * 100),
+      trigger: body.trigger,
+      triggerPrice: body.triggerPrice,
+      triggerAt: body.triggerAt ? new Date(body.triggerAt) : undefined,
+      expiryMode: body.expiryMode,
+      durationSec: body.durationSec,
+      expiresAt: body.expiresAt,
+      goodUntil: body.goodUntil ? new Date(body.goodUntil) : undefined,
+      accountType: body.accountType,
+      tournamentId: body.tournamentId,
+    });
+    res.status(201).json({ order: publicOrder(order) });
+  }),
+);
+
+router.get(
+  '/pending',
+  wrap(async (req, res) => {
+    const query = z
+      .object({
+        status: z.enum(['PENDING', 'DONE']).optional(),
+        limit: z.coerce.number().int().min(1).max(200).default(50),
+      })
+      .parse(req.query);
+    const orders = await listOrders(req.user!.id, query);
+    res.json({ orders: orders.map(publicOrder) });
+  }),
+);
+
+router.delete(
+  '/pending/:id',
+  wrap(async (req, res) => {
+    const order = await cancelOrder(req.user!.id, req.params.id);
+    res.json({ order: publicOrder(order) });
   }),
 );
 

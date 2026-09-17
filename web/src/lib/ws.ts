@@ -1,5 +1,14 @@
 import { api, tokens } from './api';
-import type { AccountType, Candle, Deposit, SupportMessage, SupportTicket, Trade, Withdrawal } from './types';
+import type {
+  AccountType,
+  Candle,
+  Deposit,
+  PendingOrder,
+  SupportMessage,
+  SupportTicket,
+  Trade,
+  Withdrawal,
+} from './types';
 
 type Handler = (payload: never) => void;
 
@@ -15,6 +24,9 @@ export interface RealtimeEvents {
   candle: { symbol: string; timeframe: string; candle: Candle };
   candles: { symbol: string; timeframe: string; candles: Candle[] };
   'trade:opened': { trade: Trade };
+  'order:updated': { order: PendingOrder };
+  'order:filled': { order: PendingOrder; trade: Trade };
+  'order:failed': { order: PendingOrder };
   'trade:settled': { trade: Trade; balance: number; accountType: AccountType };
   'deposit:created': { deposit: Deposit };
   'deposit:updated': { deposit: Deposit };

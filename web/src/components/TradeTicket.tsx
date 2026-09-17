@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
-import { duration as fmtDuration, dateTime, money, untilShort } from '../lib/format';
+import { duration as fmtDuration, dateTime, money, price, untilShort } from '../lib/format';
 import { useAuth, activeBalance } from '../store/auth';
 import { useTradingAccount } from '../store/tradingAccount';
 import { useMarket } from '../store/market';
 import { toast } from '../store/toast';
-import type { Asset, ClockSlot, Trade } from '../lib/types';
+import type { Asset, ClockSlot, PendingOrder, Trade } from '../lib/types';
 
 /** A clock boundary as a trader reads it: 13:05, in their own timezone. */
 function clockLabel(epochMs: number): string {
@@ -19,6 +19,13 @@ function countdown(seconds: number): string {
   return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, '0')}`;
 }
 
+/** A datetime-local value for an instant, which the input needs in local time. */
+function localInput(epochMs: number): string {
+  const at = new Date(epochMs);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`;
+}
+
 /** Server-side refusals that depend on what is already open, not on the form. */
 const RISK_CODES = new Set(['user_exposure_limit', 'market_exposure_limit']);
 import { IconArrowDown, IconArrowUp } from './Icons';
@@ -26,17 +33,20 @@ import { IconArrowDown, IconArrowUp } from './Icons';
 interface Props {
   asset: Asset | undefined;
   onPlaced: (trade: Trade) => void;
+  /** Called when a pending order is created, so the list can show it at once. */
+  onOrdered?: (order: PendingOrder) => void;
 }
 
 const QUICK_AMOUNTS = [10, 25, 50, 100, 250, 500];
 
 /** Stake + expiry + direction: the order ticket that places a binary option. */
-export function TradeTicket({ asset, onPlaced }: Props) {
+export function TradeTicket({ asset, onPlaced, onOrdered }: Props) {
   const { user, patchBalance } = useAuth();
   const { tournamentId, tournamentName, tournamentBalance, setBalance } = useTradingAccount();
   const platformDurations = useMarket((s) => s.durations);
   const expiryConfig = useMarket((s) => s.expiry);
   const selectSymbol = useMarket((s) => s.selectSymbol);
+  const prices = useMarket((s) => s.prices);
   const [amount, setAmount] = useState(10);
   const [durationSec, setDurationSec] = useState(60);
   const [busy, setBusy] = useState<'UP' | 'DOWN' | null>(null);
@@ -47,10 +57,16 @@ export function TradeTicket({ asset, onPlaced }: Props) {
   // a countdown has to tick, and the server owns the boundaries, so the list is
   // re-fetched as it ages rather than extrapolated in the browser
   const [tick, setTick] = useState(() => Date.now());
+  const [orderType, setOrderType] = useState<'MARKET' | 'PENDING'>('MARKET');
+  const [trigger, setTrigger] = useState<'PRICE' | 'TIME'>('PRICE');
+  const [triggerPrice, setTriggerPrice] = useState('');
+  const [triggerAt, setTriggerAt] = useState('');
 
   // a market may offer a narrower set of durations than the platform
   const offered = asset?.durations?.length ? asset.durations : platformDurations;
   const modes = expiryConfig.modes;
+  const precision = asset?.precision ?? 2;
+  const livePrice = asset ? (prices[asset.symbol] ?? asset.price ?? null) : null;
 
   useEffect(() => {
     if (!offered.length) return;
@@ -90,6 +106,23 @@ export function TradeTicket({ asset, onPlaced }: Props) {
     setLimitNotice(null);
   }, [amount, asset?.symbol]);
 
+  // a level has to start somewhere the trader can see; the live price is the
+  // only sensible anchor, and it is only seeded once so typing is never fought
+  useEffect(() => {
+    if (orderType !== 'PENDING' || trigger !== 'PRICE') return;
+    setTriggerPrice((current) => current || (livePrice != null ? livePrice.toFixed(precision) : ''));
+  }, [orderType, trigger, livePrice, precision]);
+
+  useEffect(() => {
+    if (orderType !== 'PENDING' || trigger !== 'TIME') return;
+    setTriggerAt((current) => current || localInput(Date.now() + 5 * 60_000));
+  }, [orderType, trigger]);
+
+  // switching market clears a level that belonged to the old one
+  useEffect(() => {
+    setTriggerPrice('');
+  }, [asset?.symbol]);
+
   // boundaries that are still buyable at this second, soonest first
   const liveSlots = slots
     .map((slot) => ({ ...slot, secondsToClose: Math.ceil((slot.closesAt - tick) / 1000) }))
@@ -118,10 +151,54 @@ export function TradeTicket({ asset, onPlaced }: Props) {
   const insufficient = stake > balance;
   // in clock mode there is nothing to buy until a boundary is open
   const noSlot = expiryMode === 'CLOCK' && !selectedSlot;
-  const blocked = marketClosed || tooSmall || tooLarge || insufficient || noSlot;
+  // a level equal to the market is a market order, which the server refuses, so
+  // the button says so before the round trip
+  const levelNumber = Number(triggerPrice);
+  const badLevel =
+    orderType === 'PENDING' &&
+    trigger === 'PRICE' &&
+    (!Number.isFinite(levelNumber) || levelNumber <= 0 || (livePrice != null && levelNumber === livePrice));
+  const badTime =
+    orderType === 'PENDING' && trigger === 'TIME' && !(new Date(triggerAt).getTime() > Date.now());
+  const blocked = marketClosed || tooSmall || tooLarge || insufficient || noSlot || badLevel || badTime;
+  // a pending order is not funded until it fires, so a thin balance is only a
+  // warning there rather than a block
+  const pendingSide = orderType === 'PENDING' ? (levelNumber > (livePrice ?? 0) ? 'above' : 'below') : null;
+
+  const submitOrder = async (direction: 'UP' | 'DOWN') => {
+    setBusy(direction);
+    setLimitNotice(null);
+    try {
+      const { order } = await api.post<{ order: PendingOrder }>('/trades/pending', {
+        symbol: asset.symbol,
+        direction,
+        amount,
+        trigger,
+        ...(trigger === 'PRICE'
+          ? { triggerPrice: Number(triggerPrice) }
+          : { triggerAt: new Date(triggerAt).toISOString() }),
+        expiryMode,
+        ...(expiryMode === 'CLOCK' ? { expiresAt: selectedSlot?.expiresAt } : { durationSec }),
+        accountType: tournamentId ? 'TOURNAMENT' : user.activeAccount,
+        ...(tournamentId ? { tournamentId } : {}),
+      });
+      onOrdered?.(order);
+      toast.success(
+        'Order placed',
+        trigger === 'PRICE'
+          ? `${asset.symbol} ${direction} when the price reaches ${triggerPrice}`
+          : `${asset.symbol} ${direction} at ${new Date(triggerAt).toLocaleTimeString()}`,
+      );
+    } catch (err) {
+      toast.error('Order rejected', err instanceof ApiError ? err.message : 'Please try again');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const place = async (direction: 'UP' | 'DOWN') => {
     if (blocked || busy) return;
+    if (orderType === 'PENDING') return submitOrder(direction);
     setBusy(direction);
     setLimitNotice(null);
     try {
@@ -208,6 +285,78 @@ export function TradeTicket({ asset, onPlaced }: Props) {
           <p className="tabular text-lg font-bold text-slate-100">{money(profit)}</p>
         </div>
       </div>
+
+      {/* Market now, or an order that waits for a level or a time. A pending
+          order holds no money while it waits, so it is priced and funded at the
+          moment it fires, not now. */}
+      <fieldset>
+        <legend className="label">Order</legend>
+        <div className="grid grid-cols-2 gap-1.5">
+          {(['MARKET', 'PENDING'] as const).map((type) => (
+            <button
+              key={type}
+              onClick={() => setOrderType(type)}
+              aria-pressed={orderType === type}
+              className={`rounded-lg py-1.5 text-[11px] font-semibold uppercase tracking-wide transition ${
+                orderType === type ? 'bg-ink-600 text-white' : 'bg-ink-700/60 text-slate-400'
+              }`}
+            >
+              {type === 'MARKET' ? 'Market' : 'Pending'}
+            </button>
+          ))}
+        </div>
+
+        {orderType === 'PENDING' && (
+          <div className="mt-2 space-y-2 rounded-lg border border-ink-600 p-2">
+            <div className="grid grid-cols-2 gap-1.5">
+              {(['PRICE', 'TIME'] as const).map((kind) => (
+                <button
+                  key={kind}
+                  onClick={() => setTrigger(kind)}
+                  aria-pressed={trigger === kind}
+                  className={`rounded-md py-1.5 text-[11px] font-semibold transition ${
+                    trigger === kind ? 'bg-accent text-white' : 'bg-ink-700 text-slate-300'
+                  }`}
+                >
+                  {kind === 'PRICE' ? 'At a price' : 'At a time'}
+                </button>
+              ))}
+            </div>
+
+            {trigger === 'PRICE' ? (
+              <label className="block">
+                <span className="text-[11px] text-slate-400">Open when the price reaches</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step={1 / 10 ** precision}
+                  value={triggerPrice}
+                  onChange={(event) => setTriggerPrice(event.target.value)}
+                  aria-label="Trigger price"
+                  className="field tabular mt-1 text-center font-semibold"
+                />
+                <span className="mt-1 block text-[10px] text-slate-500">
+                  {livePrice != null && `Market ${price(livePrice, precision)}`}
+                  {!badLevel &&
+                    pendingSide &&
+                    ` · fires on the way ${pendingSide === 'above' ? 'up' : 'down'}`}
+                </span>
+              </label>
+            ) : (
+              <label className="block">
+                <span className="text-[11px] text-slate-400">Open at</span>
+                <input
+                  type="datetime-local"
+                  value={triggerAt}
+                  onChange={(event) => setTriggerAt(event.target.value)}
+                  aria-label="Trigger time"
+                  className="field mt-1 text-center"
+                />
+              </label>
+            )}
+          </div>
+        )}
+      </fieldset>
 
       <fieldset>
         <legend className="label">Expiry</legend>
@@ -339,11 +488,17 @@ export function TradeTicket({ asset, onPlaced }: Props) {
 
       {blocked && (
         <p className="rounded-lg bg-down-soft px-3 py-2 text-xs text-down">
-          {insufficient
-            ? `Not enough balance — you have ${money(balance)}`
-            : tooSmall
-              ? `Minimum investment is ${money(asset.minStake)}`
-              : `Maximum investment is ${money(asset.maxStake)}`}
+          {badLevel
+            ? livePrice != null && levelNumber === livePrice
+              ? 'Pick a level above or below the market — that is a market order'
+              : 'Enter a price level'
+            : badTime
+              ? 'Pick a time in the future'
+              : insufficient
+                ? `Not enough balance — you have ${money(balance)}`
+                : tooSmall
+                  ? `Minimum investment is ${money(asset.minStake)}`
+                  : `Maximum investment is ${money(asset.maxStake)}`}
         </p>
       )}
 
@@ -354,7 +509,7 @@ export function TradeTicket({ asset, onPlaced }: Props) {
           className="btn-up !py-3.5 text-base"
         >
           <IconArrowUp className="h-5 w-5" />
-          Higher
+          {orderType === 'PENDING' ? 'Order higher' : 'Higher'}
         </button>
         <button
           onClick={() => void place('DOWN')}
@@ -362,7 +517,7 @@ export function TradeTicket({ asset, onPlaced }: Props) {
           className="btn-down !py-3.5 text-base"
         >
           <IconArrowDown className="h-5 w-5" />
-          Lower
+          {orderType === 'PENDING' ? 'Order lower' : 'Lower'}
         </button>
       </div>
       <p className="text-center text-[10px] text-slate-500">

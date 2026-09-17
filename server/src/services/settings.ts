@@ -136,6 +136,27 @@ export const SETTINGS = {
     public: true,
   }),
 
+  'trading.maxPendingOrders': define({
+    schema: z.number().int().min(0).max(200),
+    default: 20,
+    group: 'trading',
+    label: 'Max waiting orders per trader',
+    help: '0 turns pending orders off.',
+    public: true,
+  }),
+  'trading.pendingGoodForSec': define({
+    schema: z
+      .number()
+      .int()
+      .min(60)
+      .max(7 * 86400),
+    default: 24 * 3600,
+    group: 'trading',
+    label: 'Longest an order may wait (seconds)',
+    help: 'An order that has not filled by then is retired rather than waiting forever.',
+    public: true,
+  }),
+
   'risk.maxOpenStakePerUser': define({
     schema: money,
     default: 0,

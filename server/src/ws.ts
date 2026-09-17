@@ -10,8 +10,9 @@ import { supportEvents } from './services/support.js';
 import { tournamentEvents } from './services/tournaments.js';
 import { settingsEvents } from './services/settings.js';
 import { payouts } from './services/payouts.js';
+import { orderEvents } from './services/orders.js';
 import { prisma } from './lib/prisma.js';
-import { publicDeposit, publicTrade, publicWithdrawal } from './lib/serialize.js';
+import { publicDeposit, publicOrder, publicTrade, publicWithdrawal } from './lib/serialize.js';
 import { log } from './lib/logger.js';
 
 interface ClientState {
@@ -221,6 +222,28 @@ export function attachWebsocket(server: Server) {
   });
   tradeEvents.on('opened', (trade) => {
     toUser(trade.userId, { type: 'trade:opened', trade: publicTrade(trade) });
+  });
+
+  // a pending order changes state without the trader doing anything, so every
+  // transition is pushed rather than waiting for a refresh
+  orderEvents.on('created', (order) => {
+    toUser(order.userId, { type: 'order:updated', order: publicOrder(order) });
+  });
+  orderEvents.on('cancelled', (order) => {
+    toUser(order.userId, { type: 'order:updated', order: publicOrder(order) });
+  });
+  orderEvents.on('expired', (order) => {
+    toUser(order.userId, { type: 'order:updated', order: publicOrder(order) });
+  });
+  orderEvents.on('triggered', ({ order, trade }) => {
+    toUser(order.userId, {
+      type: 'order:filled',
+      order: publicOrder(order),
+      trade: publicTrade(trade),
+    });
+  });
+  orderEvents.on('failed', (order) => {
+    toUser(order.userId, { type: 'order:failed', order: publicOrder(order) });
   });
   depositEvents.on('updated', (deposit) => {
     if (deposit) toUser(deposit.userId, { type: 'deposit:updated', deposit: publicDeposit(deposit) });
