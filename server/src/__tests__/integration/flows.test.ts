@@ -633,3 +633,159 @@ suite('history level stability', () => {
     await prisma.candle.deleteMany({ where: { symbol: live } });
   });
 });
+
+/** A payout rule must change what a new trade is quoted, and nothing else. */
+suite('payout rules', () => {
+  let prisma: (typeof import('../../lib/prisma.js'))['prisma'];
+  let trading: typeof import('../../services/trading.js');
+  let payouts: (typeof import('../../services/payouts.js'))['payouts'];
+  let settings: (typeof import('../../services/settings.js'))['settings'];
+  let feed: (typeof import('../../engine/feed.js'))['marketFeed'];
+
+  const symbol = `PAYUSD_${Date.now()}`;
+  const made = { users: [] as string[], assets: [] as string[], rules: [] as string[] };
+  let assetId = '';
+
+  beforeAll(async () => {
+    prisma = (await import('../../lib/prisma.js')).prisma;
+    trading = await import('../../services/trading.js');
+    payouts = (await import('../../services/payouts.js')).payouts;
+    settings = (await import('../../services/settings.js')).settings;
+    feed = (await import('../../engine/feed.js')).marketFeed;
+    await settings.load();
+
+    const asset = await prisma.asset.create({
+      data: {
+        symbol,
+        name: 'Payout Coin',
+        pair: 'PAY/USD',
+        assetClass: 'CRYPTO',
+        base: 'PAY',
+        quote: 'USD',
+        feedSymbol: symbol,
+        basePrice: 100,
+        volatility: 0.001,
+        precision: 2,
+        pipSize: 0.01,
+        payoutPct: 80,
+      },
+    });
+    assetId = asset.id;
+    made.assets.push(asset.id);
+    feed.load([{ symbol, feedSymbol: symbol, basePrice: 100, volatility: 0.001, precision: 2 }]);
+  });
+
+  afterAll(async () => {
+    if (!prisma) return;
+    await prisma.payoutRule.deleteMany({ where: { id: { in: made.rules } } });
+    await prisma.trade.deleteMany({ where: { symbol } });
+    await prisma.user.deleteMany({ where: { id: { in: made.users } } });
+    await prisma.asset.deleteMany({ where: { id: { in: made.assets } } });
+    await payouts.load();
+    await prisma.$disconnect();
+  });
+
+  const makeTrader = async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: `pay-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.dev`,
+        name: 'Payout Trader',
+        passwordHash: 'x',
+        referralCode: `PAY${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+        demoBalance: 1_000_000,
+      },
+    });
+    made.users.push(user.id);
+    return user;
+  };
+
+  const open = async (userId: string) =>
+    trading.placeTrade({
+      userId,
+      symbol,
+      direction: 'UP',
+      stake: 10_000,
+      durationSec: 60,
+      accountType: 'DEMO',
+    });
+
+  it('locks the base payout into the trade when no rule fires', async () => {
+    await payouts.load();
+    const user = await makeTrader();
+    const trade = await open(user.id);
+    expect(trade.payoutPct).toBe(80);
+  });
+
+  it('locks the adjusted payout, and leaves positions already open alone', async () => {
+    const before = await open((await makeTrader()).id);
+    expect(before.payoutPct).toBe(80);
+
+    // a window covering the whole day, so it fires whenever this test runs
+    const rule = await prisma.payoutRule.create({
+      data: {
+        name: 'Integration cut',
+        kind: 'TIME_OF_DAY',
+        assetId,
+        adjustment: -15,
+        config: { fromMinute: 0, toMinute: 1440 },
+      },
+    });
+    made.rules.push(rule.id);
+    await payouts.load();
+
+    const after = await open((await makeTrader()).id);
+    expect(after.payoutPct).toBe(65);
+
+    // the earlier position keeps what it was quoted
+    const untouched = await prisma.trade.findUniqueOrThrow({ where: { id: before.id } });
+    expect(untouched.payoutPct).toBe(80);
+  });
+
+  it('pays the locked payout at settlement, not the current one', async () => {
+    const user = await makeTrader();
+    const trade = await open(user.id);
+    const locked = trade.payoutPct;
+
+    // the rule changes after the position is open
+    const rule = await prisma.payoutRule.create({
+      data: {
+        name: 'Integration later cut',
+        kind: 'TIME_OF_DAY',
+        assetId,
+        adjustment: -40,
+        config: { fromMinute: 0, toMinute: 1440 },
+      },
+    });
+    made.rules.push(rule.id);
+    await payouts.load();
+
+    const outcome = trading.resolveOutcome({
+      direction: 'UP',
+      entryPrice: 100,
+      exitPrice: 101,
+      stake: trade.stake,
+      payoutPct: trade.payoutPct,
+    });
+    expect(trade.payoutPct).toBe(locked);
+    expect(outcome.status).toBe('WON');
+    expect(outcome.profit).toBe(Math.floor((trade.stake * locked) / 100));
+    expect(outcome.credit).toBe(trade.stake + outcome.profit);
+  });
+
+  it('never pays outside the configured floor and ceiling', async () => {
+    const rule = await prisma.payoutRule.create({
+      data: {
+        name: 'Integration absurd cut',
+        kind: 'TIME_OF_DAY',
+        assetId,
+        adjustment: -90,
+        config: { fromMinute: 0, toMinute: 1440 },
+      },
+    });
+    made.rules.push(rule.id);
+    await payouts.load();
+
+    const trade = await open((await makeTrader()).id);
+    expect(trade.payoutPct).toBe(settings.get('trading.minPayoutPct'));
+  });
+});

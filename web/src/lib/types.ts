@@ -87,6 +87,8 @@ export interface Asset {
   quote: string;
   pipSize: number;
   payoutPct: number;
+  basePayoutPct?: number;
+  payoutAdjustments?: { name: string; kind: string; adjustment: number }[];
   minStake: number;
   maxStake: number;
   precision: number;

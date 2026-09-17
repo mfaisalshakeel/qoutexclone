@@ -43,11 +43,17 @@ test.describe('responsive shell', () => {
     }
 
     await login(page, ADMIN);
-    for (const path of ['/admin', '/admin/users', '/admin/support', '/admin/tournaments']) {
+    for (const path of ['/admin', '/admin/users', '/admin/support', '/admin/tournaments', '/admin/payouts']) {
       await page.goto(path);
       await page.waitForLoadState('networkidle');
       await expectNoHorizontalScroll(page);
     }
+
+    // the payout rule form is the widest thing in the back office, so it is
+    // checked open rather than only collapsed
+    await page.getByRole('button', { name: 'New rule' }).click();
+    await expect(page.getByLabel('Name')).toBeVisible();
+    await expectNoHorizontalScroll(page);
 
     expect(errors).toEqual([]);
   });

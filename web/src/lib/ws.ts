@@ -5,6 +5,13 @@ type Handler = (payload: never) => void;
 
 export interface RealtimeEvents {
   quotes: { prices: Record<string, number>; ts: number };
+  /** Only the markets whose payout actually moved, with what moved it. */
+  payouts: {
+    payouts: Record<
+      string,
+      { pct: number; basePct: number; adjustments: { name: string; kind: string; adjustment: number }[] }
+    >;
+  };
   candle: { symbol: string; timeframe: string; candle: Candle };
   candles: { symbol: string; timeframe: string; candles: Candle[] };
   'trade:opened': { trade: Trade };

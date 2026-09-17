@@ -9,6 +9,8 @@ import { withdrawalEvents } from './services/withdrawals.js';
 import { supportEvents } from './services/support.js';
 import { tournamentEvents } from './services/tournaments.js';
 import { settingsEvents } from './services/settings.js';
+import { payouts } from './services/payouts.js';
+import { prisma } from './lib/prisma.js';
 import { publicDeposit, publicTrade, publicWithdrawal } from './lib/serialize.js';
 import { log } from './lib/logger.js';
 
@@ -22,6 +24,11 @@ interface ClientState {
 
 const BROADCAST_MS = 400;
 const HEARTBEAT_MS = 30000;
+/**
+ * Payouts move on the clock and on volatility, not on every tick, so they ride
+ * a slower loop and only the markets whose figure actually changed are sent.
+ */
+const PAYOUT_MS = 10_000;
 
 /**
  * Realtime channel for the terminal: batched quotes + the subscribed candle for
@@ -160,6 +167,37 @@ export function attachWebsocket(server: Server) {
   }, BROADCAST_MS);
   broadcast.unref?.();
 
+  /**
+   * The catalogue the payout loop resolves against. Markets change only when an
+   * operator edits one, so the list is refreshed on the same slow loop rather
+   * than read from the database on every pass.
+   */
+  let catalogue: {
+    id: string;
+    symbol: string;
+    assetClass: string;
+    payoutPct: number;
+    volatility: number;
+  }[] = [];
+
+  const payoutLoop = setInterval(() => {
+    void (async () => {
+      try {
+        catalogue = await prisma.asset.findMany({
+          where: { enabled: true },
+          select: { id: true, symbol: true, assetClass: true, payoutPct: true, volatility: true },
+        });
+        const changed = payouts.changedPayouts(catalogue);
+        if (clients.size > 0 && Object.keys(changed).length > 0) {
+          toEveryone({ type: 'payouts', payouts: changed });
+        }
+      } catch (err) {
+        log.ws.error({ err }, 'payout broadcast failed');
+      }
+    })();
+  }, PAYOUT_MS);
+  payoutLoop.unref?.();
+
   const heartbeat = setInterval(() => {
     for (const [socket, state] of clients) {
       if (!state.alive) {
@@ -217,6 +255,7 @@ export function attachWebsocket(server: Server) {
     wss,
     close() {
       clearInterval(broadcast);
+      clearInterval(payoutLoop);
       clearInterval(heartbeat);
       wss.close();
     },

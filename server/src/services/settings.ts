@@ -84,6 +84,23 @@ export const SETTINGS = {
     public: true,
   }),
 
+  'trading.minPayoutPct': define({
+    schema: z.number().int().min(1).max(500),
+    default: 20,
+    group: 'trading',
+    label: 'Minimum payout (%)',
+    help: 'However many rules fire, a market never pays less than this.',
+    public: true,
+  }),
+  'trading.maxPayoutPct': define({
+    schema: z.number().int().min(1).max(500),
+    default: 95,
+    group: 'trading',
+    label: 'Maximum payout (%)',
+    help: 'The ceiling for a base payout plus every adjustment and bonus.',
+    public: true,
+  }),
+
   'wallet.minDepositUsd': define({
     schema: z.number().min(0),
     default: env.minDepositUsd,

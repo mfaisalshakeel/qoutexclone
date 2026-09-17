@@ -84,6 +84,8 @@ model Asset {
   pipSize   Float   @default(0.01) // smallest meaningful move for this market
   icon      String? // short label or emoji for the market list
 
+  payoutRules PayoutRule[]
+
   basePrice  Float   @default(100)
   volatility Float   @default(0.0009) // per-minute standard deviation of returns
   enabled    Boolean @default(true)
@@ -433,6 +435,40 @@ model MarketHoliday {
 
   @@unique([scheduleId, date])
   @@index([date])
+}
+
+/// A configurable adjustment to a market's payout.
+///
+/// Rules never look at a trader, a position or the house's exposure — only at
+/// the clock, the calendar and how much the market is moving. What they resolve
+/// to is locked into the trade row the moment it opens.
+model PayoutRule {
+  id   String @id @default(cuid())
+  name String
+
+  /// TIME_OF_DAY | VOLATILITY | SCHEDULE
+  kind String
+
+  /// Scope: a single market, a whole class, or (both null) every market.
+  assetId    String?
+  assetClass String?
+  asset      Asset?  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  /// Percentage points added to the base payout; negative lowers it.
+  adjustment Int
+
+  /// Kind-specific configuration, validated per kind by zod.
+  config Json
+
+  /// Lower numbers resolve first; a rule may stop the ones after it.
+  priority  Int      @default(0)
+  exclusive Boolean  @default(false)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, priority])
+  @@index([assetId, enabled])
 }
 
 /// The price engine's whole state per market, so a restart continues the same

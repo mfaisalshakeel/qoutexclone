@@ -16,6 +16,12 @@ interface MarketState {
   selectSymbol: (symbol: string) => void;
   setTimeframe: (timeframe: string) => void;
   setPrices: (prices: Record<string, number>) => void;
+  setPayouts: (
+    payouts: Record<
+      string,
+      { pct: number; basePct: number; adjustments: { name: string; kind: string; adjustment: number }[] }
+    >,
+  ) => void;
   setConnected: (connected: boolean) => void;
 }
 
@@ -61,6 +67,29 @@ export const useMarket = create<MarketState>((set, get) => ({
 
   setPrices(prices) {
     set({ prices: { ...get().prices, ...prices } });
+  },
+
+  /**
+   * Payouts move on the clock and on volatility, so the server pushes the ones
+   * that changed. Patching the catalogue keeps the ticket honest without a
+   * reload — and the figure a trade is actually locked at still comes from the
+   * server when the trade opens.
+   */
+  setPayouts(payouts) {
+    const assets = get().assets;
+    if (!assets.some((asset) => payouts[asset.symbol] !== undefined)) return;
+    set({
+      assets: assets.map((asset) => {
+        const live = payouts[asset.symbol];
+        if (!live) return asset;
+        return {
+          ...asset,
+          payoutPct: live.pct,
+          basePayoutPct: live.basePct,
+          payoutAdjustments: live.adjustments,
+        };
+      }),
+    });
   },
 
   setConnected(connected) {

@@ -17,6 +17,8 @@ import { SETTINGS, settings } from '../services/settings.js';
 import { marketHours } from '../services/market-hours.js';
 import { describeWindows } from '../lib/sessions.js';
 import { DEFAULT_OTC_PARAMS, initialState, nextTick, resolveParams } from '../engine/otc.js';
+import { resolvePayout } from '../engine/payout.js';
+import { RULE_KINDS, parseRuleConfig, payouts } from '../services/payouts.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -730,3 +732,168 @@ router.get(
 );
 
 export default router;
+
+/* ------------------------------ payout rules ------------------------------ */
+
+const ASSET_CLASSES = ['CURRENCY', 'CRYPTO', 'COMMODITY', 'STOCK', 'INDEX'] as const;
+
+const payoutRuleSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  kind: z.enum(['TIME_OF_DAY', 'VOLATILITY', 'SCHEDULE']),
+  assetId: z.string().cuid().nullish(),
+  assetClass: z.enum(ASSET_CLASSES).nullish(),
+  adjustment: z.number().int().min(-90).max(90),
+  config: z.unknown(),
+  priority: z.number().int().min(0).max(1000).default(0),
+  exclusive: z.boolean().default(false),
+  enabled: z.boolean().default(true),
+});
+
+/** Parses the body and its kind-specific config together. */
+function parsePayoutRule(body: unknown) {
+  const parsed = payoutRuleSchema.parse(body);
+  let config: unknown;
+  try {
+    config = parseRuleConfig(parsed.kind, parsed.config);
+  } catch (err) {
+    if (err instanceof z.ZodError)
+      throw badRequest(err.issues[0]?.message ?? 'Invalid rule configuration', 'validation_error');
+    throw err;
+  }
+  // a rule is scoped to one market or one class, never both
+  return { ...parsed, config, assetClass: parsed.assetId ? null : (parsed.assetClass ?? null) };
+}
+
+router.get(
+  '/payout-rules',
+  wrap(async (_req, res) => {
+    const [rules, assets] = await Promise.all([
+      prisma.payoutRule.findMany({
+        orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+        include: { asset: { select: { symbol: true, pair: true } } },
+      }),
+      prisma.asset.findMany({
+        where: { enabled: true },
+        orderBy: { sortOrder: 'asc' },
+        select: { id: true, symbol: true, pair: true, assetClass: true, payoutPct: true, volatility: true },
+      }),
+    ]);
+
+    const now = new Date();
+    res.json({
+      rules,
+      kinds: RULE_KINDS,
+      assetClasses: ASSET_CLASSES,
+      bounds: { min: settings.get('trading.minPayoutPct'), max: settings.get('trading.maxPayoutPct') },
+      // what every market is paying this instant, so the effect is visible
+      markets: assets.map((asset) => {
+        const resolved = payouts.resolve(asset, { at: now });
+        return {
+          id: asset.id,
+          symbol: asset.symbol,
+          pair: asset.pair,
+          assetClass: asset.assetClass,
+          basePct: resolved.basePct,
+          pct: resolved.pct,
+          applied: resolved.applied,
+        };
+      }),
+    });
+  }),
+);
+
+/**
+ * Resolves a market's payout at an arbitrary instant, optionally with a rule
+ * that has not been saved, so an operator can check a window before committing.
+ */
+router.post(
+  '/payout-rules/preview',
+  wrap(async (req, res) => {
+    const body = z
+      .object({
+        symbol: z.string().min(2).max(24),
+        at: z.string().datetime().optional(),
+        rule: z.unknown().optional(),
+      })
+      .parse(req.body);
+
+    const asset = await prisma.asset.findUnique({ where: { symbol: body.symbol.toUpperCase() } });
+    if (!asset) throw notFound('Market not found');
+
+    const at = body.at ? new Date(body.at) : new Date();
+    const market = {
+      id: asset.id,
+      symbol: asset.symbol,
+      assetClass: asset.assetClass,
+      payoutPct: asset.payoutPct,
+      volatility: asset.volatility,
+    };
+
+    const candidate = body.rule ? parsePayoutRule(body.rule) : null;
+    const rules = [
+      ...payouts.all(),
+      ...(candidate
+        ? [{ ...candidate, id: 'preview', assetId: candidate.assetId ?? null, config: candidate.config }]
+        : []),
+    ];
+
+    const resolved = resolvePayout({
+      market,
+      rules,
+      at,
+      realisedVolatility: marketFeed.realisedVolatility(asset.symbol, 15),
+      minPct: settings.get('trading.minPayoutPct'),
+      maxPct: settings.get('trading.maxPayoutPct'),
+    });
+
+    res.json({ symbol: asset.symbol, at: at.toISOString(), ...resolved });
+  }),
+);
+
+router.post(
+  '/payout-rules',
+  wrap(async (req, res) => {
+    const data = parsePayoutRule(req.body);
+    if (data.assetId) {
+      const asset = await prisma.asset.findUnique({ where: { id: data.assetId } });
+      if (!asset) throw notFound('Market not found');
+    }
+
+    const rule = await prisma.payoutRule.create({
+      data: { ...data, config: data.config as Prisma.InputJsonValue },
+    });
+    await payouts.load();
+    await audit(req.user!.id, 'payout.rule.create', 'payoutRule', rule.id, `${rule.kind} ${rule.adjustment}`);
+    res.status(201).json(rule);
+  }),
+);
+
+router.put(
+  '/payout-rules/:id',
+  wrap(async (req, res) => {
+    const existing = await prisma.payoutRule.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw notFound('Rule not found');
+
+    const data = parsePayoutRule(req.body);
+    const rule = await prisma.payoutRule.update({
+      where: { id: existing.id },
+      data: { ...data, config: data.config as Prisma.InputJsonValue },
+    });
+    await payouts.load();
+    await audit(req.user!.id, 'payout.rule.update', 'payoutRule', rule.id, `${rule.kind} ${rule.adjustment}`);
+    res.json(rule);
+  }),
+);
+
+router.delete(
+  '/payout-rules/:id',
+  wrap(async (req, res) => {
+    const existing = await prisma.payoutRule.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw notFound('Rule not found');
+
+    await prisma.payoutRule.delete({ where: { id: existing.id } });
+    await payouts.load();
+    await audit(req.user!.id, 'payout.rule.delete', 'payoutRule', existing.id, existing.name);
+    res.json({ ok: true });
+  }),
+);

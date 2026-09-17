@@ -8,6 +8,7 @@ import { candleStore } from '../services/candles.js';
 import { durations } from '../services/trading.js';
 import { settings } from '../services/settings.js';
 import { marketHours } from '../services/market-hours.js';
+import { payouts } from '../services/payouts.js';
 
 const router = Router();
 
@@ -23,6 +24,17 @@ router.get(
       assets: assets.map((asset) => {
         const session = marketHours.stateFor(asset.scheduleId, now);
         const otcSymbol = `${asset.symbol}_OTC`;
+        // the payout a trade opened this instant would be locked at
+        const payout = payouts.resolve(
+          {
+            id: asset.id,
+            symbol: asset.symbol,
+            assetClass: asset.assetClass,
+            payoutPct: asset.payoutPct,
+            volatility: asset.volatility,
+          },
+          { at: now },
+        );
         return {
           id: asset.id,
           symbol: asset.symbol,
@@ -34,7 +46,14 @@ router.get(
           base: asset.base,
           quote: asset.quote,
           pipSize: asset.pipSize,
-          payoutPct: asset.payoutPct,
+          payoutPct: payout.pct,
+          basePayoutPct: payout.basePct,
+          // what moved it, so the ticket can say why rather than just show a number
+          payoutAdjustments: payout.applied.map((rule) => ({
+            name: rule.name,
+            kind: rule.kind,
+            adjustment: rule.adjustment,
+          })),
           minStake: asset.minStake,
           maxStake: asset.maxStake,
           precision: asset.precision,

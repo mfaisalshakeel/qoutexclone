@@ -11,6 +11,7 @@ import { settings } from './services/settings.js';
 import { marketHours } from './services/market-hours.js';
 import { StatePersister, loadStates } from './services/otc-state.js';
 import { candleStore } from './services/candles.js';
+import { payouts } from './services/payouts.js';
 import type { OtcParams } from './engine/otc.js';
 
 /** How long a shutdown may take before in-flight work is abandoned. */
@@ -20,6 +21,7 @@ async function main() {
   // runtime configuration first: services read it synchronously afterwards
   await settings.load();
   await marketHours.load();
+  await payouts.load();
 
   const assets = await prisma.asset.findMany({ where: { enabled: true }, orderBy: { sortOrder: 'asc' } });
   if (assets.length === 0) {
@@ -67,6 +69,7 @@ async function main() {
   // pick up whatever the last process was in the middle of printing
   marketFeed.primeCandles(await candleStore.openBuckets([...symbols]));
   candleStore.start();
+  payouts.start();
   // a closed exchange stops printing prices; OTC and crypto never close
   const sessionByAsset = new Map(assets.map((asset) => [asset.symbol, asset.scheduleId]));
   marketFeed.setSessionResolver((symbol) => marketHours.stateFor(sessionByAsset.get(symbol) ?? null).isOpen);
@@ -116,6 +119,7 @@ async function main() {
       await settlementEngine.drain();
       // persist prices last, so the snapshot is the final one
       await persister.flush();
+      payouts.stop();
       candleStore.stop();
       await candleStore.flush();
       chainWatcher.stop();

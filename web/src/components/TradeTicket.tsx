@@ -36,6 +36,12 @@ export function TradeTicket({ asset, onPlaced }: Props) {
   const balance = tournamentId ? (tournamentBalance ?? 0) : activeBalance(user);
   const stake = Math.round(amount * 100);
   const profit = Math.floor((stake * asset.payoutPct) / 100);
+
+  // the base payout and what moved it, for the line under the figure
+  const base = asset.basePayoutPct ?? asset.payoutPct;
+  const adjustments = asset.payoutAdjustments ?? [];
+  const adjusted = adjustments.length > 0 && base !== asset.payoutPct;
+  const adjustmentReason = adjustments.map((rule) => rule.name).join(', ');
   const marketClosed = !asset.isOpen;
   const tooSmall = stake < asset.minStake;
   const tooLarge = stake > asset.maxStake;
@@ -108,9 +114,19 @@ export function TradeTicket({ asset, onPlaced }: Props) {
   return (
     <div className="card flex h-full flex-col gap-3 p-3">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-wide text-slate-400">Payout</p>
           <p className="text-lg font-bold text-up">{asset.payoutPct}%</p>
+          {/* when a rule has moved the payout, say so rather than leave the
+              trader wondering why the number changed */}
+          {adjusted && (
+            <p className="truncate text-[10px] text-slate-400" title={adjustmentReason}>
+              <span className={asset.payoutPct < base ? 'text-down' : 'text-up'}>
+                {asset.payoutPct < base ? '▼' : '▲'} {base}% base
+              </span>{' '}
+              · {adjustmentReason}
+            </p>
+          )}
         </div>
         <div className="text-right">
           <p className="text-[10px] uppercase tracking-wide text-slate-400">Profit</p>

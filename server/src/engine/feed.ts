@@ -322,6 +322,33 @@ export class MarketFeed extends EventEmitter {
     return newest ? this.now() - newest : null;
   }
 
+  /**
+   * Realised per-minute volatility over the last `minutes`, as a fraction, so
+   * it is directly comparable with the market's configured `volatility`.
+   *
+   * Measured from the closed one-minute candles the feed already holds, which
+   * is why it needs no extra bookkeeping. Returns null until there are enough
+   * of them — a payout rule must not fire on a guess.
+   */
+  realisedVolatility(symbol: string, minutes = 15): number | null {
+    const series = this.states.get(symbol)?.candles.get('1m');
+    if (!series || series.length < 4) return null;
+    // the last candle is still open, so it is left out of the measurement
+    const closed = series.slice(-Math.min(minutes + 1, series.length), -1);
+    if (closed.length < 3) return null;
+
+    const returns: number[] = [];
+    for (let index = 1; index < closed.length; index += 1) {
+      const previous = closed[index - 1].close;
+      if (previous > 0) returns.push(Math.log(closed[index].close / previous));
+    }
+    if (returns.length < 2) return null;
+
+    const mean = returns.reduce((sum, value) => sum + value, 0) / returns.length;
+    const variance = returns.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (returns.length - 1);
+    return Math.sqrt(variance);
+  }
+
   getPrices(): Record<string, number> {
     const out: Record<string, number> = {};
     for (const [symbol, state] of this.states) out[symbol] = state.price;

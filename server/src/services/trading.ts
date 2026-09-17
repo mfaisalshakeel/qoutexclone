@@ -8,6 +8,7 @@ import { applyLedger, type AccountType } from './wallet.js';
 import { activeEntry, adjustEntryBalance } from './tournaments.js';
 import { settings } from './settings.js';
 import { marketHours, otcAlternative } from './market-hours.js';
+import { payouts } from './payouts.js';
 
 /** Expiries offered on the terminal, in seconds. Operators change this at runtime. */
 export function durations(): number[] {
@@ -74,6 +75,19 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
   const openedAt = new Date();
   const expiresAt = new Date(openedAt.getTime() + input.durationSec * 1000);
 
+  // Resolved once, here, and written into the row: whatever the rules do later,
+  // this position pays what it was quoted. The status bonus arrives in Phase 4.
+  const payout = payouts.resolve(
+    {
+      id: asset.id,
+      symbol: asset.symbol,
+      assetClass: asset.assetClass,
+      payoutPct: asset.payoutPct,
+      volatility: asset.volatility,
+    },
+    { at: openedAt },
+  );
+
   const trade = await prisma.$transaction(async (tx) => {
     const created = await tx.trade.create({
       data: {
@@ -83,7 +97,7 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
         accountType: input.accountType,
         direction: input.direction,
         stake: input.stake,
-        payoutPct: asset.payoutPct,
+        payoutPct: payout.pct,
         entryPrice,
         durationSec: input.durationSec,
         openedAt,
