@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { duration as fmtDuration, dateTime, money, price, untilShort } from '../lib/format';
 import { useAuth, activeBalance } from '../store/auth';
@@ -37,16 +37,37 @@ interface Props {
   onOrdered?: (order: PendingOrder) => void;
 }
 
-const QUICK_AMOUNTS = [10, 25, 50, 100, 250, 500];
+/** Shares of the active balance the shortcuts offer. */
+const PERCENTAGES = [0.25, 0.5, 0.75, 1] as const;
+
+/**
+ * What a keyboard shortcut may do to the ticket.
+ *
+ * The ticket owns the stake and the expiry, so the shortcuts reach in through a
+ * handle rather than having that state lifted into the terminal — the ticket
+ * stays the one place that knows what a valid stake is.
+ */
+export interface TicketHandle {
+  higher: () => void;
+  lower: () => void;
+  amountUp: () => void;
+  amountDown: () => void;
+  expiryUp: () => void;
+  expiryDown: () => void;
+}
 
 /** Stake + expiry + direction: the order ticket that places a binary option. */
-export function TradeTicket({ asset, onPlaced, onOrdered }: Props) {
+export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
+  { asset, onPlaced, onOrdered },
+  ref,
+) {
   const { user, patchBalance } = useAuth();
   const { tournamentId, tournamentName, tournamentBalance, setBalance } = useTradingAccount();
   const platformDurations = useMarket((s) => s.durations);
   const expiryConfig = useMarket((s) => s.expiry);
   const selectSymbol = useMarket((s) => s.selectSymbol);
   const prices = useMarket((s) => s.prices);
+  const ticketConfig = useMarket((s) => s.ticket);
   const [amount, setAmount] = useState(10);
   const [durationSec, setDurationSec] = useState(60);
   const [busy, setBusy] = useState<'UP' | 'DOWN' | null>(null);
@@ -62,11 +83,39 @@ export function TradeTicket({ asset, onPlaced, onOrdered }: Props) {
   const [triggerPrice, setTriggerPrice] = useState('');
   const [triggerAt, setTriggerAt] = useState('');
 
+  /**
+   * The shortcut handle has to be stable and unconditional — hooks cannot sit
+   * behind the early return below — so it forwards to the actions of whichever
+   * render is current. Render assigns them; events only fire afterwards, so the
+   * ref is never stale.
+   */
+  const actionsRef = useRef<TicketHandle | null>(null);
+  useImperativeHandle(
+    ref,
+    () => ({
+      higher: () => actionsRef.current?.higher(),
+      lower: () => actionsRef.current?.lower(),
+      amountUp: () => actionsRef.current?.amountUp(),
+      amountDown: () => actionsRef.current?.amountDown(),
+      expiryUp: () => actionsRef.current?.expiryUp(),
+      expiryDown: () => actionsRef.current?.expiryDown(),
+    }),
+    [],
+  );
+
   // a market may offer a narrower set of durations than the platform
   const offered = asset?.durations?.length ? asset.durations : platformDurations;
   const modes = expiryConfig.modes;
   const precision = asset?.precision ?? 2;
   const livePrice = asset ? (prices[asset.symbol] ?? asset.price ?? null) : null;
+
+  // The market's own range is the authority; a preset or a percentage outside it
+  // is never offered, so a trader cannot arrive at a stake that will be refused.
+  const minCents = asset?.minStake ?? 100;
+  const maxCents = asset?.maxStake ?? 500_000;
+  const stepCents = ticketConfig.step;
+  const clampCents = (cents: number) => Math.min(Math.max(Math.round(cents), minCents), maxCents);
+  const presets = ticketConfig.presets.filter((cents) => cents >= minCents && cents <= maxCents);
 
   useEffect(() => {
     if (!offered.length) return;
@@ -196,6 +245,21 @@ export function TradeTicket({ asset, onPlaced, onOrdered }: Props) {
     }
   };
 
+  /** Moves one place along whichever expiry list is showing. */
+  const stepExpiry = (delta: number) => {
+    if (expiryMode === 'CLOCK') {
+      if (liveSlots.length === 0) return;
+      const at = liveSlots.findIndex((slot) => slot.expiresAt === selectedSlot?.expiresAt);
+      const next = Math.min(Math.max((at < 0 ? 0 : at) + delta, 0), liveSlots.length - 1);
+      setClockExpiresAt(liveSlots[next].expiresAt);
+      return;
+    }
+    if (offered.length === 0) return;
+    const at = offered.indexOf(durationSec);
+    const next = Math.min(Math.max((at < 0 ? 0 : at) + delta, 0), offered.length - 1);
+    setDurationSec(offered[next]);
+  };
+
   const place = async (direction: 'UP' | 'DOWN') => {
     if (blocked || busy) return;
     if (orderType === 'PENDING') return submitOrder(direction);
@@ -232,6 +296,17 @@ export function TradeTicket({ asset, onPlaced, onOrdered }: Props) {
     } finally {
       setBusy(null);
     }
+  };
+
+  // Every shortcut goes through the same setters the buttons use, so it can
+  // never reach a stake or an expiry the UI would refuse.
+  actionsRef.current = {
+    higher: () => void place('UP'),
+    lower: () => void place('DOWN'),
+    amountUp: () => setAmount(clampCents(stake + stepCents) / 100),
+    amountDown: () => setAmount(clampCents(stake - stepCents) / 100),
+    expiryUp: () => stepExpiry(1),
+    expiryDown: () => stepExpiry(-1),
   };
 
   if (marketClosed) {
@@ -441,9 +516,10 @@ export function TradeTicket({ asset, onPlaced, onOrdered }: Props) {
         <legend className="label">Investment</legend>
         <div className="flex items-center gap-1.5">
           <button
-            onClick={() => setAmount((v) => Math.max(asset.minStake / 100, Math.round((v - 10) * 100) / 100))}
-            className="btn-ghost !px-3 !py-2 text-base"
-            aria-label="Decrease amount"
+            onClick={() => setAmount(clampCents(stake - stepCents) / 100)}
+            disabled={stake <= minCents}
+            className="btn-ghost !px-3 !py-2 text-base disabled:opacity-40"
+            aria-label={`Decrease amount by ${money(stepCents)}`}
           >
             −
           </button>
@@ -453,33 +529,71 @@ export function TradeTicket({ asset, onPlaced, onOrdered }: Props) {
               type="number"
               inputMode="decimal"
               value={amount}
-              min={asset.minStake / 100}
-              max={asset.maxStake / 100}
-              onChange={(e) => setAmount(Math.max(0, Number(e.target.value)))}
+              min={minCents / 100}
+              max={maxCents / 100}
+              step={stepCents / 100}
+              aria-label="Investment amount"
+              onChange={(event) => setAmount(Math.max(0, Number(event.target.value)))}
+              // typing is left alone; the value is pulled into range on blur so
+              // an intermediate keystroke is never fought
+              onBlur={() => setAmount(clampCents(Math.round(amount * 100)) / 100)}
               className="field tabular !pl-7 text-center font-semibold"
             />
           </div>
           <button
-            onClick={() => setAmount((v) => Math.round((v + 10) * 100) / 100)}
-            className="btn-ghost !px-3 !py-2 text-base"
-            aria-label="Increase amount"
+            onClick={() => setAmount(clampCents(stake + stepCents) / 100)}
+            disabled={stake >= maxCents}
+            className="btn-ghost !px-3 !py-2 text-base disabled:opacity-40"
+            aria-label={`Increase amount by ${money(stepCents)}`}
           >
             +
           </button>
         </div>
-        <div className="mt-1.5 grid grid-cols-6 gap-1">
-          {QUICK_AMOUNTS.map((value) => (
-            <button
-              key={value}
-              onClick={() => setAmount(value)}
-              className={`rounded-md py-1.5 text-[11px] font-medium transition ${
-                amount === value ? 'bg-ink-500 text-white' : 'bg-ink-700 text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {value}
-            </button>
-          ))}
+
+        {presets.length > 0 && (
+          <div className="mt-1.5 grid grid-cols-6 gap-1">
+            {presets.map((cents) => (
+              <button
+                key={cents}
+                onClick={() => setAmount(cents / 100)}
+                aria-pressed={stake === cents}
+                className={`rounded-md py-1.5 text-[11px] font-medium transition ${
+                  stake === cents ? 'bg-ink-500 text-white' : 'bg-ink-700 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {cents % 100 === 0 ? cents / 100 : (cents / 100).toFixed(2)}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* a share of what the trader actually has, clamped to the market's
+            range so the button never sets a stake that would be refused */}
+        <div className="mt-1 grid grid-cols-4 gap-1">
+          {PERCENTAGES.map((share) => {
+            const target = clampCents(balance * share);
+            const unreachable = balance * share < minCents;
+            return (
+              <button
+                key={share}
+                onClick={() => setAmount(target / 100)}
+                disabled={unreachable}
+                title={unreachable ? `Below this market's ${money(minCents)} minimum` : undefined}
+                className={`rounded-md py-1.5 text-[11px] font-medium transition ${
+                  !unreachable && stake === target
+                    ? 'bg-ink-500 text-white'
+                    : 'bg-ink-700/60 text-slate-400 hover:text-slate-200 disabled:opacity-40'
+                }`}
+              >
+                {share === 1 ? 'All' : `${share * 100}%`}
+              </button>
+            );
+          })}
         </div>
+
+        <p className="mt-1 text-[10px] text-slate-500">
+          {money(minCents)}–{money(maxCents)} on this market
+        </p>
       </fieldset>
 
       {!blocked && limitNotice && (
@@ -529,4 +643,4 @@ export function TradeTicket({ asset, onPlaced, onOrdered }: Props) {
       </p>
     </div>
   );
-}
+});

@@ -45,8 +45,8 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 
 - [x] **Expiry modes.** (a) *Duration*: 5s, 10s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m, 30m, 1h, 4h (configurable per asset). (b) *Clock time*: expiry at the next valid candle boundaries (e.g. 12:05, 12:10), with a configurable purchase cut-off before expiry and a live "time to purchase" countdown. Server validates both.
 - [x] **Pending trades.** Open when the price reaches a level, or at a set time. They're cancellable and listed separately. The server executes them from the feed with the same idempotency guarantees.
-- [ ] **Ticket UX.** Amount with presets, ± steps, balance-percentage shortcuts, per-asset min/max enforced, live payout % and profit, and "double up" (repeat the same trade) from an open position if allowed by settings.
-- [ ] **Hotkeys.** Configurable shortcuts for up, down, amount ±, expiry ±, and next/previous asset, with a help overlay (`?`). Can be turned off in settings.
+- [x] **Ticket UX.** Amount with presets, ± steps, balance-percentage shortcuts, per-asset min/max enforced, live payout % and profit, and "double up" (repeat the same trade) from an open position if allowed by settings.
+- [x] **Hotkeys.** Configurable shortcuts for up, down, amount ±, expiry ±, and next/previous asset, with a help overlay (`?`). Can be turned off in settings.
 - [ ] **Asset picker.** Tabs by class, favourites (persisted), search, sort by payout/name/change, OTC badge, open/closed state, and payout shown per asset. Recent assets appear as tabs above the chart, as in Quotex.
 - [ ] **Multi-chart layouts.** 1, 2 (horizontal/vertical) or 4 charts, each with its own asset/timeframe, and trade from the focused one. Layout is persisted per user.
 - [ ] **Positions panel.** Open trades show a live countdown and progress, a winning/losing tint, and potential result. Closed trades show the result, and a detail modal shows the entry/exit chart snippet. There's also a "Trade again" action.

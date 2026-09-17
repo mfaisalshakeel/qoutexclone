@@ -10,15 +10,19 @@ interface Props {
   /** Orders waiting on a price or a time; they are not positions yet. */
   pending: PendingOrder[];
   onCancel: (orderId: string) => void | Promise<void>;
+  /** Re-opens a position at the current price, optionally at twice the stake. */
+  onRepeat: (tradeId: string, multiplier: 1 | 2) => void | Promise<void>;
   loading?: boolean;
 }
 
 /** Open positions with a live countdown, plus the most recent settled ones. */
-export function Positions({ open, closed, pending, onCancel, loading = false }: Props) {
+export function Positions({ open, closed, pending, onCancel, onRepeat, loading = false }: Props) {
   const prices = useMarket((s) => s.prices);
   const assets = useMarket((s) => s.assets);
   const [tab, setTab] = useState<'open' | 'pending' | 'closed'>('open');
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [repeating, setRepeating] = useState<string | null>(null);
+  const allowRepeat = useMarket((s) => s.ticket.allowRepeat);
   const [, force] = useState(0);
 
   // one timer drives every countdown on screen
@@ -30,6 +34,15 @@ export function Positions({ open, closed, pending, onCancel, loading = false }: 
   const precisionOf = (symbol: string) => assets.find((a) => a.symbol === symbol)?.precision ?? 2;
   const waiting = pending.filter((order) => order.status === 'PENDING');
   const settledOrders = pending.filter((order) => order.status !== 'PENDING').slice(0, 10);
+
+  const repeat = async (tradeId: string, multiplier: 1 | 2) => {
+    setRepeating(tradeId);
+    try {
+      await onRepeat(tradeId, multiplier);
+    } finally {
+      setRepeating(null);
+    }
+  };
 
   const cancel = async (orderId: string) => {
     setCancelling(orderId);
@@ -115,6 +128,28 @@ export function Positions({ open, closed, pending, onCancel, loading = false }: 
                       </span>
                     </span>
                   </div>
+
+                  {/* the same trade again, at the price and payout of now — it
+                      is a new position, not a copy of this one */}
+                  {allowRepeat && (
+                    <div className="mt-1.5 flex gap-1">
+                      <button
+                        onClick={() => void repeat(trade.id, 1)}
+                        disabled={repeating === trade.id}
+                        className="flex-1 rounded-md bg-ink-700 py-1 text-[10px] font-semibold text-slate-300 hover:bg-ink-600 disabled:opacity-50"
+                      >
+                        {repeating === trade.id ? 'Placing…' : 'Repeat'}
+                      </button>
+                      <button
+                        onClick={() => void repeat(trade.id, 2)}
+                        disabled={repeating === trade.id}
+                        title={`Open the same trade at ${money(trade.stake * 2)}`}
+                        className="flex-1 rounded-md bg-ink-700 py-1 text-[10px] font-semibold text-slate-300 hover:bg-ink-600 disabled:opacity-50"
+                      >
+                        Double up
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })

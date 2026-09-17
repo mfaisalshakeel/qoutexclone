@@ -1487,3 +1487,160 @@ suite('pending orders', () => {
     }
   });
 });
+
+/** Repeating a position opens a new trade at the price and payout of now. */
+suite('repeat a position', () => {
+  let prisma: (typeof import('../../lib/prisma.js'))['prisma'];
+  let trading: typeof import('../../services/trading.js');
+  let settings: (typeof import('../../services/settings.js'))['settings'];
+  let feed: (typeof import('../../engine/feed.js'))['marketFeed'];
+
+  const symbol = `REPUSD_${Date.now()}`;
+  const made = { users: [] as string[], assets: [] as string[] };
+
+  beforeAll(async () => {
+    prisma = (await import('../../lib/prisma.js')).prisma;
+    trading = await import('../../services/trading.js');
+    settings = (await import('../../services/settings.js')).settings;
+    feed = (await import('../../engine/feed.js')).marketFeed;
+    await settings.load();
+
+    const asset = await prisma.asset.create({
+      data: {
+        symbol,
+        name: 'Repeat Coin',
+        pair: 'REP/USD',
+        assetClass: 'CRYPTO',
+        base: 'REP',
+        quote: 'USD',
+        feedSymbol: symbol,
+        basePrice: 100,
+        volatility: 0.001,
+        precision: 2,
+        pipSize: 0.01,
+        payoutPct: 80,
+        durations: [60, 300],
+      },
+    });
+    made.assets.push(asset.id);
+    feed.load([{ symbol, feedSymbol: symbol, basePrice: 100, volatility: 0.001, precision: 2 }]);
+  });
+
+  afterAll(async () => {
+    if (!prisma) return;
+    await prisma.trade.deleteMany({ where: { symbol } });
+    await prisma.user.deleteMany({ where: { id: { in: made.users } } });
+    await prisma.asset.deleteMany({ where: { id: { in: made.assets } } });
+    await prisma.$disconnect();
+  });
+
+  const makeTrader = async (balance = 1_000_000) => {
+    const user = await prisma.user.create({
+      data: {
+        email: `rep-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.dev`,
+        name: 'Repeat Trader',
+        passwordHash: 'x',
+        referralCode: `REP${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+        demoBalance: balance,
+      },
+    });
+    made.users.push(user.id);
+    return user;
+  };
+
+  const open = (userId: string, over: Record<string, unknown> = {}) =>
+    trading.placeTrade({
+      userId,
+      symbol,
+      direction: 'UP',
+      stake: 5_000,
+      durationSec: 60,
+      accountType: 'DEMO',
+      ...over,
+    });
+
+  it('opens the same market, direction and expiry at the same stake', async () => {
+    const user = await makeTrader();
+    const first = await open(user.id);
+    const again = await trading.repeatTrade(user.id, first.id);
+
+    expect(again.id).not.toBe(first.id);
+    expect(again.symbol).toBe(first.symbol);
+    expect(again.direction).toBe(first.direction);
+    expect(again.durationSec).toBe(first.durationSec);
+    expect(again.stake).toBe(first.stake);
+    // it is a new trade, priced now
+    expect(again.openedAt.getTime()).toBeGreaterThanOrEqual(first.openedAt.getTime());
+  });
+
+  it('doubles the stake when asked, and charges for it', async () => {
+    const user = await makeTrader();
+    const first = await open(user.id, { stake: 3_000 });
+    const doubled = await trading.repeatTrade(user.id, first.id, 2);
+
+    expect(doubled.stake).toBe(6_000);
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(after.demoBalance).toBe(1_000_000 - 3_000 - 6_000);
+  });
+
+  it('belongs to its owner and nobody else', async () => {
+    const owner = await makeTrader();
+    const stranger = await makeTrader();
+    const trade = await open(owner.id);
+    await expect(trading.repeatTrade(stranger.id, trade.id)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('is still checked against every limit, like any other trade', async () => {
+    // a trader who cannot afford the double
+    const user = await makeTrader(7_000);
+    const first = await open(user.id, { stake: 5_000 });
+    await expect(trading.repeatTrade(user.id, first.id, 2)).rejects.toMatchObject({
+      code: 'insufficient_funds',
+    });
+  });
+
+  it('refuses when an operator has turned it off', async () => {
+    const user = await makeTrader();
+    const trade = await open(user.id);
+    await settings.set('trading.allowRepeat', false);
+    try {
+      await expect(trading.repeatTrade(user.id, trade.id)).rejects.toMatchObject({
+        code: 'repeat_disabled',
+      });
+    } finally {
+      await settings.reset('trading.allowRepeat');
+    }
+  });
+
+  it('refuses a duration the market has since stopped offering', async () => {
+    const user = await makeTrader();
+    const trade = await open(user.id, { durationSec: 300 });
+    await prisma.asset.update({ where: { symbol }, data: { durations: [60] } });
+    try {
+      await expect(trading.repeatTrade(user.id, trade.id)).rejects.toMatchObject({
+        code: 'invalid_duration',
+      });
+    } finally {
+      await prisma.asset.update({ where: { symbol }, data: { durations: [60, 300] } });
+    }
+  });
+
+  it('re-buys the soonest boundary for a clock position, not the one that passed', async () => {
+    const user = await makeTrader();
+    const [slot] = trading.clockExpiries();
+    const first = await open(user.id, {
+      durationSec: undefined,
+      expiryMode: 'CLOCK',
+      expiresAt: slot.expiresAt,
+    });
+    expect(first.expiryMode).toBe('CLOCK');
+
+    const again = await trading.repeatTrade(user.id, first.id);
+    expect(again.expiryMode).toBe('CLOCK');
+    // the original boundary may already be inside its cut-off, so the repeat
+    // takes whatever is open now
+    expect(again.expiresAt.getTime()).toBeGreaterThanOrEqual(Date.now());
+    const offered = trading.clockExpiries().map((each) => each.expiresAt);
+    expect([...offered, slot.expiresAt]).toContain(again.expiresAt.getTime());
+  });
+});

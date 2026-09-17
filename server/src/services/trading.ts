@@ -208,6 +208,66 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
   return trade;
 }
 
+/**
+ * Re-opens a position the trader already holds: same market, direction and
+ * expiry, at the price and payout of *now* — it is a new trade, not a copy.
+ *
+ * The expiry is resolved here rather than sent by the client, because a clock
+ * boundary has passed by the time anyone clicks and a duration may no longer be
+ * offered. One place decides, and it is the same place that validates.
+ */
+export async function repeatTrade(userId: string, tradeId: string, multiplier: 1 | 2 = 1): Promise<Trade> {
+  if (!settings.get('trading.allowRepeat')) {
+    throw conflict('Repeating a position is turned off', 'repeat_disabled');
+  }
+
+  const original = await prisma.trade.findUnique({ where: { id: tradeId } });
+  if (!original || original.userId !== userId) throw notFound('Trade not found');
+
+  const asset = await prisma.asset.findUnique({ where: { id: original.assetId } });
+  if (!asset) throw notFound('Unknown asset');
+
+  const stake = original.stake * multiplier;
+
+  if (original.expiryMode === 'CLOCK') {
+    // the boundary it bought is gone; the soonest one still open is the
+    // honest equivalent
+    const [slot] = clockExpiries();
+    if (!slot) {
+      throw conflict(
+        'No clock expiry is open for purchase right now. Try again in a moment.',
+        'no_clock_expiry',
+      );
+    }
+    return placeTrade({
+      userId,
+      symbol: original.symbol,
+      accountType: original.accountType as AccountType,
+      direction: original.direction as 'UP' | 'DOWN',
+      stake,
+      expiryMode: 'CLOCK',
+      expiresAt: slot.expiresAt,
+      tournamentId: original.tournamentId ?? undefined,
+    });
+  }
+
+  const offered = durationsFor(asset);
+  if (!offered.includes(original.durationSec)) {
+    throw conflict('That expiry is no longer offered on this market', 'invalid_duration');
+  }
+
+  return placeTrade({
+    userId,
+    symbol: original.symbol,
+    accountType: original.accountType as AccountType,
+    direction: original.direction as 'UP' | 'DOWN',
+    stake,
+    expiryMode: 'DURATION',
+    durationSec: original.durationSec,
+    tournamentId: original.tournamentId ?? undefined,
+  });
+}
+
 export interface OutcomeInput {
   direction: 'UP' | 'DOWN';
   entryPrice: number;

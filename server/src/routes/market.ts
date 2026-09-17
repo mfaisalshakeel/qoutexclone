@@ -70,6 +70,14 @@ router.get(
         };
       }),
       durations: durations(),
+      // ticket configuration: what the stake buttons offer and whether a
+      // position may be repeated
+      ticket: {
+        presets: settings.get('trading.amountPresets'),
+        step: settings.get('trading.amountStep'),
+        allowRepeat: settings.get('trading.allowRepeat'),
+        hotkeys: settings.get('trading.hotkeysEnabled'),
+      },
       // expiry is resolved server-side; the terminal renders what it is told
       expiry: {
         modes: expiryModes(),

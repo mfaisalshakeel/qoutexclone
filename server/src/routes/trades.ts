@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { notFound, wrap } from '../lib/errors.js';
 import { publicOrder, publicTrade } from '../lib/serialize.js';
 import { requireActiveUser, requireAuth } from '../middleware/auth.js';
-import { clockExpiries, listTrades, placeTrade } from '../services/trading.js';
+import { clockExpiries, listTrades, placeTrade, repeatTrade } from '../services/trading.js';
 import { cancelOrder, createOrder, listOrders } from '../services/orders.js';
 import { marketFeed } from '../engine/feed.js';
 
@@ -89,6 +89,30 @@ router.get(
   '/expiries',
   wrap(async (_req, res) => {
     res.json({ slots: clockExpiries(), serverTime: Date.now() });
+  }),
+);
+
+/**
+ * Re-opens a position the trader holds, optionally at twice the stake. The
+ * expiry and the price come from now, not from the original — it is a new
+ * trade.
+ */
+router.post(
+  '/:id/repeat',
+  requireActiveUser,
+  wrap(async (req, res) => {
+    const body = z.object({ multiplier: z.union([z.literal(1), z.literal(2)]).default(1) }).parse(req.body);
+    const trade = await repeatTrade(req.user!.id, req.params.id, body.multiplier);
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { demoBalance: true, realBalance: true },
+    });
+    const entry = trade.entryId
+      ? await prisma.tournamentEntry.findUnique({ where: { id: trade.entryId }, select: { balance: true } })
+      : null;
+    res
+      .status(201)
+      .json({ trade: publicTrade(trade), balances: user, tournamentBalance: entry?.balance ?? null });
   }),
 );
 

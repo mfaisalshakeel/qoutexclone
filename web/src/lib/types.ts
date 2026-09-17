@@ -265,3 +265,12 @@ export interface PendingOrder {
   createdAt: string;
   tournamentId: string | null;
 }
+
+/** How the ticket's stake controls behave, in cents. */
+export interface TicketConfig {
+  presets: number[];
+  step: number;
+  allowRepeat: boolean;
+  /** The platform switch; a trader may still turn them off for themselves. */
+  hotkeys: boolean;
+}

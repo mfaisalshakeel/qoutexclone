@@ -136,6 +136,39 @@ export const SETTINGS = {
     public: true,
   }),
 
+  'trading.hotkeysEnabled': define({
+    schema: z.boolean(),
+    default: true,
+    group: 'trading',
+    label: 'Keyboard shortcuts',
+    help: 'Traders can still turn them off for themselves.',
+    public: true,
+  }),
+
+  'trading.amountPresets': define({
+    schema: z.array(z.number().int().min(1).max(100_000_000)).min(1).max(8),
+    default: [1_000, 2_500, 5_000, 10_000, 25_000, 50_000],
+    group: 'trading',
+    label: 'Stake presets (cents)',
+    help: "Shown on the ticket. Presets outside a market's own range are hidden for it.",
+    public: true,
+  }),
+  'trading.amountStep': define({
+    schema: z.number().int().min(1).max(10_000_000),
+    default: 1_000,
+    group: 'trading',
+    label: 'Stake step for + and − (cents)',
+    public: true,
+  }),
+  'trading.allowRepeat': define({
+    schema: z.boolean(),
+    default: true,
+    group: 'trading',
+    label: 'Allow repeating a position',
+    help: 'Lets a trader re-open the same trade, or double it, from an open position.',
+    public: true,
+  }),
+
   'trading.maxPendingOrders': define({
     schema: z.number().int().min(0).max(200),
     default: 20,

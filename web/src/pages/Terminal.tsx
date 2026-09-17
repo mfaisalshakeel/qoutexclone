@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, api } from '../lib/api';
 import { realtime } from '../lib/ws';
 import { percent, price, untilShort } from '../lib/format';
@@ -11,7 +11,9 @@ import { AssetPicker } from '../components/AssetPicker';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { PriceChart, type ChartType, type IndicatorSettings } from '../components/PriceChart';
 import { Positions } from '../components/Positions';
-import { TradeTicket } from '../components/TradeTicket';
+import { TradeTicket, type TicketHandle } from '../components/TradeTicket';
+import { HotkeyHelp } from '../components/HotkeyHelp';
+import { useHotkeys } from '../hooks/useHotkeys';
 import { ChartSkeleton, Skeleton, SkeletonGroup } from '../components/Skeleton';
 import type { PendingOrder, Trade } from '../lib/types';
 
@@ -34,6 +36,8 @@ const STUDIES = [
 
 export function Terminal() {
   const { assets, prices, symbol, timeframe, timeframes, setTimeframe, load, loaded } = useMarket();
+  const selectSymbol = useMarket((s) => s.selectSymbol);
+  const ticketConfig = useMarket((s) => s.ticket);
   const user = useAuth((s) => s.user);
   const [openTrades, setOpenTrades] = useState<Trade[]>([]);
   const [closedTrades, setClosedTrades] = useState<Trade[]>([]);
@@ -50,10 +54,14 @@ export function Terminal() {
   const [studiesOpen, setStudiesOpen] = useState(false);
   const [timeframesOpen, setTimeframesOpen] = useState(false);
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const ticketRef = useRef<TicketHandle>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const asset = useMemo(() => assetOf(symbol, assets), [symbol, assets]);
   const livePrice = prices[symbol] ?? asset?.price ?? null;
   const tournamentId = useTradingAccount((s) => s.tournamentId);
+  const setTournamentBalance = useTradingAccount((s) => s.setBalance);
+  const patchBalance = useAuth((s) => s.patchBalance);
   const accountType = tournamentId ? 'TOURNAMENT' : (user?.activeAccount ?? 'DEMO');
 
   useEffect(() => {
@@ -80,6 +88,32 @@ export function Terminal() {
       return [order, ...without];
     });
   }, []);
+
+  const repeatTrade = useCallback(
+    async (tradeId: string, multiplier: 1 | 2) => {
+      try {
+        const data = await api.post<{
+          trade: Trade;
+          balances: { demoBalance: number; realBalance: number };
+          tournamentBalance: number | null;
+        }>(`/trades/${tradeId}/repeat`, { multiplier });
+        setOpenTrades((current) => [data.trade, ...current]);
+        if (data.tournamentBalance != null) setTournamentBalance(data.tournamentBalance);
+        else
+          patchBalance(
+            data.trade.accountType,
+            data.trade.accountType === 'DEMO' ? data.balances.demoBalance : data.balances.realBalance,
+          );
+        toast.info(
+          multiplier === 2 ? 'Doubled up' : 'Repeated',
+          `${data.trade.symbol} ${data.trade.direction} · ${data.trade.entryPrice}`,
+        );
+      } catch (err) {
+        toast.error('Could not repeat', err instanceof ApiError ? err.message : 'Please try again');
+      }
+    },
+    [patchBalance, setTournamentBalance],
+  );
 
   const cancelOrder = useCallback(
     async (orderId: string) => {
@@ -126,6 +160,34 @@ export function Terminal() {
     };
   }, [accountType, patchOrder]);
 
+  /** Walks the market list, skipping nothing: a closed market is still selectable. */
+  const stepAsset = useCallback(
+    (delta: number) => {
+      if (assets.length === 0) return;
+      const at = assets.findIndex((each) => each.symbol === symbol);
+      const next = ((((at < 0 ? 0 : at) + delta) % assets.length) + assets.length) % assets.length;
+      selectSymbol(assets[next].symbol);
+    },
+    [assets, symbol, selectSymbol],
+  );
+
+  const hotkeyHandlers = useMemo(
+    () => ({
+      higher: () => ticketRef.current?.higher(),
+      lower: () => ticketRef.current?.lower(),
+      amountUp: () => ticketRef.current?.amountUp(),
+      amountDown: () => ticketRef.current?.amountDown(),
+      expiryUp: () => ticketRef.current?.expiryUp(),
+      expiryDown: () => ticketRef.current?.expiryDown(),
+      nextAsset: () => stepAsset(1),
+      prevAsset: () => stepAsset(-1),
+      help: () => setHelpOpen((open) => !open),
+    }),
+    [stepAsset],
+  );
+
+  const hotkeys = useHotkeys(hotkeyHandlers, ticketConfig.hotkeys);
+
   const changePct = asset?.changePct ?? 0;
   const activeStudies = Object.values(indicators).filter(Boolean).length;
 
@@ -143,6 +205,7 @@ export function Terminal() {
 
   return (
     <div className="flex flex-col gap-2 p-2 md:h-[calc(100dvh-3.5rem)] md:flex-row">
+      {helpOpen && <HotkeyHelp state={hotkeys} onClose={() => setHelpOpen(false)} />}
       {/* markets — rail on desktop, sheet on mobile */}
       {isDesktop && (
         <aside className="card w-60 shrink-0">
@@ -356,6 +419,7 @@ export function Terminal() {
                   closed={closedTrades}
                   pending={orders}
                   onCancel={cancelOrder}
+                  onRepeat={repeatTrade}
                   loading={!tradesLoaded}
                 />
               )}
@@ -367,7 +431,16 @@ export function Terminal() {
       {isDesktop && (
         <aside className="flex w-72 shrink-0 flex-col gap-2">
           <div className="shrink-0">
+            {ticketConfig.hotkeys && (
+              <button
+                onClick={() => setHelpOpen(true)}
+                className="self-end rounded-md px-1.5 py-0.5 text-[10px] font-medium text-slate-500 hover:text-slate-300"
+              >
+                Shortcuts (?)
+              </button>
+            )}
             <TradeTicket
+              ref={ticketRef}
               asset={asset}
               onPlaced={(trade) => setOpenTrades((c) => [trade, ...c])}
               onOrdered={patchOrder}
@@ -379,6 +452,7 @@ export function Terminal() {
               closed={closedTrades}
               pending={orders}
               onCancel={cancelOrder}
+              onRepeat={repeatTrade}
               loading={!tradesLoaded}
             />
           </div>
