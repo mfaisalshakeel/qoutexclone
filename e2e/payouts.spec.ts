@@ -1,5 +1,20 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { ADMIN, TRADER, failOnPageErrors, login } from './helpers';
+
+/** Removes any rule this suite created before, however a run ended. */
+async function clearRules(page: Page): Promise<void> {
+  for (let guard = 0; guard < 10; guard += 1) {
+    const row = page.getByRole('row', { name: /E2E / }).first();
+    if ((await row.count()) === 0) break;
+    const remove = row.getByRole('button', { name: 'Delete' });
+    if ((await remove.count()) === 0) break;
+    await remove.click();
+    await row.getByRole('button', { name: 'Confirm delete' }).click();
+    await expect(row)
+      .toHaveCount(0, { timeout: 15_000 })
+      .catch(() => undefined);
+  }
+}
 
 test.describe('payout rules', () => {
   test('an admin rule changes what the terminal quotes, and the ticket says why', async ({ browser }) => {
@@ -17,8 +32,13 @@ test.describe('payout rules', () => {
       await admin.goto('/admin/payouts');
       await expect(admin.getByRole('heading', { name: 'Payouts' })).toBeVisible();
 
+      // a previous run that was interrupted may have left one behind; this spec
+      // asserts on counts, so it starts from a known state rather than assuming
+      // the database is pristine
+      await clearRules(admin);
+
       await login(trader, TRADER);
-      const ticket = trader.getByRole('complementary').filter({ hasText: 'Payout' }).first();
+      const ticket = trader.getByRole('region', { name: 'Order ticket' });
       const figure = ticket.getByText(/^\d+%$/).first();
       await expect(figure).toBeVisible({ timeout: 15_000 });
 

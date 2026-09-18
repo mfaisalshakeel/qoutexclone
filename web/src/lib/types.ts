@@ -14,6 +14,8 @@ export interface User {
   referralCode: string;
   referralEarnings: number;
   kycStatus: 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
+  /** The saved chart workspace; validated by the reader, so it is unknown here. */
+  terminalLayout?: unknown;
   createdAt: string;
 }
 

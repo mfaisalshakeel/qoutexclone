@@ -251,7 +251,7 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
     };
     chartRef.current?.timeScale().subscribeVisibleLogicalRangeChange(onRangeChange);
 
-    realtime.subscribe(symbol, timeframe);
+    const unsubscribe = realtime.subscribe(symbol, timeframe);
 
     const offSnapshot = realtime.on('candles', (payload) => {
       if (cancelled || payload.symbol !== symbol || payload.timeframe !== timeframe) return;
@@ -272,6 +272,7 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
     return () => {
       cancelled = true;
       chartRef.current?.timeScale().unsubscribeVisibleLogicalRangeChange(onRangeChange);
+      unsubscribe();
       offSnapshot();
       offCandle();
     };

@@ -7,7 +7,7 @@ test.describe('expiry modes', () => {
     await login(page, TRADER);
     await page.waitForSelector('canvas');
 
-    const ticket = page.getByRole('complementary').filter({ hasText: 'Payout' }).first();
+    const ticket = page.getByRole('region', { name: 'Order ticket' });
     const expiry = ticket.getByRole('group', { name: 'Expiry' });
 
     // duration is the default, and the market's own list is what is offered
@@ -43,11 +43,7 @@ test.describe('expiry modes', () => {
     await login(page, TRADER);
     await page.waitForSelector('canvas');
 
-    const expiry = page
-      .getByRole('complementary')
-      .filter({ hasText: 'Payout' })
-      .first()
-      .getByRole('group', { name: 'Expiry' });
+    const expiry = page.getByRole('region', { name: 'Order ticket' }).getByRole('group', { name: 'Expiry' });
 
     // every duration button is one the catalogue offered for this market
     const offered: string[] = await page.evaluate(async () => {

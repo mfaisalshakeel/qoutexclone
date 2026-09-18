@@ -4,6 +4,26 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-17**: Phase 2 — **Multi-chart layouts**. One chart, two side by side or stacked, or four, each pane carrying its own market and timeframe, with one pane focused: the ticket, the header, the positions and the hotkeys all follow it, so there is never a question of which chart a trade belongs to. `web/src/lib/layout.ts` holds the shape changes as pure functions — resizing keeps the panes that survive, fills new ones from the last, and a round trip through four charts and back leaves the first pane exactly as it was.
+
+  **The socket had to grow up for this.** It carried one subscription per client, so with four charts the last pane to mount would simply win and the other three would sit still. Clients now hold a counted set of channels: each chart subscribes for itself and releases on unmount, the server tracks a map per connection (capped at eight, so one socket cannot ask for the world), and only a chart that is new to a client gets its history sent. An e2e spec reads the websocket frames and asserts more than one channel is actually subscribed, because this is the kind of thing that looks right on screen while three charts quietly go stale.
+
+  The layout lives on the **account**, not the browser, so a workspace follows a trader between devices — unlike their favourites and hotkeys, which are per-device conveniences. It is stored as given and validated by the reader: a stale shape from an older version must never stop the terminal rendering, so an unknown layout kind, a pane that is not a pane, or a focus beyond the panes all fall back rather than throwing.
+
+  **A real bug found by the spec**: saving is debounced, and because each change cancelled the previous timer, changing the layout and immediately reloading lost it — the last timer never fired. The pending write is now flushed on `pagehide` and on the tab being hidden, with `keepalive` so the request outlives the page. That is the difference between a setting that works and one that works only if you wait.
+
+  One more regression the suite caught, from the asset-picker work rather than this one: the new sort dropdown put the word "Payout" into the market rail, and several specs located the order ticket as "the aside containing 'Payout'" — so they started finding the rail instead. The ticket and the positions panel now name themselves (`role="region"` with `aria-label`), which is what those specs should have been using all along and is better for anyone navigating by landmark.
+
+  An unfocused pane is claimed by a real button covering it — the linter was right to refuse a click handler on a plain div — so focusing is one click or one Enter, and the chart underneath only takes scroll and drag once it is the one being traded. Four charts on a phone is not a layout, so the switcher is desktop-only. 16 unit tests, 2 e2e specs.
+
+- **2026-09-17**: Phase 2 — **Asset picker**. The market rail gains tabs by class, starred markets, and sorting, on top of the search, OTC badge, session state and per-market payout it already had. `web/src/lib/watchlist.ts` holds the logic as pure functions — filtering, sorting, and the two persisted lists — so it is testable without a browser.
+
+  Two rules shape the sort, both about not wasting a trader's attention: **an open market always outranks a closed one**, whatever the sort key, because a list headed by markets nobody can trade is a worse list however it is ordered; and **a starred market leads its group**, so a favourite is never buried. Sorting returns a copy rather than reordering the store's array. Class tabs are built from the catalogue, so only classes that exist are offered, and the favourites tab appears with the first star and disappears with the last — the picker falls back to All rather than stranding a tab that has gone.
+
+  Recently visited markets appear as tabs above the chart, as in Quotex: capped at six, unique, and re-visiting one promotes it instead of duplicating it. A market that has since been disabled simply drops out of the strip rather than rendering an empty tab.
+
+  Favourites and recents live in the browser, like the hotkey bindings, and tolerate storage holding something that is not a list of symbols — each entry is checked rather than trusting the parse. 17 unit tests and 2 e2e specs, one of which stars a market, reloads, and confirms it is still there.
+
 - **2026-09-17**: Phase 2 — **Hotkeys**. Configurable shortcuts for higher, lower, amount ±, expiry ±, and next/previous market, with a help overlay on `?`. `web/src/lib/hotkeys.ts` is pure data and pure functions, so the binding shown in the overlay, the one stored in the browser and the one matched against a keystroke are the same thing.
 
   **The rule that matters most is that a shortcut never fires while someone is typing.** The ticket has a number field, and a platform where typing "25" places two trades is worse than one with no shortcuts at all — so any editable target, anything nested inside one, and `contenteditable` all keep their own keys, and an e2e spec types into the stake field with the step key and asserts nothing moved and no position opened. Defaults avoid keys the browser already owns: WASD for the ticket, brackets for the market list, nothing needing a modifier, no arrows.
@@ -102,6 +122,7 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 _Record product choices made without the owner here: what, why, where it's configurable._
 
+- **The chart layout lives on the account, favourites and hotkeys in the browser.** A workspace is worth carrying between devices; a key map and a star list are per-device conveniences and not worth a round trip. The roadmap asked for the layout "per user", and this is the reading that actually follows the user.
 - **Hotkey preferences live in the browser, not the account.** They are a per-device convenience — a trader on a laptop and a phone wants different things, and a key map is not worth a round trip or a table. The platform switch stays server-side in settings.
 - **Repeating a position resolves its expiry server-side.** A client cannot send the original's expiry, because a clock boundary has passed by the time the button is clicked and a duration may have been withdrawn from the market. A duration repeat keeps its length or is refused; a clock repeat takes the soonest boundary still open.
 - **A market's stake range wins over the platform's presets.** Presets and balance shares outside a market's min/max are hidden or disabled rather than shown and then refused by the server.

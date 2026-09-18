@@ -47,8 +47,8 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **Pending trades.** Open when the price reaches a level, or at a set time. They're cancellable and listed separately. The server executes them from the feed with the same idempotency guarantees.
 - [x] **Ticket UX.** Amount with presets, ± steps, balance-percentage shortcuts, per-asset min/max enforced, live payout % and profit, and "double up" (repeat the same trade) from an open position if allowed by settings.
 - [x] **Hotkeys.** Configurable shortcuts for up, down, amount ±, expiry ±, and next/previous asset, with a help overlay (`?`). Can be turned off in settings.
-- [ ] **Asset picker.** Tabs by class, favourites (persisted), search, sort by payout/name/change, OTC badge, open/closed state, and payout shown per asset. Recent assets appear as tabs above the chart, as in Quotex.
-- [ ] **Multi-chart layouts.** 1, 2 (horizontal/vertical) or 4 charts, each with its own asset/timeframe, and trade from the focused one. Layout is persisted per user.
+- [x] **Asset picker.** Tabs by class, favourites (persisted), search, sort by payout/name/change, OTC badge, open/closed state, and payout shown per asset. Recent assets appear as tabs above the chart, as in Quotex.
+- [x] **Multi-chart layouts.** 1, 2 (horizontal/vertical) or 4 charts, each with its own asset/timeframe, and trade from the focused one. Layout is persisted per user.
 - [ ] **Positions panel.** Open trades show a live countdown and progress, a winning/losing tint, and potential result. Closed trades show the result, and a detail modal shows the entry/exit chart snippet. There's also a "Trade again" action.
 - [ ] **Trader sentiment.** Per asset, the % of stake on UP vs DOWN over the last N minutes, from real platform data.
 - [ ] **Top traders today.** A leaderboard by daily profit, with anonymised names, country flag, and an opt-out in settings.

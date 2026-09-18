@@ -32,8 +32,12 @@ model User {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  trades            Trade[]
-  pendingTrades     PendingTrade[]
+  trades        Trade[]
+  pendingTrades PendingTrade[]
+
+  /// Terminal workspace: chart layout and each pane's market and timeframe.
+  /// Follows the trader across devices, unlike their per-browser conveniences.
+  terminalLayout    Json?
   transactions      Transaction[]
   deposits          Deposit[]
   withdrawals       Withdrawal[]

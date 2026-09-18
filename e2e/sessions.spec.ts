@@ -58,7 +58,10 @@ test.describe('trading sessions', () => {
       await page.goto('/trade');
       await page.waitForSelector('canvas');
       await page.fill('input[placeholder="Search markets"]', 'EUR/USD');
-      await page.locator('button:has-text("EUR/USD")').first().click();
+      // the spot market and its OTC twin both read "EUR/USD" on screen, and the
+      // picker now lists open markets first — so the closed one has to be asked
+      // for by name rather than taken as the first match
+      await page.getByRole('button', { name: 'EUR/USD', exact: true }).first().click();
       await expect(page.getByText(/is closed/).first()).toBeVisible();
 
       await page.locator('button:has-text("Trade the OTC market instead")').first().click();

@@ -45,7 +45,12 @@ export interface RealtimeEvents {
 class RealtimeClient {
   private socket: WebSocket | null = null;
   private handlers = new Map<string, Set<Handler>>();
-  private subscription: { symbol?: string; timeframe?: string } = {};
+  /**
+   * Every chart on screen, counted. A terminal can show four at once and each
+   * one subscribes for itself, so the socket tracks how many charts want a
+   * channel rather than letting the last one to mount replace the rest.
+   */
+  private channels = new Map<string, { symbol: string; timeframe: string; count: number }>();
   private attempts = 0;
   private closedByUs = false;
   private reconnectTimer: number | null = null;
@@ -65,7 +70,7 @@ class RealtimeClient {
     socket.onopen = () => {
       this.attempts = 0;
       this.emit('status', { connected: true });
-      if (this.subscription.symbol) this.send({ type: 'subscribe', ...this.subscription });
+      if (this.channels.size > 0) this.sendChannels();
     };
     socket.onmessage = (event) => {
       try {
@@ -110,9 +115,39 @@ class RealtimeClient {
     if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message));
   }
 
-  subscribe(symbol: string, timeframe: string): void {
-    this.subscription = { symbol, timeframe };
-    this.send({ type: 'subscribe', symbol, timeframe });
+  /**
+   * Watches one chart, returning the function that stops watching it. The
+   * server is only told when the set actually changes, so four charts sharing a
+   * market do not send four messages.
+   */
+  subscribe(symbol: string, timeframe: string): () => void {
+    const key = `${symbol}|${timeframe}`;
+    const existing = this.channels.get(key);
+    if (existing) existing.count += 1;
+    else {
+      this.channels.set(key, { symbol, timeframe, count: 1 });
+      this.sendChannels();
+    }
+
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const entry = this.channels.get(key);
+      if (!entry) return;
+      entry.count -= 1;
+      if (entry.count <= 0) {
+        this.channels.delete(key);
+        this.sendChannels();
+      }
+    };
+  }
+
+  private sendChannels(): void {
+    this.send({
+      type: 'subscribe',
+      channels: [...this.channels.values()].map(({ symbol, timeframe }) => ({ symbol, timeframe })),
+    });
   }
 
   on<K extends keyof RealtimeEvents>(type: K, handler: (payload: RealtimeEvents[K]) => void): () => void {

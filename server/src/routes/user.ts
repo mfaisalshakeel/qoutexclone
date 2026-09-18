@@ -38,6 +38,34 @@ router.patch(
   }),
 );
 
+/**
+ * The terminal workspace. Stored as given and validated by the client that
+ * reads it: a layout is a preference, and a stale shape from an older version
+ * must never stop the terminal rendering, so the reader is the one that
+ * decides what is usable.
+ */
+router.patch(
+  '/layout',
+  wrap(async (req, res) => {
+    const body = z
+      .object({
+        kind: z.enum(['single', 'rows', 'cols', 'quad']),
+        panes: z
+          .array(z.object({ symbol: z.string().min(1).max(24), timeframe: z.string().min(1).max(8) }))
+          .min(1)
+          .max(4),
+        focused: z.number().int().min(0).max(3),
+      })
+      .parse(req.body);
+
+    const user = await prisma.user.update({
+      where: { id: req.user!.id },
+      data: { terminalLayout: body },
+    });
+    res.json({ terminalLayout: user.terminalLayout });
+  }),
+);
+
 router.post(
   '/password',
   wrap(async (req, res) => {

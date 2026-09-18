@@ -7,7 +7,7 @@ test.describe('ticket', () => {
     await login(page, TRADER);
     await page.waitForSelector('canvas');
 
-    const ticket = page.getByRole('complementary').filter({ hasText: 'Payout' }).first();
+    const ticket = page.getByRole('region', { name: 'Order ticket' });
     const investment = ticket.getByRole('group', { name: 'Investment' });
     const amount = investment.getByLabel('Investment amount');
 
@@ -67,8 +67,8 @@ test.describe('ticket', () => {
     await login(page, TRADER);
     await page.waitForSelector('canvas');
 
-    const ticket = page.getByRole('complementary').filter({ hasText: 'Payout' }).first();
-    const panel = page.getByRole('complementary').filter({ hasText: 'Pending' }).first();
+    const ticket = page.getByRole('region', { name: 'Order ticket' });
+    const panel = page.getByRole('region', { name: 'Positions' });
 
     // one position to repeat, on a one-minute expiry so it stays open
     await ticket

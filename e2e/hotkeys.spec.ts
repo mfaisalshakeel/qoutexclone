@@ -7,7 +7,7 @@ test.describe('hotkeys', () => {
     await login(page, TRADER);
     await page.waitForSelector('canvas');
 
-    const ticket = page.getByRole('complementary').filter({ hasText: 'Payout' }).first();
+    const ticket = page.getByRole('region', { name: 'Order ticket' });
     const investment = ticket.getByRole('group', { name: 'Investment' });
     const amount = investment.getByLabel('Investment amount');
 
@@ -43,7 +43,7 @@ test.describe('hotkeys', () => {
     await amount.press('d');
     await expect(amount).toHaveValue('50');
     // no position was opened by any of that
-    const panel = page.getByRole('complementary').filter({ hasText: 'Pending' }).first();
+    const panel = page.getByRole('region', { name: 'Positions' });
     await expect(panel.getByRole('tab', { name: 'Open' })).toBeVisible();
 
     expect(errors).toEqual([]);
@@ -83,7 +83,7 @@ test.describe('hotkeys', () => {
     await reopened.getByLabel('Shortcuts enabled').uncheck();
     await reopened.getByRole('button', { name: 'Close' }).click();
 
-    const ticket = page.getByRole('complementary').filter({ hasText: 'Payout' }).first();
+    const ticket = page.getByRole('region', { name: 'Order ticket' });
     const amount = ticket.getByRole('group', { name: 'Investment' }).getByLabel('Investment amount');
     const before = await amount.inputValue();
     await page.locator('body').press('k');

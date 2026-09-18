@@ -1,7 +1,74 @@
 import { create } from 'zustand';
-import { api } from '../lib/api';
+import { api, tokens } from '../lib/api';
 import type { ExpiryConfig, TicketConfig } from '../lib/types';
-import { realtime } from '../lib/ws';
+import { loadFavourites, loadRecents, pushRecent } from '../lib/watchlist';
+import {
+  clampFocus,
+  defaultLayout,
+  parseLayout,
+  resize,
+  updatePane,
+  type LayoutKind,
+  type TerminalLayout,
+} from '../lib/layout';
+
+/**
+ * Saves the workspace to the account, so it follows the trader to another
+ * device.
+ *
+ * Debounced, because walking through layouts or timeframes would otherwise
+ * write on every click. The debounce has to be flushed when the page goes away,
+ * though: without that, changing the layout and immediately reloading loses it,
+ * since each change cancels the previous timer and the last one never fires.
+ * A failure is silent — a layout that did not save is not worth interrupting
+ * anyone over.
+ */
+const PERSIST_DEBOUNCE_MS = 600;
+let layoutTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingLayout: TerminalLayout | null = null;
+
+function sendLayout(layout: TerminalLayout): void {
+  void api.patch('/me/layout', layout).catch(() => undefined);
+}
+
+function persistLayout(layout: TerminalLayout): void {
+  if (!tokens.access) return;
+  pendingLayout = layout;
+  if (layoutTimer) clearTimeout(layoutTimer);
+  layoutTimer = setTimeout(() => {
+    layoutTimer = null;
+    const next = pendingLayout;
+    pendingLayout = null;
+    if (next) sendLayout(next);
+  }, PERSIST_DEBOUNCE_MS);
+}
+
+/** Sends whatever is still waiting, before the page is gone. */
+export function flushLayout(): void {
+  if (layoutTimer) {
+    clearTimeout(layoutTimer);
+    layoutTimer = null;
+  }
+  const next = pendingLayout;
+  pendingLayout = null;
+  if (!next || !tokens.access) return;
+  // keepalive lets the request outlive the page it started on
+  void fetch(`${import.meta.env.VITE_API_URL ?? ''}/api/me/layout`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${tokens.access}` },
+    body: JSON.stringify(next),
+    keepalive: true,
+  }).catch(() => undefined);
+}
+
+if (typeof window !== 'undefined') {
+  // pagehide covers reload, navigation and the mobile bfcache; visibilitychange
+  // covers a tab being switched away from and never coming back
+  window.addEventListener('pagehide', flushLayout);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushLayout();
+  });
+}
 import type { Asset } from '../lib/types';
 
 interface MarketState {
@@ -11,6 +78,17 @@ interface MarketState {
   expiry: ExpiryConfig;
   /** Stake presets, the ± step, and whether a position may be repeated. */
   ticket: TicketConfig;
+  /** Starred markets and the ones just visited, both per browser. */
+  favourites: string[];
+  recents: string[];
+  setFavourites: (symbols: string[]) => void;
+  /** Chart layout. The focused pane is what `symbol` and `timeframe` refer to. */
+  layout: TerminalLayout;
+  setLayoutKind: (kind: LayoutKind) => void;
+  focusPane: (index: number) => void;
+  setPaneSymbol: (index: number, symbol: string) => void;
+  setPaneTimeframe: (index: number, timeframe: string) => void;
+  adoptLayout: (stored: unknown) => void;
   timeframes: string[];
   prices: Record<string, number>;
   symbol: string;
@@ -44,6 +122,9 @@ export const useMarket = create<MarketState>((set, get) => ({
   },
   timeframes: ['5s', '10s', '15s', '30s', '1m', '2m', '3m', '5m', '10m', '15m', '30m', '1h', '4h', '1d'],
   prices: {},
+  favourites: loadFavourites(),
+  recents: loadRecents(),
+  layout: defaultLayout(localStorage.getItem(LAST_SYMBOL_KEY) ?? 'EURUSD', '1m'),
   // the catalogue's lead market; `load` corrects a stored symbol that no longer exists
   symbol: localStorage.getItem(LAST_SYMBOL_KEY) ?? 'EURUSD',
   timeframe: '1m',
@@ -69,18 +150,74 @@ export const useMarket = create<MarketState>((set, get) => ({
       symbol: symbol ?? get().symbol,
       loaded: true,
     });
-    realtime.subscribe(symbol ?? get().symbol, get().timeframe);
   },
 
   selectSymbol(symbol) {
     localStorage.setItem(LAST_SYMBOL_KEY, symbol);
-    set({ symbol });
-    realtime.subscribe(symbol, get().timeframe);
+    // visiting a market moves it to the front of the recent tabs, and changes
+    // the pane the ticket is trading from — never a pane nobody is looking at
+    const { layout } = get();
+    set({
+      symbol,
+      recents: pushRecent(get().recents, symbol),
+      layout: updatePane(layout, layout.focused, { symbol }),
+    });
+    persistLayout(get().layout);
+  },
+
+  setFavourites(symbols) {
+    set({ favourites: symbols });
   },
 
   setTimeframe(timeframe) {
-    set({ timeframe });
-    realtime.subscribe(get().symbol, timeframe);
+    const { layout } = get();
+    set({ timeframe, layout: updatePane(layout, layout.focused, { timeframe }) });
+    persistLayout(get().layout);
+  },
+
+  setLayoutKind(kind) {
+    const { layout, symbol, timeframe } = get();
+    const panes = resize(layout.panes, kind, { symbol, timeframe });
+    const focused = clampFocus(layout.focused, kind);
+    const next = { kind, panes, focused };
+    set({ layout: next, symbol: panes[focused].symbol, timeframe: panes[focused].timeframe });
+    persistLayout(next);
+  },
+
+  focusPane(index) {
+    const { layout } = get();
+    const focused = clampFocus(index, layout.kind);
+    const pane = layout.panes[focused];
+    if (!pane) return;
+    const next = { ...layout, focused };
+    set({ layout: next, symbol: pane.symbol, timeframe: pane.timeframe });
+    persistLayout(next);
+  },
+
+  setPaneSymbol(index, symbol) {
+    const { layout } = get();
+    const next = updatePane(layout, index, { symbol });
+    set({
+      layout: next,
+      recents: pushRecent(get().recents, symbol),
+      ...(index === layout.focused ? { symbol } : {}),
+    });
+    persistLayout(next);
+  },
+
+  setPaneTimeframe(index, timeframe) {
+    const { layout } = get();
+    const next = updatePane(layout, index, { timeframe });
+    set({ layout: next, ...(index === layout.focused ? { timeframe } : {}) });
+    persistLayout(next);
+  },
+
+  /** Takes the layout stored on the account, whatever shape it is in. */
+  adoptLayout(stored) {
+    const { symbol, timeframe } = get();
+    const layout = parseLayout(stored, defaultLayout(symbol, timeframe));
+    const pane = layout.panes[layout.focused];
+    set({ layout, symbol: pane.symbol, timeframe: pane.timeframe });
   },
 
   setPrices(prices) {

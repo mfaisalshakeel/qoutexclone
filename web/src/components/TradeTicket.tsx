@@ -311,7 +311,11 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
 
   if (marketClosed) {
     return (
-      <div className="card flex h-full flex-col items-center justify-center gap-3 p-5 text-center">
+      <div
+        role="region"
+        aria-label="Order ticket"
+        className="card flex h-full flex-col items-center justify-center gap-3 p-5 text-center"
+      >
         <span className="flex h-10 w-10 items-center justify-center rounded-full bg-ink-600 text-slate-400">
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
             <circle cx="12" cy="12" r="9" />
@@ -339,7 +343,7 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
   }
 
   return (
-    <div className="card flex h-full flex-col gap-3 p-3">
+    <div role="region" aria-label="Order ticket" className="card flex h-full flex-col gap-3 p-3">
       <div className="flex items-center justify-between">
         <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-wide text-slate-400">Payout</p>

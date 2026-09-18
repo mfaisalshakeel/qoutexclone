@@ -15,13 +15,26 @@ import { prisma } from './lib/prisma.js';
 import { publicDeposit, publicOrder, publicTrade, publicWithdrawal } from './lib/serialize.js';
 import { log } from './lib/logger.js';
 
+/** One chart a client is watching. */
+interface Channel {
+  symbol: string;
+  timeframe: string;
+}
+
 interface ClientState {
   userId?: string;
   isAdmin?: boolean;
-  symbol?: string;
-  timeframe: string;
+  /**
+   * Every chart on screen, keyed `symbol|timeframe`. A terminal can show four
+   * at once, so one subscription per client is not enough — the last one would
+   * simply win and the other three would sit still.
+   */
+  channels: Map<string, Channel>;
   alive: boolean;
 }
+
+/** At most this many charts per client, so one socket cannot ask for the world. */
+const MAX_CHANNELS = 8;
 
 const BROADCAST_MS = 400;
 const HEARTBEAT_MS = 30000;
@@ -69,7 +82,7 @@ export function attachWebsocket(server: Server) {
   };
 
   wss.on('connection', (socket, req) => {
-    const state: ClientState = { timeframe: '1m', alive: true };
+    const state: ClientState = { channels: new Map(), alive: true };
     clients.set(socket, state);
     log.ws.debug({ clients: clients.size }, 'client connected');
 
@@ -115,17 +128,39 @@ export function attachWebsocket(server: Server) {
           break;
         }
         case 'subscribe': {
-          if (typeof msg.symbol === 'string') state.symbol = msg.symbol.toUpperCase();
-          if (typeof msg.timeframe === 'string') state.timeframe = msg.timeframe;
-          if (state.symbol) {
+          // a list replaces the whole set; a single pair is still accepted so an
+          // older client keeps working
+          const requested: Channel[] = Array.isArray(msg.channels)
+            ? (msg.channels as unknown[])
+                .filter(
+                  (each): each is Channel =>
+                    !!each &&
+                    typeof (each as Channel).symbol === 'string' &&
+                    typeof (each as Channel).timeframe === 'string',
+                )
+                .map((each) => ({ symbol: each.symbol.toUpperCase(), timeframe: each.timeframe }))
+            : typeof msg.symbol === 'string'
+              ? [{ symbol: msg.symbol.toUpperCase(), timeframe: String(msg.timeframe ?? '1m') }]
+              : [];
+
+          const next = new Map<string, Channel>();
+          for (const channel of requested.slice(0, MAX_CHANNELS)) {
+            next.set(`${channel.symbol}|${channel.timeframe}`, channel);
+          }
+
+          // only a chart that is new to this client needs its history sent
+          const fresh = [...next.entries()].filter(([key]) => !state.channels.has(key));
+          state.channels = next;
+
+          for (const [, channel] of fresh) {
             // durable history, not just the in-memory tail
             void candleStore
-              .history(state.symbol, state.timeframe, { limit: 200 })
+              .history(channel.symbol, channel.timeframe, { limit: 200 })
               .then((candles) =>
                 send(socket, {
                   type: 'candles',
-                  symbol: state.symbol,
-                  timeframe: state.timeframe,
+                  symbol: channel.symbol,
+                  timeframe: channel.timeframe,
                   candles,
                 }),
               )
@@ -159,10 +194,11 @@ export function attachWebsocket(server: Server) {
     const ts = Date.now();
     for (const [socket, state] of clients) {
       send(socket, { type: 'quotes', prices, ts });
-      if (state.symbol) {
-        const [candle] = marketFeed.getCandles(state.symbol, state.timeframe, 1);
-        if (candle)
-          send(socket, { type: 'candle', symbol: state.symbol, timeframe: state.timeframe, candle });
+      for (const channel of state.channels.values()) {
+        const [candle] = marketFeed.getCandles(channel.symbol, channel.timeframe, 1);
+        if (candle) {
+          send(socket, { type: 'candle', symbol: channel.symbol, timeframe: channel.timeframe, candle });
+        }
       }
     }
   }, BROADCAST_MS);

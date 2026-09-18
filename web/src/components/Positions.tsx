@@ -54,7 +54,7 @@ export function Positions({ open, closed, pending, onCancel, onRepeat, loading =
   };
 
   return (
-    <div className="card flex h-full min-h-0 flex-col">
+    <div role="region" aria-label="Positions" className="card flex h-full min-h-0 flex-col">
       <div
         role="tablist"
         aria-label="Positions"

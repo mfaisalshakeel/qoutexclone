@@ -7,8 +7,8 @@ test.describe('pending orders', () => {
     await login(page, TRADER);
     await page.waitForSelector('canvas');
 
-    const ticket = page.getByRole('complementary').filter({ hasText: 'Payout' }).first();
-    const panel = page.getByRole('complementary').filter({ hasText: 'Pending' }).first();
+    const ticket = page.getByRole('region', { name: 'Order ticket' });
+    const panel = page.getByRole('region', { name: 'Positions' });
 
     await ticket.getByRole('group', { name: 'Order' }).getByRole('button', { name: 'Pending' }).click();
     await expect(ticket.getByRole('button', { name: 'At a price' })).toHaveAttribute('aria-pressed', 'true');
@@ -19,8 +19,12 @@ test.describe('pending orders', () => {
     const market = Number(await level.inputValue());
     expect(market).toBeGreaterThan(0);
 
-    // a level sitting on the market is a market order, and the ticket says so
-    await expect(ticket.getByText(/that is a market order/)).toBeVisible();
+    // an empty level is refused before any round trip
+    await level.fill('');
+    await expect(ticket.getByText('Enter a price level')).toBeVisible();
+    await expect(ticket.getByRole('button', { name: 'Order higher' })).toBeDisabled();
+    // (a level sitting exactly on the market is refused too, but the tape moves
+    // under it, so that one is pinned down by an integration test instead)
 
     // well above the market, so it will not fill during the test
     await level.fill((market * 1.5).toFixed(5));
@@ -46,7 +50,7 @@ test.describe('pending orders', () => {
     await login(page, TRADER);
     await page.waitForSelector('canvas');
 
-    const ticket = page.getByRole('complementary').filter({ hasText: 'Payout' }).first();
+    const ticket = page.getByRole('region', { name: 'Order ticket' });
     await ticket.getByRole('group', { name: 'Order' }).getByRole('button', { name: 'Pending' }).click();
     await ticket.getByRole('button', { name: 'At a time' }).click();
 
@@ -67,7 +71,7 @@ test.describe('pending orders', () => {
     await ticket.getByRole('button', { name: 'Order lower' }).click();
     await expect(page.getByText('Order placed')).toBeVisible({ timeout: 15_000 });
 
-    const panel = page.getByRole('complementary').filter({ hasText: 'Pending' }).first();
+    const panel = page.getByRole('region', { name: 'Positions' });
     await panel.getByRole('tab', { name: /Pending/ }).click();
     await expect(panel.getByText(/Opens at /).first()).toBeVisible();
 

@@ -3,6 +3,7 @@ import { ApiError, api } from '../lib/api';
 import { realtime } from '../lib/ws';
 import { percent, price, untilShort } from '../lib/format';
 import { assetOf, useMarket } from '../store/market';
+import { LAYOUTS, gridClass } from '../lib/layout';
 import { useAuth } from '../store/auth';
 import { useTradingAccount } from '../store/tradingAccount';
 import { toast } from '../store/toast';
@@ -15,7 +16,7 @@ import { TradeTicket, type TicketHandle } from '../components/TradeTicket';
 import { HotkeyHelp } from '../components/HotkeyHelp';
 import { useHotkeys } from '../hooks/useHotkeys';
 import { ChartSkeleton, Skeleton, SkeletonGroup } from '../components/Skeleton';
-import type { PendingOrder, Trade } from '../lib/types';
+import type { Asset, PendingOrder, Trade } from '../lib/types';
 
 /** Traders should always know where a quote comes from. */
 function sourceLabel(source: string): { text: string; title: string } {
@@ -38,6 +39,12 @@ export function Terminal() {
   const { assets, prices, symbol, timeframe, timeframes, setTimeframe, load, loaded } = useMarket();
   const selectSymbol = useMarket((s) => s.selectSymbol);
   const ticketConfig = useMarket((s) => s.ticket);
+  const recents = useMarket((s) => s.recents);
+  const layout = useMarket((s) => s.layout);
+  const setLayoutKind = useMarket((s) => s.setLayoutKind);
+  const focusPane = useMarket((s) => s.focusPane);
+  const setPaneTimeframe = useMarket((s) => s.setPaneTimeframe);
+  const adoptLayout = useMarket((s) => s.adoptLayout);
   const user = useAuth((s) => s.user);
   const [openTrades, setOpenTrades] = useState<Trade[]>([]);
   const [closedTrades, setClosedTrades] = useState<Trade[]>([]);
@@ -58,6 +65,11 @@ export function Terminal() {
   const [helpOpen, setHelpOpen] = useState(false);
 
   const asset = useMemo(() => assetOf(symbol, assets), [symbol, assets]);
+  // recents are symbols; a market that has since been disabled simply drops out
+  const recentTabs = useMemo(
+    () => recents.map((each) => assetOf(each, assets)).filter((each): each is Asset => !!each),
+    [recents, assets],
+  );
   const livePrice = prices[symbol] ?? asset?.price ?? null;
   const tournamentId = useTradingAccount((s) => s.tournamentId);
   const setTournamentBalance = useTradingAccount((s) => s.setBalance);
@@ -67,6 +79,15 @@ export function Terminal() {
   useEffect(() => {
     if (!loaded) void load();
   }, [loaded, load]);
+
+  // the workspace follows the trader between devices, so it comes from the
+  // account rather than the browser — adopted once, when the account arrives
+  const adoptedRef = useRef(false);
+  useEffect(() => {
+    if (adoptedRef.current || !user) return;
+    adoptedRef.current = true;
+    adoptLayout(user.terminalLayout);
+  }, [user, adoptLayout]);
 
   const loadTrades = useCallback(async () => {
     setTradesLoaded(false);
@@ -327,6 +348,35 @@ export function Terminal() {
 
             <div className="mx-1 hidden h-5 w-px bg-ink-600 sm:block" />
 
+            {/* chart layout — desktop only: four charts on a phone is not a
+                layout, it is four unreadable charts */}
+            {isDesktop && (
+              <div className="flex gap-1" role="group" aria-label="Chart layout">
+                {LAYOUTS.map((option) => (
+                  <button
+                    key={option.kind}
+                    onClick={() => setLayoutKind(option.kind)}
+                    aria-pressed={layout.kind === option.kind}
+                    title={option.label}
+                    aria-label={option.label}
+                    className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${
+                      layout.kind === option.kind
+                        ? 'bg-ink-600 text-white'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {option.kind === 'single'
+                      ? '▢'
+                      : option.kind === 'cols'
+                        ? '▯▯'
+                        : option.kind === 'rows'
+                          ? '≡'
+                          : '⊞'}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="flex gap-1">
               {(['candles', 'line'] as const).map((type) => (
                 <button
@@ -374,20 +424,105 @@ export function Terminal() {
           </div>
         </header>
 
-        <div className="card relative h-[42dvh] min-h-[240px] overflow-hidden md:h-auto md:flex-1">
-          {!asset && <ChartSkeleton />}
-          {asset && (
-            <ErrorBoundary variant="inline" title="Chart unavailable" resetKey={`${symbol}:${timeframe}`}>
-              <PriceChart
-                symbol={symbol}
-                timeframe={timeframe}
-                precision={asset.precision}
-                trades={openTrades}
-                chartType={chartType}
-                indicators={indicators}
-              />
-            </ErrorBoundary>
-          )}
+        {/* the markets just visited, as tabs: the fastest way back to one */}
+        {recentTabs.length > 1 && (
+          <div
+            role="tablist"
+            aria-label="Recent markets"
+            className="-mx-0.5 flex shrink-0 gap-1 overflow-x-auto px-0.5"
+          >
+            {recentTabs.map((each) => (
+              <button
+                key={each.symbol}
+                role="tab"
+                aria-selected={each.symbol === symbol}
+                onClick={() => selectSymbol(each.symbol)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition ${
+                  each.symbol === symbol
+                    ? 'bg-ink-700 text-white'
+                    : 'bg-ink-800/60 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <span className="truncate">{each.pair.replace(' (OTC)', '')}</span>
+                {each.isOtc && <span className="chip bg-accent-soft text-accent">OTC</span>}
+                {!each.isOpen && <span className="chip bg-ink-600 text-slate-500">closed</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className={`grid h-[42dvh] min-h-[240px] gap-2 md:h-auto md:flex-1 ${gridClass(layout.kind)}`}>
+          {layout.panes.map((pane, index) => {
+            const paneAsset = assetOf(pane.symbol, assets);
+            const isFocused = index === layout.focused;
+            const single = layout.panes.length === 1;
+            return (
+              <div
+                key={`${index}:${pane.symbol}:${pane.timeframe}`}
+                className={`card relative min-h-0 overflow-hidden ${
+                  single ? '' : isFocused ? 'ring-1 ring-accent/60' : 'opacity-90'
+                }`}
+              >
+                {/* An unfocused pane is claimed by a real button covering it, so
+                    focusing is one click or one Enter — and the chart below only
+                    takes scroll and drag once it is the one being traded. */}
+                {!single && !isFocused && (
+                  <button
+                    onClick={() => focusPane(index)}
+                    aria-label={`Trade from ${paneAsset?.pair ?? pane.symbol}`}
+                    className="absolute inset-0 z-20 cursor-pointer bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  />
+                )}
+                {/* with one chart the header above already says which market it
+                    is; with several, each pane has to say so itself */}
+                {!single && (
+                  <div className="absolute left-0 right-0 top-0 z-30 flex items-center gap-1.5 bg-gradient-to-b from-ink-900/90 to-transparent px-2 py-1.5">
+                    <button
+                      onClick={() => {
+                        focusPane(index);
+                        setMarketsOpen(true);
+                      }}
+                      aria-label={`Change the market in pane ${index + 1}`}
+                      className="truncate text-[11px] font-semibold text-slate-200 hover:text-white"
+                    >
+                      {paneAsset?.pair.replace(' (OTC)', '') ?? pane.symbol}
+                    </button>
+                    {isFocused && <span className="chip bg-accent-soft text-accent">trading</span>}
+                    <select
+                      value={pane.timeframe}
+                      onChange={(event) => setPaneTimeframe(index, event.target.value)}
+                      aria-label={`Timeframe for pane ${index + 1}`}
+                      className="ml-auto rounded border border-ink-600 bg-ink-900/80 px-1 py-0.5 text-[10px] text-slate-300"
+                    >
+                      {timeframes.map((each) => (
+                        <option key={each} value={each}>
+                          {each}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {!paneAsset && <ChartSkeleton />}
+                {paneAsset && (
+                  <ErrorBoundary
+                    variant="inline"
+                    title="Chart unavailable"
+                    resetKey={`${pane.symbol}:${pane.timeframe}`}
+                  >
+                    <PriceChart
+                      symbol={pane.symbol}
+                      timeframe={pane.timeframe}
+                      precision={paneAsset.precision}
+                      trades={openTrades}
+                      chartType={chartType}
+                      indicators={indicators}
+                    />
+                  </ErrorBoundary>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* narrow viewports swap between the ticket and the positions list */}

@@ -34,12 +34,21 @@ test.describe('risk limits', () => {
       // a practice trader is never held back by the house's book, but their own
       // per-market cap still applies
       await login(trader, TRADER);
+      // the workspace is saved on the account now, so the terminal opens on
+      // whatever market was last used — this spec caps EUR/USD, so it has to
+      // put the trader there rather than assume it
+      await trader.waitForSelector('canvas');
+      const rail = trader.getByRole('complementary').filter({ has: trader.getByLabel('Search markets') });
+      await rail.getByLabel('Search markets').fill('EURUSD');
+      await rail.getByRole('button', { name: 'EUR/USD', exact: true }).first().click();
+      await rail.getByLabel('Search markets').fill('');
+
       await placeTrade(trader, 'Higher', '1m');
       await placeTrade(trader, 'Higher', '1m');
 
       // $10 + $10 is past the $15 cap, so the second is refused with a reason
       // that stays on the ticket
-      const ticket = trader.getByRole('complementary').filter({ hasText: 'Payout' }).first();
+      const ticket = trader.getByRole('region', { name: 'Order ticket' });
       await expect(ticket.getByText(/open on this market/)).toBeVisible({ timeout: 15_000 });
 
       expect(adminErrors).toEqual([]);
