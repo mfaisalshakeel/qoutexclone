@@ -78,7 +78,8 @@ are the point.
 
 ## Install
 
-Requires **Node 20+** and **MySQL 8** (or MariaDB 10.4+).
+Requires **Node 20+** and **MySQL 8** (or MariaDB 10.4+). For a hosted test
+deployment — Railway, a VPS or shared hosting — see [DEPLOY.md](DEPLOY.md).
 
 ### Option 1 — Docker (nothing else to install)
 
