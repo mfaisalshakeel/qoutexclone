@@ -1,5 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { expectNoHorizontalScroll, failOnPageErrors, fundAccount, placeTrade, register } from './helpers';
+import {
+  expectNoHorizontalScroll,
+  failOnPageErrors,
+  fundAccount,
+  placeTrade,
+  register,
+  useLiveAccount,
+} from './helpers';
 
 test.describe('top traders today', () => {
   test('a settled live position reaches the board, and a trader can leave it', async ({ page }) => {
@@ -10,11 +17,7 @@ test.describe('top traders today', () => {
     await fundAccount(page, '$250');
     await page.goto('/trade');
     await page.waitForSelector('canvas');
-    await page
-      .getByRole('button', { name: /Practice/ })
-      .first()
-      .click();
-    await page.getByRole('button', { name: /Live account/ }).click();
+    await useLiveAccount(page);
 
     await placeTrade(page, 'Higher', '30s');
     const positions = page.getByRole('region', { name: 'Positions' });

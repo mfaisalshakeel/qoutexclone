@@ -52,14 +52,38 @@ export async function openMarket(page: Page, search: string, pair: string): Prom
   await rail.getByLabel('Search markets').fill('');
   // leaving the search box focused would swallow every hotkey that follows
   await rail.getByLabel('Search markets').blur();
-  await expect(page.locator('button:visible:has-text("Higher")').first()).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Order ticket' }).getByRole('button', { name: 'Higher', exact: true }),
+  ).toBeVisible();
+}
+
+/** The account switcher pill, whichever account it currently names. */
+export const accountPill = (page: Page) => page.getByRole('button', { name: /^Trading account:/ });
+
+/** The switcher's open menu. */
+export const accountMenu = (page: Page) => page.getByRole('menu', { name: 'Trading accounts' });
+
+/** Moves the terminal onto live money, so a position is staked from it. */
+export async function useLiveAccount(page: Page): Promise<void> {
+  await accountPill(page).click();
+  await accountMenu(page)
+    .getByRole('menuitem', { name: /Live account/ })
+    .click();
+  await expect(accountPill(page)).toHaveAttribute('aria-label', 'Trading account: Live');
 }
 
 /** Places a position on the account currently selected in the header. */
 export async function placeTrade(page: Page, direction: 'Higher' | 'Lower', expiry = '30s'): Promise<void> {
   await page.waitForSelector('canvas');
-  await page.locator(`button:visible:has-text("${expiry}")`).first().click();
-  await page.locator(`button:visible:has-text("${direction}")`).first().click();
+  // scoped to the ticket, and exact: a loose `has-text("1m")` also matches a
+  // closed market's "Opens in 7h 1m" row in the rail, which made this helper
+  // fail once a minute depending on the clock
+  const ticket = page.getByRole('region', { name: 'Order ticket' });
+  await ticket
+    .getByRole('group', { name: 'Expiry' })
+    .getByRole('button', { name: expiry, exact: true })
+    .click();
+  await ticket.getByRole('button', { name: direction, exact: true }).click();
 }
 
 /**

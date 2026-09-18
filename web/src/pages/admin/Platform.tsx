@@ -48,6 +48,9 @@ function isoIn(hours: number): string {
 export function AdminTournaments() {
   const [rows, setRows] = useState<AdminTournament[] | null>(null);
   const [board, setBoard] = useState<{ id: string; rows: LeaderboardRow[] } | null>(null);
+  // paying out is irreversible, so it takes two clicks — in two steps rather
+  // than a native confirm, which a keyboard or an automated check cannot reach
+  const [confirming, setConfirming] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -92,7 +95,7 @@ export function AdminTournaments() {
   };
 
   const act = async (id: string, action: 'start' | 'finish') => {
-    if (action === 'finish' && !window.confirm('Finish now and pay out the prize pool?')) return;
+    setConfirming(null);
     try {
       await api.post(`/admin/tournaments/${id}/${action}`);
       await load();
@@ -264,14 +267,27 @@ export function AdminTournaments() {
                         Start
                       </button>
                     )}
-                    {t.status === 'RUNNING' && (
-                      <button
-                        onClick={() => void act(t.id, 'finish')}
-                        className="btn-up !px-3 !py-1.5 text-xs"
-                      >
-                        Finish & pay
-                      </button>
-                    )}
+                    {t.status === 'RUNNING' &&
+                      (confirming === t.id ? (
+                        <>
+                          <button
+                            onClick={() => void act(t.id, 'finish')}
+                            className="btn-up !px-3 !py-1.5 text-xs"
+                          >
+                            Confirm payout
+                          </button>
+                          <button
+                            onClick={() => setConfirming(null)}
+                            className="btn-ghost !px-3 !py-1.5 text-xs"
+                          >
+                            Keep running
+                          </button>
+                        </>
+                      ) : (
+                        <button onClick={() => setConfirming(t.id)} className="btn-up !px-3 !py-1.5 text-xs">
+                          Finish &amp; pay
+                        </button>
+                      ))}
                   </span>
                 </Td>
               </tr>

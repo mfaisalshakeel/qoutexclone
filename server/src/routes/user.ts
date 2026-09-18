@@ -5,20 +5,17 @@ import { prisma } from '../lib/prisma.js';
 import { badRequest, notFound, wrap } from '../lib/errors.js';
 import { publicNotification, publicUser } from '../lib/serialize.js';
 import { requireAuth } from '../middleware/auth.js';
-import { applyLedger } from '../services/wallet.js';
 import { tradingStats } from '../services/trading.js';
 import { DOCUMENT_TYPES, latestKycSubmission, submitKyc } from '../services/kyc.js';
 import { referralSummary } from '../services/referrals.js';
 import { settings } from '../services/settings.js';
 import { leaderboard } from '../services/leaderboard.js';
+import { refillPractice } from '../services/practice.js';
 import * as notifications from '../services/notifications.js';
 
 // mounted at /api/me — every route here needs a signed-in user
 const router = Router();
 router.use(requireAuth);
-
-// the practice starting balance is operator-configurable
-const practiceStart = () => settings.get('trading.practiceStartBalance');
 
 router.get(
   '/',
@@ -197,28 +194,16 @@ router.post(
   }),
 );
 
+/**
+ * Tops the practice balance up to the configured starting amount.
+ *
+ * The rule about when that is allowed lives in the service, so the switcher and
+ * the API cannot disagree about it.
+ */
 router.post(
   '/demo/reset',
   wrap(async (req, res) => {
-    const user = await prisma.$transaction(async (tx) => {
-      const current = await tx.user.findUnique({
-        where: { id: req.user!.id },
-        select: { demoBalance: true },
-      });
-      if (!current) throw notFound('Account not found');
-      const delta = practiceStart() - current.demoBalance;
-      if (delta !== 0) {
-        await applyLedger(tx, {
-          userId: req.user!.id,
-          accountType: 'DEMO',
-          type: 'DEMO_RESET',
-          amount: delta,
-          note: 'Practice balance reset',
-        });
-      }
-      return tx.user.findUnique({ where: { id: req.user!.id } });
-    });
-    res.json({ user: publicUser(user!) });
+    res.json({ user: publicUser(await refillPractice(req.user!.id)) });
   }),
 );
 

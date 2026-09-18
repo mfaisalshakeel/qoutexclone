@@ -2440,3 +2440,98 @@ suite('the notification centre', () => {
     }
   });
 });
+
+suite('the practice account', () => {
+  let prisma: (typeof import('../../lib/prisma.js'))['prisma'];
+  let practice: typeof import('../../services/practice.js');
+  let settings: (typeof import('../../services/settings.js'))['settings'];
+
+  const made = { users: [] as string[] };
+
+  beforeAll(async () => {
+    prisma = (await import('../../lib/prisma.js')).prisma;
+    practice = await import('../../services/practice.js');
+    settings = (await import('../../services/settings.js')).settings;
+    await settings.load();
+  });
+
+  afterAll(async () => {
+    if (!prisma) return;
+    await prisma.user.deleteMany({ where: { id: { in: made.users } } });
+    await prisma.$disconnect();
+  });
+
+  const makeTrader = async (demoBalance: number) => {
+    const user = await prisma.user.create({
+      data: {
+        email: `prc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.dev`,
+        name: 'Practice Trader',
+        passwordHash: 'x',
+        referralCode: `PRC${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+        demoBalance,
+      },
+    });
+    made.users.push(user.id);
+    return user;
+  };
+
+  it('tops up to the configured starting balance, through the ledger', async () => {
+    const start = settings.get('trading.practiceStartBalance');
+    const user = await makeTrader(1_234);
+
+    const after = await practice.refillPractice(user.id);
+    expect(after.demoBalance).toBe(start);
+
+    // the money moved the same way every other balance change moves
+    const entries = await prisma.transaction.findMany({
+      where: { userId: user.id, type: 'DEMO_RESET' },
+    });
+    expect(entries).toHaveLength(1);
+    expect(entries[0].amount).toBe(start - 1_234);
+    expect(entries[0].balanceAfter).toBe(start);
+    expect(entries[0].accountType).toBe('DEMO');
+  });
+
+  it('leaves the live balance and the ledger for it alone', async () => {
+    const user = await makeTrader(0);
+    await prisma.user.update({ where: { id: user.id }, data: { realBalance: 50_000 } });
+
+    await practice.refillPractice(user.id);
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(after.realBalance).toBe(50_000);
+  });
+
+  it('waits for the balance to run down when an operator asks it to', async () => {
+    await settings.set('trading.practiceRefillBelow', 100_000);
+    try {
+      const flush = await makeTrader(100_000);
+      await expect(practice.refillPractice(flush.id)).rejects.toThrow(/falls below \$1000\.00/);
+      // and nothing moved
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: flush.id } })).demoBalance).toBe(100_000);
+      expect(await prisma.transaction.count({ where: { userId: flush.id } })).toBe(0);
+
+      const spent = await makeTrader(99_999);
+      const after = await practice.refillPractice(spent.id);
+      expect(after.demoBalance).toBe(settings.get('trading.practiceStartBalance'));
+    } finally {
+      await settings.reset('trading.practiceRefillBelow');
+    }
+  });
+
+  it('is always available when no threshold is set, even from a full balance', async () => {
+    const start = settings.get('trading.practiceStartBalance');
+    const user = await makeTrader(start);
+    const after = await practice.refillPractice(user.id);
+    expect(after.demoBalance).toBe(start);
+    // nothing to move, so nothing was written
+    expect(await prisma.transaction.count({ where: { userId: user.id } })).toBe(0);
+  });
+
+  it('takes a balance above the starting amount back down to it', async () => {
+    const start = settings.get('trading.practiceStartBalance');
+    const user = await makeTrader(start + 500_000);
+    const after = await practice.refillPractice(user.id);
+    // it is a reset to a known figure, not a gift on top
+    expect(after.demoBalance).toBe(start);
+  });
+});

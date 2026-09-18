@@ -1,5 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { expectNoHorizontalScroll, failOnPageErrors, fundAccount, placeTrade, register } from './helpers';
+import {
+  expectNoHorizontalScroll,
+  failOnPageErrors,
+  fundAccount,
+  placeTrade,
+  register,
+  useLiveAccount,
+} from './helpers';
 
 test.describe('notification centre', () => {
   test('collects a deposit and a settled position, and clears when read', async ({ page }) => {
@@ -14,11 +21,7 @@ test.describe('notification centre', () => {
     // and a settled live position is the second
     await page.goto('/trade');
     await page.waitForSelector('canvas');
-    await page
-      .getByRole('button', { name: /Practice/ })
-      .first()
-      .click();
-    await page.getByRole('button', { name: /Live account/ }).click();
+    await useLiveAccount(page);
     await placeTrade(page, 'Higher', '30s');
     await expect(bell).toHaveAttribute('aria-label', /2 unread/, { timeout: 90_000 });
 

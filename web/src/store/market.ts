@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { api, tokens } from '../lib/api';
 import type { ExpiryConfig, TicketConfig, TraderSentiment } from '../lib/types';
 import { loadFavourites, loadRecents, pushRecent } from '../lib/watchlist';
+import type { PracticeConfig } from '../lib/accounts';
 import {
   clampFocus,
   defaultLayout,
@@ -80,6 +81,8 @@ interface MarketState {
   ticket: TicketConfig;
   /** Whether sentiment is shown, and how much activity it needs. */
   sentimentConfig: { enabled: boolean; windowMin: number; minTrades: number };
+  /** The practice account's rules, so the switcher can say what is on offer. */
+  practice: PracticeConfig;
   /** Starred markets and the ones just visited, both per browser. */
   favourites: string[];
   recents: string[];
@@ -132,6 +135,7 @@ export const useMarket = create<MarketState>((set, get) => ({
     hotkeys: true,
   },
   sentimentConfig: { enabled: true, windowMin: 15, minTrades: 5 },
+  practice: { startBalance: 1_000_000, refillBelow: 0 },
   timeframes: ['5s', '10s', '15s', '30s', '1m', '2m', '3m', '5m', '10m', '15m', '30m', '1h', '4h', '1d'],
   prices: {},
   favourites: loadFavourites(),
@@ -151,6 +155,7 @@ export const useMarket = create<MarketState>((set, get) => ({
       expiry: ExpiryConfig;
       ticket: TicketConfig;
       sentiment: { enabled: boolean; windowMin: number; minTrades: number };
+      practice: PracticeConfig;
       timeframes: string[];
     }>('/market/assets');
     const symbol = data.assets.some((a) => a.symbol === get().symbol) ? get().symbol : data.assets[0]?.symbol;
@@ -160,6 +165,7 @@ export const useMarket = create<MarketState>((set, get) => ({
       expiry: data.expiry,
       ticket: data.ticket,
       sentimentConfig: data.sentiment,
+      practice: data.practice,
       timeframes: data.timeframes,
       prices: Object.fromEntries(data.assets.map((a) => [a.symbol, a.price ?? 0])),
       symbol: symbol ?? get().symbol,

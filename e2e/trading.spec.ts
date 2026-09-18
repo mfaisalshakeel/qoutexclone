@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { failOnPageErrors, newCredentials, placeTrade, register } from './helpers';
+import { accountPill, failOnPageErrors, newCredentials, placeTrade, register } from './helpers';
 
 test.describe('trading', () => {
   test('register, place a practice trade, see it settle and land in history', async ({ page }) => {
@@ -8,8 +8,8 @@ test.describe('trading', () => {
     await register(page, newCredentials('trade'));
 
     // a new account starts on practice with $10,000
-    const accountButton = page.getByRole('button', { name: /Practice \$/ });
-    await expect(accountButton).toBeVisible();
+    const accountButton = accountPill(page);
+    await expect(accountButton).toHaveAttribute('aria-label', 'Trading account: Practice');
     await expect(accountButton).toContainText('$10,000.00');
 
     await placeTrade(page, 'Higher', '30s');

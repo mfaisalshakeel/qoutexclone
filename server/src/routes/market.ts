@@ -80,6 +80,12 @@ router.get(
         allowRepeat: settings.get('trading.allowRepeat'),
         hotkeys: settings.get('trading.hotkeysEnabled'),
       },
+      // the practice account's own rules, so the switcher can say when a refill
+      // is available rather than offering one the server will refuse
+      practice: {
+        startBalance: settings.get('trading.practiceStartBalance'),
+        refillBelow: settings.get('trading.practiceRefillBelow'),
+      },
       sentiment: {
         enabled: settings.get('trading.sentimentEnabled'),
         windowMin: settings.get('trading.sentimentWindowMin'),
