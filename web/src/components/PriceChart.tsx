@@ -3,11 +3,12 @@ import { api } from '../lib/api';
 import { realtime } from '../lib/ws';
 import { bollinger, ema, sma } from '../lib/indicators';
 import { ChartEngine, type IndicatorLine } from '../chart/engine';
+import type { SeriesKind } from '../chart/series';
 import { THEME } from '../chart/types';
 import type { Candle, Trade } from '../lib/types';
 import { ChartSkeleton } from './Skeleton';
 
-export type ChartType = 'candles' | 'line';
+export type ChartType = SeriesKind;
 
 export interface IndicatorSettings {
   sma: boolean;

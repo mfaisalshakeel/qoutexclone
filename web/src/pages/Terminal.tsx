@@ -12,6 +12,7 @@ import { AssetPicker } from '../components/AssetPicker';
 import { BottomSheet } from '../components/BottomSheet';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { PriceChart, type ChartType, type IndicatorSettings } from '../components/PriceChart';
+import { SERIES_LABELS, SERIES_TYPES } from '../chart/series';
 import { Positions } from '../components/Positions';
 import { TradeTicket, type TicketHandle, type TicketSummary } from '../components/TradeTicket';
 import { HotkeyHelp } from '../components/HotkeyHelp';
@@ -30,6 +31,15 @@ function sourceLabel(source: string): { text: string; title: string } {
 
 /** Shown inline; the rest live behind the "···" menu. */
 const QUICK_TIMEFRAMES = ['5s', '15s', '1m', '5m', '1h'];
+
+/** One glyph per series shape; the accessible name carries the real word. */
+const SERIES_GLYPHS: Record<(typeof SERIES_TYPES)[number], string> = {
+  candles: '▦',
+  bars: '╫',
+  'heikin-ashi': '◫',
+  line: '〰',
+  area: '◣',
+};
 
 const STUDIES = [
   { key: 'sma' as const, label: 'SMA 20', color: '#f6c445' },
@@ -383,17 +393,19 @@ export function Terminal() {
               </div>
             )}
 
-            <div className="flex gap-1">
-              {(['candles', 'line'] as const).map((type) => (
+            <div role="group" aria-label="Series type" className="flex gap-1">
+              {SERIES_TYPES.map((type) => (
                 <button
                   key={type}
                   onClick={() => setChartType(type)}
-                  title={type === 'candles' ? 'Candlesticks' : 'Line'}
-                  className={`rounded-md px-2 py-1.5 text-xs font-semibold capitalize transition ${
+                  title={SERIES_LABELS[type]}
+                  aria-label={SERIES_LABELS[type]}
+                  aria-pressed={chartType === type}
+                  className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${
                     chartType === type ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  {type === 'candles' ? '▦' : '〰'}
+                  {SERIES_GLYPHS[type]}
                 </button>
               ))}
             </div>

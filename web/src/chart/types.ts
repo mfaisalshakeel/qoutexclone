@@ -1,6 +1,7 @@
 import type { Candle, Trade } from '../lib/types';
+import type { SeriesKind } from './series';
 
-export type SeriesType = 'candles' | 'line';
+export type SeriesType = SeriesKind;
 
 /** What part of the series is on screen, in bar coordinates. */
 export interface Viewport {

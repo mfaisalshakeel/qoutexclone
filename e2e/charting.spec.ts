@@ -76,6 +76,32 @@ test.describe('charting', () => {
     expect(errors).toEqual([]);
   });
 
+  test('switches between all five series shapes without refetching a thing', async ({ page }) => {
+    const errors = failOnPageErrors(page);
+    const candleRequests: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/api/market/candles/')) candleRequests.push(request.url());
+    });
+
+    await login(page, TRADER);
+    await page.waitForSelector('canvas');
+    const shapes = page.getByRole('group', { name: 'Series type' });
+    await expect(shapes.getByRole('button', { name: 'Candlesticks' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    const loaded = candleRequests.length;
+    for (const shape of ['Bars', 'Heikin-Ashi', 'Area', 'Line', 'Candlesticks']) {
+      await shapes.getByRole('button', { name: shape }).click();
+      await expect(shapes.getByRole('button', { name: shape })).toHaveAttribute('aria-pressed', 'true');
+    }
+
+    // the bars on screen are the bars already held: changing shape is a redraw
+    expect(candleRequests.length).toBe(loaded);
+    expect(errors).toEqual([]);
+  });
+
   test('switches to any of the fourteen timeframes', async ({ page }) => {
     const errors = failOnPageErrors(page);
     await login(page, TRADER);

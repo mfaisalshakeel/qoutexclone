@@ -1,5 +1,6 @@
 import type { Candle } from '../lib/types';
 import { barWidth, indexAt, priceTicks, timeTicks, visibleSlice, xOf, yOf } from './scales';
+import { isBarSeries } from './series';
 import { THEME, type Frame } from './types';
 
 /**
@@ -92,15 +93,16 @@ export function drawSeries(ctx: CanvasRenderingContext2D, frame: Frame): void {
   if (candles.length === 0) return;
 
   const slice = visibleSlice(candles.length, view);
-  if (type === 'line') {
-    drawLine(ctx, frame, slice);
+  if (!isBarSeries(type)) {
+    drawLine(ctx, frame, slice, { filled: type === 'area' });
     return;
   }
 
   const width = barWidth(view, plot);
-  // a body narrower than this is a line, and the border eats it
+  // a body narrower than this is a line, and its border would eat it
   const body = Math.max(1, Math.min(width * 0.7, width - 1));
   const thin = body <= 2;
+  const tick = Math.max(1, Math.min(width * 0.35, 6));
 
   for (let index = slice.from; index <= slice.to; index += 1) {
     const candle = candles[index];
@@ -116,11 +118,22 @@ export function drawSeries(ctx: CanvasRenderingContext2D, frame: Frame): void {
     ctx.strokeStyle = colour;
     ctx.fillStyle = colour;
     ctx.lineWidth = 1;
+    const spine = Math.round(x) + 0.5;
     ctx.beginPath();
-    const wick = Math.round(x) + 0.5;
-    ctx.moveTo(wick, high);
-    ctx.lineTo(wick, low);
+    ctx.moveTo(spine, high);
+    ctx.lineTo(spine, low);
     ctx.stroke();
+
+    // an OHLC bar wears its open and close as ticks rather than a body
+    if (type === 'bars') {
+      ctx.beginPath();
+      ctx.moveTo(spine - tick, Math.round(open) + 0.5);
+      ctx.lineTo(spine, Math.round(open) + 0.5);
+      ctx.moveTo(spine, Math.round(close) + 0.5);
+      ctx.lineTo(spine + tick, Math.round(close) + 0.5);
+      ctx.stroke();
+      continue;
+    }
 
     if (thin) continue;
     const top = Math.min(open, close);
@@ -129,7 +142,12 @@ export function drawSeries(ctx: CanvasRenderingContext2D, frame: Frame): void {
   }
 }
 
-function drawLine(ctx: CanvasRenderingContext2D, frame: Frame, slice: { from: number; to: number }) {
+function drawLine(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  slice: { from: number; to: number },
+  options: { filled: boolean },
+) {
   const { candles, view, range, plot } = frame;
   ctx.beginPath();
   for (let index = slice.from; index <= slice.to; index += 1) {
@@ -146,14 +164,16 @@ function drawLine(ctx: CanvasRenderingContext2D, frame: Frame, slice: { from: nu
   ctx.strokeStyle = THEME.line;
   ctx.stroke();
 
-  ctx.lineTo(xOf(slice.to, view, plot), plot.height);
-  ctx.lineTo(xOf(slice.from, view, plot), plot.height);
-  ctx.closePath();
-  const gradient = ctx.createLinearGradient(0, 0, 0, plot.height);
-  gradient.addColorStop(0, THEME.lineFillTop);
-  gradient.addColorStop(1, THEME.lineFillBottom);
-  ctx.fillStyle = gradient;
-  ctx.fill();
+  if (options.filled) {
+    ctx.lineTo(xOf(slice.to, view, plot), plot.height);
+    ctx.lineTo(xOf(slice.from, view, plot), plot.height);
+    ctx.closePath();
+    const gradient = ctx.createLinearGradient(0, 0, 0, plot.height);
+    gradient.addColorStop(0, THEME.lineFillTop);
+    gradient.addColorStop(1, THEME.lineFillBottom);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+  }
   ctx.restore();
 }
 

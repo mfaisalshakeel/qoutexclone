@@ -9,6 +9,7 @@ import {
   drawSeries,
 } from './draw';
 import { atLive, clampView, liveView, panBy, priceRange, visibleSlice, zoomAt } from './scales';
+import { heikinAshi } from './series';
 import { THEME, type Frame, type SeriesType, type Viewport } from './types';
 
 /**
@@ -45,6 +46,12 @@ export class ChartEngine {
   private readonly observer: ResizeObserver;
 
   private candles: Candle[] = [];
+  /**
+   * What is actually drawn. Heikin-Ashi is a different set of bars rather than
+   * a different way of drawing the same ones, so the transform is cached here
+   * and rebuilt when the data or the type changes — never per frame.
+   */
+  private drawn: Candle[] = [];
   private trades: Trade[] = [];
   private lines: IndicatorLine[] = [];
   private type: SeriesType = 'candles';
@@ -90,6 +97,7 @@ export class ChartEngine {
   setCandles(candles: Candle[], options: { keepView?: boolean } = {}): void {
     const wasLive = this.candles.length === 0 || atLive(this.view, this.candles.length);
     this.candles = candles;
+    this.reshape();
     if (!options.keepView || wasLive) this.view = liveView(candles.length, this.view.barsVisible);
     this.mark('grid', 'series');
     this.report();
@@ -99,6 +107,7 @@ export class ChartEngine {
   prepend(older: Candle[]): void {
     if (older.length === 0) return;
     this.candles = [...older, ...this.candles];
+    this.reshape();
     // every index has shifted by the number of bars added, so the viewport
     // shifts with them and the trader does not see the chart jump
     this.view = { ...this.view, rightIndex: this.view.rightIndex + older.length };
@@ -115,6 +124,7 @@ export class ChartEngine {
       // a chart that was watching the live edge keeps watching it
       if (following) this.view = { ...this.view, rightIndex: this.view.rightIndex + 1 };
     }
+    this.reshape();
     this.mark('grid', 'series');
   }
 
@@ -129,8 +139,17 @@ export class ChartEngine {
   }
 
   setType(type: SeriesType): void {
+    if (type === this.type) return;
     this.type = type;
-    this.mark('series');
+    // switching shape is a redraw of what is already loaded: no request, and no
+    // gap while one comes back
+    this.reshape();
+    this.mark('grid', 'series', 'cursor');
+  }
+
+  /** Rebuilds the drawn series from the real one. */
+  private reshape(): void {
+    this.drawn = this.type === 'heikin-ashi' ? heikinAshi(this.candles) : this.candles;
   }
 
   setPrecision(precision: number): void {
@@ -242,12 +261,12 @@ export class ChartEngine {
 
   /** The frame every layer is drawn from, so they cannot disagree. */
   private frame(): Frame {
-    const slice = visibleSlice(this.candles.length, this.view);
+    const slice = visibleSlice(this.drawn.length, this.view);
     const strikes = this.openTrades().map((trade) => trade.entryPrice);
     return {
-      candles: this.candles,
+      candles: this.drawn,
       view: this.view,
-      range: priceRange(this.candles, slice, strikes),
+      range: priceRange(this.drawn, slice, strikes),
       plot: this.plot,
       precision: this.precision,
       timeframeSec: 60,
@@ -294,6 +313,8 @@ export class ChartEngine {
       });
     }
 
+    // the real close, never the smoothed one: a Heikin-Ashi close is an average
+    // of four numbers and nobody trades at it
     const last = this.candles[this.candles.length - 1];
     if (!last) return;
     drawPriceLine(ctx, frame, {

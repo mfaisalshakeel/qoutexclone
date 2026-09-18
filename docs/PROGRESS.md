@@ -4,6 +4,14 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-18**: Phase 3 — **Series types**. Five shapes for the same data: candlesticks, OHLC bars, Heikin-Ashi, a plain line and a filled area, switched from the chart header with no request and no gap while one comes back.
+
+  Heikin-Ashi is the only one that is not a drawing choice — it is a different set of bars — so it lives in `chart/series.ts` as a transform and is tested as arithmetic: the close is the bar's own average, the open is the midpoint of the *previous* synthetic bar (the first has none, so it opens on the real one), and the high and low take in both, or a candle would show a body outside its own wick. One test asserts the point of it, that the synthetic series swings less than the real one. The transform is cached on the engine and rebuilt only when the data or the shape changes, never per frame.
+
+  **The last price line always comes from the real series.** A Heikin-Ashi close is an average of four numbers and nobody trades at it; quoting it beside a trade ticket that will fill at the real price would be a lie the chart told quietly.
+
+  8 unit tests and an e2e spec that walks all five shapes and asserts the candle endpoint was not called once in the process. Verified with lint, format, typecheck, 139 web unit tests, a production build, the full Playwright suite at 49 passed, and each shape looked at by hand.
+
 - **2026-09-18**: Phase 3 — **Renderer**. The terminal draws its own charts now: `web/src/chart/` is a canvas engine written for this platform, and `lightweight-charts` is gone from the dependencies. The production bundle fell from 599KB to 446KB (180KB to 131KB gzipped).
 
   **Three canvases, one animation frame, a dirty flag each.** The grid and axes, the series and its overlays, and the crosshair are separate layers, so moving the pointer repaints a few lines and a label while the candles keep the pixels they already have; a tick repaints the series; nothing paints at all when nothing changed, so an idle chart costs nothing. A frame is only scheduled when a layer is marked dirty, and every layer draws from one `Frame` object so they cannot disagree about the scale. Each canvas's backing store is sized by `devicePixelRatio` with the context transformed to CSS pixels, which the e2e suite asserts — a blurry chart on a retina screen is the kind of thing nobody files a bug about and everybody notices.
