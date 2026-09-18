@@ -10,6 +10,7 @@ import { supportEvents } from './services/support.js';
 import { tournamentEvents } from './services/tournaments.js';
 import { settingsEvents } from './services/settings.js';
 import { payouts } from './services/payouts.js';
+import { sentiment } from './services/sentiment.js';
 import { orderEvents } from './services/orders.js';
 import { prisma } from './lib/prisma.js';
 import { publicDeposit, publicOrder, publicTrade, publicWithdrawal } from './lib/serialize.js';
@@ -227,6 +228,13 @@ export function attachWebsocket(server: Server) {
         const changed = payouts.changedPayouts(catalogue);
         if (clients.size > 0 && Object.keys(changed).length > 0) {
           toEveryone({ type: 'payouts', payouts: changed });
+        }
+
+        // sentiment moves on the same slow clock, and the whole snapshot is
+        // small enough to send rather than diff
+        if (clients.size > 0) {
+          const book = sentiment.all();
+          if (Object.keys(book).length > 0) toEveryone({ type: 'sentiment', sentiment: book });
         }
       } catch (err) {
         log.ws.error({ err }, 'payout broadcast failed');

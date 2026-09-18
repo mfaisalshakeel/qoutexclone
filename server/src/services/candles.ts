@@ -280,7 +280,10 @@ class CandleStore {
         });
     if (!oldestKnown) return null;
 
-    const endBucket = Math.floor(before / seconds) * seconds;
+    // The generated block has to end where the *stored* history starts, not at
+    // the cursor. Deriving it from `before` overlaps whatever rows came back
+    // short, which produced two candles for the same instant.
+    const endBucket = existing.length ? oldestKnown.time : Math.floor(before / seconds) * seconds;
     const earliestAllowed = Math.floor(Date.now() / 1000) - retentionSeconds(timeframe);
     const count = Math.min(limit - existing.length, Math.floor((endBucket - earliestAllowed) / seconds));
     if (count <= 0) return null;

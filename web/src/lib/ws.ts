@@ -7,6 +7,7 @@ import type {
   SupportMessage,
   SupportTicket,
   Trade,
+  TraderSentiment,
   Withdrawal,
 } from './types';
 
@@ -14,6 +15,8 @@ type Handler = (payload: never) => void;
 
 export interface RealtimeEvents {
   quotes: { prices: Record<string, number>; ts: number };
+  /** The whole sentiment book; small enough to send rather than diff. */
+  sentiment: { sentiment: Record<string, TraderSentiment> };
   /** Only the markets whose payout actually moved, with what moved it. */
   payouts: {
     payouts: Record<

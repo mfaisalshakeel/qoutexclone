@@ -3,6 +3,7 @@ import { useMarket } from '../store/market';
 import { countdown, dateTime, money, price } from '../lib/format';
 import type { PendingOrder, Trade } from '../lib/types';
 import { Skeleton, SkeletonGroup } from './Skeleton';
+import { TradeDetail } from './TradeDetail';
 
 interface Props {
   open: Trade[];
@@ -22,6 +23,7 @@ export function Positions({ open, closed, pending, onCancel, onRepeat, loading =
   const [tab, setTab] = useState<'open' | 'pending' | 'closed'>('open');
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [repeating, setRepeating] = useState<string | null>(null);
+  const [detail, setDetail] = useState<Trade | null>(null);
   const allowRepeat = useMarket((s) => s.ticket.allowRepeat);
   const [, force] = useState(0);
 
@@ -55,6 +57,15 @@ export function Positions({ open, closed, pending, onCancel, onRepeat, loading =
 
   return (
     <div role="region" aria-label="Positions" className="card flex h-full min-h-0 flex-col">
+      {detail && (
+        <TradeDetail
+          trade={detail}
+          precision={precisionOf(detail.symbol)}
+          onClose={() => setDetail(null)}
+          onTradeAgain={(tradeId) => repeat(tradeId, 1)}
+          canTradeAgain={allowRepeat}
+        />
+      )}
       <div
         role="tablist"
         aria-label="Positions"
@@ -127,6 +138,24 @@ export function Positions({ open, closed, pending, onCancel, onRepeat, loading =
                             : `−${money(trade.stake)}`}
                       </span>
                     </span>
+                  </div>
+
+                  {/* how much of the position's life has run: a countdown says
+                      how long is left, a bar says how far through it is */}
+                  <div
+                    className="mt-1.5 h-0.5 overflow-hidden rounded-full bg-ink-600"
+                    role="progressbar"
+                    aria-label={`Time elapsed on the ${trade.symbol} position`}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(elapsedFraction(trade) * 100)}
+                  >
+                    <div
+                      className={`h-full rounded-full transition-[width] duration-500 ${
+                        flat ? 'bg-slate-500' : winning ? 'bg-up' : 'bg-down'
+                      }`}
+                      style={{ width: `${Math.round(elapsedFraction(trade) * 100)}%` }}
+                    />
                   </div>
 
                   {/* the same trade again, at the price and payout of now — it
@@ -227,9 +256,11 @@ export function Positions({ open, closed, pending, onCancel, onRepeat, loading =
             <Empty text="No closed trades yet" />
           ) : (
             closed.map((trade) => (
-              <div
+              <button
                 key={trade.id}
-                className="mb-1.5 flex items-center justify-between rounded-lg bg-ink-700/40 p-2.5"
+                onClick={() => setDetail(trade)}
+                aria-label={`Details for the ${trade.direction} trade on ${trade.symbol}`}
+                className="mb-1.5 flex w-full items-center justify-between rounded-lg bg-ink-700/40 p-2.5 text-left transition hover:bg-ink-700"
               >
                 <span>
                   <span className="block text-xs font-semibold">
@@ -263,7 +294,7 @@ export function Positions({ open, closed, pending, onCancel, onRepeat, loading =
                     {price(trade.exitPrice, precisionOf(trade.symbol))}
                   </span>
                 </span>
-              </div>
+              </button>
             ))
           ))}
       </div>
@@ -302,4 +333,13 @@ function describeOrder(order: PendingOrder, precision: number): string {
   if (order.triggerPrice == null) return 'Opens at a price';
   const side = order.triggerSide === 'BELOW' ? 'at or below' : 'at or above';
   return `Opens ${side} ${price(order.triggerPrice, precision)}`;
+}
+
+/** How far through its life an open position is, 0–1. */
+function elapsedFraction(trade: Trade): number {
+  const opened = new Date(trade.openedAt).getTime();
+  const expires = new Date(trade.expiresAt).getTime();
+  const span = expires - opened;
+  if (!(span > 0)) return 1;
+  return Math.min(Math.max((Date.now() - opened) / span, 0), 1);
 }

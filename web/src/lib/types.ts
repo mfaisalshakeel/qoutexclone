@@ -93,6 +93,8 @@ export interface Asset {
   payoutAdjustments?: { name: string; kind: string; adjustment: number }[];
   /** Durations this market offers, in seconds. */
   durations?: number[];
+  /** The share of staked money on each side over the recent window. */
+  sentiment?: TraderSentiment | null;
   minStake: number;
   maxStake: number;
   precision: number;
@@ -275,4 +277,13 @@ export interface TicketConfig {
   allowRepeat: boolean;
   /** The platform switch; a trader may still turn them off for themselves. */
   hotkeys: boolean;
+}
+
+/** Trader sentiment on one market: a display of aggregate positions. */
+export interface TraderSentiment {
+  upPct: number;
+  downPct: number;
+  trades: number;
+  stake: number;
+  meaningful: boolean;
 }

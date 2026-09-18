@@ -23,6 +23,7 @@ test.describe('responsive shell', () => {
       '/wallet',
       '/wallet?tab=withdraw',
       '/history',
+      '/leaderboard',
       '/account',
     ]) {
       await page.goto(path);

@@ -38,9 +38,8 @@ test.describe('asset picker', () => {
     const starred = (await star.getAttribute('aria-label'))!.replace('Star ', '');
     await star.click();
     await classes.getByRole('tab', { name: 'Favourites' }).click();
-    await expect(
-      rail.getByRole('button', { name: new RegExp(starred.replace('/', '\\/')) }).first(),
-    ).toBeVisible();
+    // the pair carries regex metacharacters — "BTC/USDT (OTC)" — so match it literally
+    await expect(rail.getByRole('button', { name: starred, exact: false }).first()).toBeVisible();
 
     // and it survives a reload, because it is the trader's own list
     await page.reload();

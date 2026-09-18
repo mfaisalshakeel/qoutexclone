@@ -7,6 +7,9 @@ import { requireActiveUser, requireAuth } from '../middleware/auth.js';
 import { clockExpiries, listTrades, placeTrade, repeatTrade } from '../services/trading.js';
 import { cancelOrder, createOrder, listOrders } from '../services/orders.js';
 import { marketFeed } from '../engine/feed.js';
+import { candleStore } from '../services/candles.js';
+import { timeframeSeconds } from '../engine/timeframes.js';
+import { snapshotWindow } from '../engine/snapshot.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -113,6 +116,38 @@ router.post(
     res
       .status(201)
       .json({ trade: publicTrade(trade), balances: user, tournamentBalance: entry?.balance ?? null });
+  }),
+);
+
+/**
+ * The candles around one position, for the detail view: what the market did on
+ * the approach, during the trade, and just after it settled.
+ *
+ * The window and the timeframe are chosen from the position's own length, so a
+ * five-second trade and a four-hour one both come back readable. Ownership is
+ * checked — a trade id is not a licence to read someone else's history.
+ */
+router.get(
+  '/:id/chart',
+  wrap(async (req, res) => {
+    const trade = await prisma.trade.findUnique({ where: { id: req.params.id } });
+    if (!trade || trade.userId !== req.user!.id) throw notFound('Trade not found');
+
+    const window = snapshotWindow(trade.openedAt.getTime(), trade.expiresAt.getTime(), trade.durationSec);
+
+    // one page back from just past the window's end gives the whole span
+    const candles = await candleStore.history(trade.symbol, window.timeframe, {
+      before: window.to + timeframeSeconds(window.timeframe)!,
+      limit: Math.min(Math.max(window.bars + 10, 10), 500),
+    });
+
+    res.json({
+      trade: publicTrade(trade),
+      timeframe: window.timeframe,
+      from: window.from,
+      to: window.to,
+      candles: candles.filter((candle) => candle.time >= window.from && candle.time <= window.to),
+    });
   }),
 );
 

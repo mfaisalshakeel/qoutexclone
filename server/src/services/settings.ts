@@ -136,6 +136,46 @@ export const SETTINGS = {
     public: true,
   }),
 
+  'trading.leaderboardEnabled': define({
+    schema: z.boolean(),
+    default: true,
+    group: 'trading',
+    label: "Show today's top traders",
+    help: 'Live-money profit only, with masked names. A trader can opt out for themselves.',
+    public: true,
+  }),
+  'trading.leaderboardSize': define({
+    schema: z.number().int().min(3).max(100),
+    default: 20,
+    group: 'trading',
+    label: 'Traders shown on the leaderboard',
+    public: true,
+  }),
+
+  'trading.sentimentEnabled': define({
+    schema: z.boolean(),
+    default: true,
+    group: 'trading',
+    label: 'Show trader sentiment',
+    help: "The share of staked money on each side, from the platform's own positions.",
+    public: true,
+  }),
+  'trading.sentimentWindowMin': define({
+    schema: z.number().int().min(1).max(1440),
+    default: 15,
+    group: 'trading',
+    label: 'Sentiment window (minutes)',
+    public: true,
+  }),
+  'trading.sentimentMinTrades': define({
+    schema: z.number().int().min(1).max(1000),
+    default: 5,
+    group: 'trading',
+    label: 'Positions needed before sentiment is shown',
+    help: 'Below this, the terminal says there is not enough activity rather than showing noise.',
+    public: true,
+  }),
+
   'trading.hotkeysEnabled': define({
     schema: z.boolean(),
     default: true,

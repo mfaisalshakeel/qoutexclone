@@ -9,6 +9,7 @@ import { clockConfig, clockExpiries, durations, durationsFor, expiryModes } from
 import { settings } from '../services/settings.js';
 import { marketHours } from '../services/market-hours.js';
 import { payouts } from '../services/payouts.js';
+import { sentiment } from '../services/sentiment.js';
 
 const router = Router();
 
@@ -60,6 +61,7 @@ router.get(
           precision: asset.precision,
           price: marketFeed.getPrice(asset.symbol),
           priceSource: marketFeed.sourceFor(asset.symbol),
+          sentiment: sentiment.for(asset.symbol),
           changePct: Math.round(marketFeed.getChangePct(asset.symbol) * 100) / 100,
           isOpen: session.isOpen,
           nextOpen: session.nextOpen,
@@ -77,6 +79,11 @@ router.get(
         step: settings.get('trading.amountStep'),
         allowRepeat: settings.get('trading.allowRepeat'),
         hotkeys: settings.get('trading.hotkeysEnabled'),
+      },
+      sentiment: {
+        enabled: settings.get('trading.sentimentEnabled'),
+        windowMin: settings.get('trading.sentimentWindowMin'),
+        minTrades: settings.get('trading.sentimentMinTrades'),
       },
       // expiry is resolved server-side; the terminal renders what it is told
       expiry: {

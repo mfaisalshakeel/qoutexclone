@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api, tokens } from '../lib/api';
-import type { ExpiryConfig, TicketConfig } from '../lib/types';
+import type { ExpiryConfig, TicketConfig, TraderSentiment } from '../lib/types';
 import { loadFavourites, loadRecents, pushRecent } from '../lib/watchlist';
 import {
   clampFocus,
@@ -78,6 +78,8 @@ interface MarketState {
   expiry: ExpiryConfig;
   /** Stake presets, the ± step, and whether a position may be repeated. */
   ticket: TicketConfig;
+  /** Whether sentiment is shown, and how much activity it needs. */
+  sentimentConfig: { enabled: boolean; windowMin: number; minTrades: number };
   /** Starred markets and the ones just visited, both per browser. */
   favourites: string[];
   recents: string[];
@@ -99,6 +101,7 @@ interface MarketState {
   selectSymbol: (symbol: string) => void;
   setTimeframe: (timeframe: string) => void;
   setPrices: (prices: Record<string, number>) => void;
+  setSentiment: (book: Record<string, TraderSentiment>) => void;
   setPayouts: (
     payouts: Record<
       string,
@@ -120,6 +123,7 @@ export const useMarket = create<MarketState>((set, get) => ({
     allowRepeat: true,
     hotkeys: true,
   },
+  sentimentConfig: { enabled: true, windowMin: 15, minTrades: 5 },
   timeframes: ['5s', '10s', '15s', '30s', '1m', '2m', '3m', '5m', '10m', '15m', '30m', '1h', '4h', '1d'],
   prices: {},
   favourites: loadFavourites(),
@@ -137,6 +141,7 @@ export const useMarket = create<MarketState>((set, get) => ({
       durations: number[];
       expiry: ExpiryConfig;
       ticket: TicketConfig;
+      sentiment: { enabled: boolean; windowMin: number; minTrades: number };
       timeframes: string[];
     }>('/market/assets');
     const symbol = data.assets.some((a) => a.symbol === get().symbol) ? get().symbol : data.assets[0]?.symbol;
@@ -145,6 +150,7 @@ export const useMarket = create<MarketState>((set, get) => ({
       durations: data.durations,
       expiry: data.expiry,
       ticket: data.ticket,
+      sentimentConfig: data.sentiment,
       timeframes: data.timeframes,
       prices: Object.fromEntries(data.assets.map((a) => [a.symbol, a.price ?? 0])),
       symbol: symbol ?? get().symbol,
@@ -230,6 +236,17 @@ export const useMarket = create<MarketState>((set, get) => ({
    * reload — and the figure a trade is actually locked at still comes from the
    * server when the trade opens.
    */
+  /** Sentiment arrives for every active market at once; absent means unchanged. */
+  setSentiment(book) {
+    const assets = get().assets;
+    if (assets.length === 0) return;
+    set({
+      assets: assets.map((asset) =>
+        book[asset.symbol] ? { ...asset, sentiment: book[asset.symbol] } : asset,
+      ),
+    });
+  },
+
   setPayouts(payouts) {
     const assets = get().assets;
     if (!assets.some((asset) => payouts[asset.symbol] !== undefined)) return;

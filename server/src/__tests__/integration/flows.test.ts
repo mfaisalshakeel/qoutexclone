@@ -551,6 +551,28 @@ suite('deep candle paging', () => {
     }
   });
 
+  it('never returns two candles for the same instant', async () => {
+    // a page that comes back short is extended, and the extension has to start
+    // where the stored rows end — deriving it from the cursor overlapped them
+    const recent = await store.history(symbol, '1m', { limit: 100 });
+    const times = new Set<number>();
+    let cursor: number | undefined = recent[0].time;
+
+    for (let page = 0; page < 6; page += 1) {
+      const older: Awaited<ReturnType<typeof store.history>> = await store.history(symbol, '1m', {
+        before: cursor,
+        limit: 100,
+      });
+      if (older.length === 0) break;
+      for (const candle of older) {
+        expect(times.has(candle.time), `duplicate candle at ${candle.time}`).toBe(false);
+        times.add(candle.time);
+      }
+      cursor = older[0].time;
+    }
+    expect(times.size).toBeGreaterThan(100);
+  });
+
   it('stops at the retention boundary instead of generating forever', async () => {
     // 5s candles are kept for six hours, so paging back a day must run out
     let cursor: number | undefined = undefined;
@@ -1642,5 +1664,500 @@ suite('repeat a position', () => {
     expect(again.expiresAt.getTime()).toBeGreaterThanOrEqual(Date.now());
     const offered = trading.clockExpiries().map((each) => each.expiresAt);
     expect([...offered, slot.expiresAt]).toContain(again.expiresAt.getTime());
+  });
+});
+
+/** A settled position can be reviewed: its own candles, and nobody else's. */
+suite('trade detail', () => {
+  let prisma: (typeof import('../../lib/prisma.js'))['prisma'];
+  let trading: typeof import('../../services/trading.js');
+  let store: (typeof import('../../services/candles.js'))['candleStore'];
+  let feed: (typeof import('../../engine/feed.js'))['marketFeed'];
+  let snapshot: typeof import('../../engine/snapshot.js');
+
+  const symbol = `SNAPUSD_${Date.now()}`;
+  const made = { users: [] as string[], assets: [] as string[] };
+
+  beforeAll(async () => {
+    prisma = (await import('../../lib/prisma.js')).prisma;
+    trading = await import('../../services/trading.js');
+    store = (await import('../../services/candles.js')).candleStore;
+    feed = (await import('../../engine/feed.js')).marketFeed;
+    snapshot = await import('../../engine/snapshot.js');
+
+    const asset = await prisma.asset.create({
+      data: {
+        symbol,
+        name: 'Snapshot Coin',
+        pair: 'SNAP/USD',
+        assetClass: 'CRYPTO',
+        base: 'SNAP',
+        quote: 'USD',
+        feedSymbol: symbol,
+        basePrice: 100,
+        volatility: 0.001,
+        precision: 2,
+        pipSize: 0.01,
+        payoutPct: 80,
+      },
+    });
+    made.assets.push(asset.id);
+    feed.load([{ symbol, feedSymbol: symbol, basePrice: 100, volatility: 0.001, precision: 2 }]);
+    store.register(symbol, { basePrice: 100, volatility: 0.001, precision: 2 });
+  });
+
+  afterAll(async () => {
+    if (!prisma) return;
+    await prisma.candle.deleteMany({ where: { symbol } });
+    await prisma.trade.deleteMany({ where: { symbol } });
+    await prisma.user.deleteMany({ where: { id: { in: made.users } } });
+    await prisma.asset.deleteMany({ where: { id: { in: made.assets } } });
+    store._reset();
+    await prisma.$disconnect();
+  });
+
+  const makeTrader = async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: `snap-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.dev`,
+        name: 'Snapshot Trader',
+        passwordHash: 'x',
+        referralCode: `SNP${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+        demoBalance: 1_000_000,
+      },
+    });
+    made.users.push(user.id);
+    return user;
+  };
+
+  it('serves candles covering the whole position', async () => {
+    const user = await makeTrader();
+    const trade = await trading.placeTrade({
+      userId: user.id,
+      symbol,
+      direction: 'UP',
+      stake: 5_000,
+      durationSec: 300,
+      accountType: 'DEMO',
+    });
+
+    const window = snapshot.snapshotWindow(
+      trade.openedAt.getTime(),
+      trade.expiresAt.getTime(),
+      trade.durationSec,
+    );
+    const candles = await store.history(symbol, window.timeframe, {
+      before: window.to + 60,
+      limit: window.bars + 10,
+    });
+    const covering = candles.filter((candle) => candle.time >= window.from && candle.time <= window.to);
+
+    // the window spans the trade with room either side, and the store has it
+    expect(window.from).toBeLessThan(Math.floor(trade.openedAt.getTime() / 1000));
+    expect(window.to).toBeGreaterThan(Math.floor(trade.expiresAt.getTime() / 1000));
+    expect(covering.length).toBeGreaterThan(3);
+    for (const candle of covering) {
+      expect(candle.high).toBeGreaterThanOrEqual(Math.max(candle.open, candle.close));
+      expect(candle.low).toBeLessThanOrEqual(Math.min(candle.open, candle.close));
+    }
+  });
+
+  it('picks a timeframe that suits the position, short or long', async () => {
+    const user = await makeTrader();
+    const quick = await trading.placeTrade({
+      userId: user.id,
+      symbol,
+      direction: 'UP',
+      stake: 1_000,
+      durationSec: 30,
+      accountType: 'DEMO',
+    });
+    const slow = await trading.placeTrade({
+      userId: user.id,
+      symbol,
+      direction: 'DOWN',
+      stake: 1_000,
+      durationSec: 3_600,
+      accountType: 'DEMO',
+    });
+
+    const quickWindow = snapshot.snapshotWindow(
+      quick.openedAt.getTime(),
+      quick.expiresAt.getTime(),
+      quick.durationSec,
+    );
+    const slowWindow = snapshot.snapshotWindow(
+      slow.openedAt.getTime(),
+      slow.expiresAt.getTime(),
+      slow.durationSec,
+    );
+
+    expect(quickWindow.timeframe).toBe('5s');
+    expect(slowWindow.timeframe).toBe('2m');
+    // both readable, neither one bar nor hundreds
+    for (const each of [quickWindow, slowWindow]) {
+      expect(each.bars).toBeGreaterThan(3);
+      expect(each.bars).toBeLessThan(120);
+    }
+  });
+
+  it('can be traded again from its own record, whatever its outcome', async () => {
+    const user = await makeTrader();
+    const trade = await trading.placeTrade({
+      userId: user.id,
+      symbol,
+      direction: 'UP',
+      stake: 2_500,
+      durationSec: 60,
+      accountType: 'DEMO',
+    });
+
+    // settle it, then repeat from the settled row — "trade again" works on a
+    // finished trade, which is the whole point of it being on a closed row
+    await prisma.trade.update({
+      where: { id: trade.id },
+      data: { status: 'LOST', exitPrice: 99, profit: -2_500, settledAt: new Date() },
+    });
+
+    const again = await trading.repeatTrade(user.id, trade.id);
+    expect(again.status).toBe('OPEN');
+    expect(again.stake).toBe(2_500);
+    expect(again.direction).toBe('UP');
+    expect(again.durationSec).toBe(60);
+  });
+});
+
+/** Sentiment reflects real positions, and only ever reads them. */
+suite('trader sentiment', () => {
+  let prisma: (typeof import('../../lib/prisma.js'))['prisma'];
+  let trading: typeof import('../../services/trading.js');
+  let sentimentService: (typeof import('../../services/sentiment.js'))['sentiment'];
+  let settings: (typeof import('../../services/settings.js'))['settings'];
+  let feed: (typeof import('../../engine/feed.js'))['marketFeed'];
+
+  const symbol = `SENTUSD_${Date.now()}`;
+  const made = { users: [] as string[], assets: [] as string[] };
+
+  beforeAll(async () => {
+    prisma = (await import('../../lib/prisma.js')).prisma;
+    trading = await import('../../services/trading.js');
+    sentimentService = (await import('../../services/sentiment.js')).sentiment;
+    settings = (await import('../../services/settings.js')).settings;
+    feed = (await import('../../engine/feed.js')).marketFeed;
+    await settings.load();
+
+    const asset = await prisma.asset.create({
+      data: {
+        symbol,
+        name: 'Sentiment Coin',
+        pair: 'SENT/USD',
+        assetClass: 'CRYPTO',
+        base: 'SENT',
+        quote: 'USD',
+        feedSymbol: symbol,
+        basePrice: 100,
+        volatility: 0.001,
+        precision: 2,
+        pipSize: 0.01,
+        payoutPct: 80,
+      },
+    });
+    made.assets.push(asset.id);
+    feed.load([{ symbol, feedSymbol: symbol, basePrice: 100, volatility: 0.001, precision: 2 }]);
+  });
+
+  afterAll(async () => {
+    if (!prisma) return;
+    await prisma.trade.deleteMany({ where: { symbol } });
+    await prisma.user.deleteMany({ where: { id: { in: made.users } } });
+    await prisma.asset.deleteMany({ where: { id: { in: made.assets } } });
+    await prisma.$disconnect();
+  });
+
+  const makeTrader = async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: `sent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.dev`,
+        name: 'Sentiment Trader',
+        passwordHash: 'x',
+        referralCode: `SNT${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+        demoBalance: 1_000_000,
+        realBalance: 1_000_000,
+      },
+    });
+    made.users.push(user.id);
+    return user;
+  };
+
+  const open = (userId: string, direction: 'UP' | 'DOWN', stake: number, accountType = 'DEMO') =>
+    trading.placeTrade({
+      userId,
+      symbol,
+      direction,
+      stake,
+      durationSec: 3600,
+      accountType: accountType as 'DEMO' | 'REAL',
+    });
+
+  it('says nothing until enough positions have been taken', async () => {
+    const user = await makeTrader();
+    await open(user.id, 'UP', 10_000);
+    await sentimentService.refresh();
+
+    const quiet = sentimentService.for(symbol);
+    // the default threshold is five; one position is not a trend
+    expect(quiet.meaningful).toBe(false);
+    expect(quiet.trades).toBe(1);
+    expect(quiet.upPct).toBe(50);
+  });
+
+  it('is the share of staked money, not of trade count', async () => {
+    const whale = await makeTrader();
+    const crowd = await makeTrader();
+    // one large DOWN against four small UPs is a bearish book
+    await open(whale.id, 'DOWN', 70_000);
+    for (let index = 0; index < 4; index += 1) await open(crowd.id, 'UP', 5_000);
+    await sentimentService.refresh();
+
+    const book = sentimentService.for(symbol);
+    expect(book.meaningful).toBe(true);
+    expect(book.trades).toBe(6);
+    // 10,000 + 20,000 up against 70,000 down
+    expect(book.downPct).toBeGreaterThan(book.upPct);
+    expect(book.upPct + book.downPct).toBe(100);
+    expect(book.stake).toBe(100_000);
+  });
+
+  it('counts live and practice positions, never tournament chips', async () => {
+    const before = sentimentService.for(symbol);
+    const user = await makeTrader();
+    await open(user.id, 'UP', 10_000, 'REAL');
+    await sentimentService.refresh();
+
+    const after = sentimentService.for(symbol);
+    expect(after.trades).toBe(before.trades + 1);
+    expect(after.stake).toBe(before.stake + 10_000);
+  });
+
+  it('only looks at the recent window', async () => {
+    // a position from outside the window does not count
+    const user = await makeTrader();
+    const old = await open(user.id, 'UP', 500_000);
+    await prisma.trade.update({
+      where: { id: old.id },
+      data: { openedAt: new Date(Date.now() - 24 * 3_600_000) },
+    });
+
+    const withOld = sentimentService.for(symbol);
+    await sentimentService.refresh();
+    const withoutOld = sentimentService.for(symbol);
+    expect(withoutOld.trades).toBe(withOld.trades);
+    expect(withoutOld.stake).toBe(withOld.stake);
+  });
+
+  it('goes quiet when an operator turns it off', async () => {
+    await settings.set('trading.sentimentEnabled', false);
+    try {
+      await sentimentService.refresh();
+      expect(sentimentService.for(symbol).trades).toBe(0);
+      expect(sentimentService.all()).toEqual({});
+    } finally {
+      await settings.reset('trading.sentimentEnabled');
+      await sentimentService.refresh();
+    }
+  });
+});
+
+suite('top traders today', () => {
+  let prisma: (typeof import('../../lib/prisma.js'))['prisma'];
+  let board: (typeof import('../../services/leaderboard.js'))['leaderboard'];
+  let settings: (typeof import('../../services/settings.js'))['settings'];
+
+  const symbol = `LBUSD_${Date.now()}`;
+  const made = { users: [] as string[], assets: [] as string[] };
+  let assetId = '';
+
+  beforeAll(async () => {
+    prisma = (await import('../../lib/prisma.js')).prisma;
+    board = (await import('../../services/leaderboard.js')).leaderboard;
+    settings = (await import('../../services/settings.js')).settings;
+    await settings.load();
+
+    const asset = await prisma.asset.create({
+      data: {
+        symbol,
+        name: 'Leader Coin',
+        pair: 'LEAD/USD',
+        assetClass: 'CRYPTO',
+        base: 'LEAD',
+        quote: 'USD',
+        feedSymbol: symbol,
+        basePrice: 100,
+        volatility: 0.001,
+        precision: 2,
+        pipSize: 0.01,
+        payoutPct: 80,
+      },
+    });
+    made.assets.push(asset.id);
+    assetId = asset.id;
+  });
+
+  afterAll(async () => {
+    if (!prisma) return;
+    await prisma.trade.deleteMany({ where: { symbol } });
+    await prisma.user.deleteMany({ where: { id: { in: made.users } } });
+    await prisma.asset.deleteMany({ where: { id: { in: made.assets } } });
+    await prisma.$disconnect();
+  });
+
+  const makeTrader = async (name: string, overrides: Record<string, unknown> = {}) => {
+    const user = await prisma.user.create({
+      data: {
+        email: `lb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.dev`,
+        name,
+        country: 'PT',
+        passwordHash: 'x',
+        referralCode: `LBD${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+        ...overrides,
+      },
+    });
+    made.users.push(user.id);
+    return user;
+  };
+
+  /** A settled position, written straight in: the service only ever reads these. */
+  const settled = (
+    userId: string,
+    profit: number,
+    options: { accountType?: string; status?: string; settledAt?: Date } = {},
+  ) =>
+    prisma.trade.create({
+      data: {
+        userId,
+        assetId,
+        symbol,
+        accountType: options.accountType ?? 'REAL',
+        direction: profit >= 0 ? 'UP' : 'DOWN',
+        stake: 10_000,
+        payoutPct: 80,
+        entryPrice: 100,
+        exitPrice: 101,
+        durationSec: 60,
+        expiresAt: new Date(),
+        settledAt: options.settledAt ?? new Date(),
+        status: options.status ?? (profit > 0 ? 'WON' : 'LOST'),
+        profit,
+      },
+    });
+
+  /**
+   * A row carries no user id — that is the point of the board — so a test finds
+   * its own traders by the masked name. The figures are deliberately large
+   * because the test database is shared: these traders have to sit at the top
+   * of the day whatever else another suite settled.
+   */
+  const rowFor = (initials: string, options: { viewerId?: string } = {}) =>
+    board.board({ limit: 100, ...options }).rows.find((row) => row.display === initials);
+
+  it('ranks live profit for the day and masks who made it', async () => {
+    const winner = await makeTrader('Ada Lovelace');
+    const second = await makeTrader('Grace Hopper');
+    await settled(winner.id, 40_000_000);
+    await settled(winner.id, 40_000_000);
+    await settled(second.id, 70_000_000);
+    await board.refresh();
+
+    const rows = board.board({ limit: 100 }).rows;
+    const top = rows.findIndex((row) => row.display === 'A•• L.');
+    const next = rows.findIndex((row) => row.display === 'G•••• H.');
+    expect(top).toBe(0);
+    expect(next).toBe(1);
+
+    expect(rows[0].profit).toBe(80_000_000);
+    expect(rows[0].trades).toBe(2);
+    expect(rows[0].winRate).toBe(100);
+    // the board is public, so a real name never reaches it
+    expect(JSON.stringify(rows)).not.toContain('Lovelace');
+    expect(rows[0].flag).toBe('🇵🇹');
+  });
+
+  it('ignores practice and tournament results', async () => {
+    const practice = await makeTrader('Demoing Whale');
+    await settled(practice.id, 99_000_000, { accountType: 'DEMO' });
+    await settled(practice.id, 98_000_000, { accountType: 'TOURNAMENT' });
+    await board.refresh();
+
+    // a practice account starts with a million: it would own the board forever
+    expect(rowFor('D•••••• W.')).toBeUndefined();
+  });
+
+  it('ignores open positions and yesterday, and counts a refund as a flat day', async () => {
+    const trader = await makeTrader('Edsger Dijkstra');
+    await settled(trader.id, 60_000_000, { settledAt: new Date(Date.now() - 36 * 3_600_000) });
+    await prisma.trade.create({
+      data: {
+        userId: trader.id,
+        assetId,
+        symbol,
+        accountType: 'REAL',
+        direction: 'UP',
+        stake: 900_000,
+        payoutPct: 80,
+        entryPrice: 100,
+        durationSec: 60,
+        expiresAt: new Date(Date.now() + 60_000),
+        status: 'OPEN',
+      },
+    });
+    await settled(trader.id, 0, { status: 'REFUNDED' });
+    await board.refresh();
+
+    const row = rowFor('E••••• D.');
+    // only the refund settled inside today's window, and it moved nothing
+    expect(row?.profit).toBe(0);
+    expect(row?.trades).toBe(1);
+    expect(row?.winRate).toBe(0);
+  });
+
+  it('leaves an opted-out trader out of the ranking entirely', async () => {
+    const shy = await makeTrader('Barbara Liskov', { leaderboardOptOut: true });
+    await settled(shy.id, 99_000_000);
+    await board.refresh();
+
+    // not merely hidden from the rows: a hidden row would still take a rank
+    expect(rowFor('B•••••• L.')).toBeUndefined();
+    const ranks = board.board({ limit: 100 }).rows.map((row) => row.rank);
+    expect(ranks).toEqual(ranks.map((_, index) => index + 1));
+  });
+
+  it('marks the row belonging to whoever is reading', async () => {
+    const reader = await makeTrader('Ken Thompson');
+    await settled(reader.id, 50_000_000);
+    await board.refresh();
+
+    expect(rowFor('K•• T.', { viewerId: reader.id })?.isYou).toBe(true);
+    expect(rowFor('K•• T.')?.isYou).toBe(false);
+    // and nobody else is told which row is theirs
+    expect(board.board({ viewerId: reader.id, limit: 100 }).rows.filter((row) => row.isYou)).toHaveLength(1);
+  });
+
+  it('shows only as many rows as the operator allows', async () => {
+    const one = board.board({ limit: 1 });
+    expect(one.rows).toHaveLength(1);
+    expect(one.rows[0].rank).toBe(1);
+    expect(one.traders).toBeGreaterThan(1);
+  });
+
+  it('goes quiet when an operator turns it off', async () => {
+    await settings.set('trading.leaderboardEnabled', false);
+    try {
+      await board.refresh();
+      expect(board.board().rows).toEqual([]);
+      expect(board.board().traders).toBe(0);
+    } finally {
+      await settings.reset('trading.leaderboardEnabled');
+      await board.refresh();
+    }
   });
 });

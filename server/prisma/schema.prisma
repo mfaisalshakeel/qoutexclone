@@ -37,7 +37,10 @@ model User {
 
   /// Terminal workspace: chart layout and each pane's market and timeframe.
   /// Follows the trader across devices, unlike their per-browser conveniences.
-  terminalLayout    Json?
+  terminalLayout Json?
+
+  /// When true, this trader never appears on the public leaderboard.
+  leaderboardOptOut Boolean              @default(false)
   transactions      Transaction[]
   deposits          Deposit[]
   withdrawals       Withdrawal[]
@@ -155,6 +158,8 @@ model Trade {
   @@index([status, expiresAt])
   /// live exposure per market and side, read on every new position
   @@index([assetId, status, direction])
+  /// today's settled positions, for the leaderboard
+  @@index([status, settledAt])
 }
 
 model Transaction {

@@ -21,6 +21,7 @@ import { AdminSettings } from './pages/admin/Settings';
 import { AdminSupport } from './pages/admin/Support';
 import { AdminKyc, AdminUsers } from './pages/admin/Traders';
 import { History } from './pages/History';
+import { Leaderboard } from './pages/Leaderboard';
 import { Landing } from './pages/Landing';
 import { ForgotPassword, ResetPassword } from './pages/ForgotPassword';
 import { Login } from './pages/Login';
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="/tournaments" element={<Tournaments />} />
             <Route path="/wallet" element={<Wallet />} />
             <Route path="/history" element={<History />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/account" element={<Account />} />
           </Route>
 

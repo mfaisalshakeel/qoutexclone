@@ -19,6 +19,7 @@ export function publicUser(user: User) {
     referralEarnings: user.referralEarnings,
     kycStatus: user.kycStatus,
     terminalLayout: user.terminalLayout,
+    leaderboardOptOut: user.leaderboardOptOut,
     createdAt: user.createdAt,
   };
 }

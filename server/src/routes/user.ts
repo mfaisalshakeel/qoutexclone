@@ -10,6 +10,7 @@ import { tradingStats } from '../services/trading.js';
 import { DOCUMENT_TYPES, latestKycSubmission, submitKyc } from '../services/kyc.js';
 import { referralSummary } from '../services/referrals.js';
 import { settings } from '../services/settings.js';
+import { leaderboard } from '../services/leaderboard.js';
 
 // mounted at /api/me — every route here needs a signed-in user
 const router = Router();
@@ -35,6 +36,48 @@ router.patch(
       .parse(req.body);
     const user = await prisma.user.update({ where: { id: req.user!.id }, data: body });
     res.json({ user: publicUser(user) });
+  }),
+);
+
+/**
+ * Today's top traders, by profit on settled live positions.
+ *
+ * Names are masked and opted-out traders are excluded before ranking, so the
+ * response carries no identity beyond a country and an initial. The reader's
+ * own row is marked, which is the one place an identity is known — to them.
+ */
+router.get(
+  '/leaderboard',
+  wrap(async (req, res) => {
+    if (!settings.get('trading.leaderboardEnabled')) {
+      res.json({ rows: [], updatedAt: 0, traders: 0, enabled: false });
+      return;
+    }
+    const board = leaderboard.board({
+      viewerId: req.user!.id,
+      limit: settings.get('trading.leaderboardSize'),
+    });
+    const me = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { leaderboardOptOut: true },
+    });
+    res.json({ ...board, enabled: true, optedOut: !!me?.leaderboardOptOut });
+  }),
+);
+
+/** A trader's own choice about appearing on the public leaderboard. */
+router.patch(
+  '/leaderboard',
+  wrap(async (req, res) => {
+    const body = z.object({ optOut: z.boolean() }).parse(req.body);
+    const user = await prisma.user.update({
+      where: { id: req.user!.id },
+      data: { leaderboardOptOut: body.optOut },
+    });
+    // the board is cached, so the choice has to take effect now rather than at
+    // the next refresh
+    await leaderboard.refresh();
+    res.json({ optedOut: user.leaderboardOptOut });
   }),
 );
 

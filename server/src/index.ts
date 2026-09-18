@@ -12,6 +12,8 @@ import { marketHours } from './services/market-hours.js';
 import { StatePersister, loadStates } from './services/otc-state.js';
 import { candleStore } from './services/candles.js';
 import { payouts } from './services/payouts.js';
+import { sentiment } from './services/sentiment.js';
+import { leaderboard } from './services/leaderboard.js';
 import type { OtcParams } from './engine/otc.js';
 
 /** How long a shutdown may take before in-flight work is abandoned. */
@@ -70,6 +72,8 @@ async function main() {
   marketFeed.primeCandles(await candleStore.openBuckets([...symbols]));
   candleStore.start();
   payouts.start();
+  sentiment.start();
+  leaderboard.start();
   // a closed exchange stops printing prices; OTC and crypto never close
   const sessionByAsset = new Map(assets.map((asset) => [asset.symbol, asset.scheduleId]));
   marketFeed.setSessionResolver((symbol) => marketHours.stateFor(sessionByAsset.get(symbol) ?? null).isOpen);
@@ -120,6 +124,8 @@ async function main() {
       // persist prices last, so the snapshot is the final one
       await persister.flush();
       payouts.stop();
+      sentiment.stop();
+      leaderboard.stop();
       candleStore.stop();
       await candleStore.flush();
       chainWatcher.stop();

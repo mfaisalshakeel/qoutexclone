@@ -14,6 +14,7 @@ const NAV = [
   { to: '/tournaments', label: 'Events', icon: IconCup },
   { to: '/wallet', label: 'Wallet', icon: IconWallet },
   { to: '/history', label: 'History', icon: IconHistory },
+  { to: '/leaderboard', label: 'Top', icon: IconCup },
   { to: '/account', label: 'Account', icon: IconUser },
 ];
 

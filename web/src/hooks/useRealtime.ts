@@ -13,6 +13,7 @@ import { money } from '../lib/format';
 export function useRealtime(): void {
   const setPrices = useMarket((s) => s.setPrices);
   const setPayouts = useMarket((s) => s.setPayouts);
+  const setSentiment = useMarket((s) => s.setSentiment);
   const setConnected = useMarket((s) => s.setConnected);
   const patchBalance = useAuth((s) => s.patchBalance);
   const refreshUser = useAuth((s) => s.refreshUser);
@@ -21,6 +22,7 @@ export function useRealtime(): void {
     realtime.connect();
     const offQuotes = realtime.on('quotes', ({ prices }) => setPrices(prices));
     const offPayouts = realtime.on('payouts', ({ payouts }) => setPayouts(payouts));
+    const offSentiment = realtime.on('sentiment', ({ sentiment }) => setSentiment(sentiment));
     const offStatus = realtime.on('status', ({ connected }) => setConnected(connected));
 
     const offSettled = realtime.on('trade:settled', ({ trade, balance, accountType }) => {
@@ -60,10 +62,11 @@ export function useRealtime(): void {
     return () => {
       offQuotes();
       offPayouts();
+      offSentiment();
       offStatus();
       offSettled();
       offDeposit();
       offWithdrawal();
     };
-  }, [setPrices, setPayouts, setConnected, patchBalance, refreshUser]);
+  }, [setPrices, setPayouts, setSentiment, setConnected, patchBalance, refreshUser]);
 }

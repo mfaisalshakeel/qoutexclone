@@ -29,6 +29,7 @@ function localInput(epochMs: number): string {
 /** Server-side refusals that depend on what is already open, not on the form. */
 const RISK_CODES = new Set(['user_exposure_limit', 'market_exposure_limit']);
 import { IconArrowDown, IconArrowUp } from './Icons';
+import { Sentiment } from './Sentiment';
 
 interface Props {
   asset: Asset | undefined;
@@ -68,6 +69,7 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
   const selectSymbol = useMarket((s) => s.selectSymbol);
   const prices = useMarket((s) => s.prices);
   const ticketConfig = useMarket((s) => s.ticket);
+  const sentimentConfig = useMarket((s) => s.sentimentConfig);
   const [amount, setAmount] = useState(10);
   const [durationSec, setDurationSec] = useState(60);
   const [busy, setBusy] = useState<'UP' | 'DOWN' | null>(null);
@@ -106,6 +108,8 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
   // a market may offer a narrower set of durations than the platform
   const offered = asset?.durations?.length ? asset.durations : platformDurations;
   const modes = expiryConfig.modes;
+  const sentimentEnabled = sentimentConfig.enabled;
+  const sentimentMinTrades = sentimentConfig.minTrades;
   const precision = asset?.precision ?? 2;
   const livePrice = asset ? (prices[asset.symbol] ?? asset.price ?? null) : null;
 
@@ -620,7 +624,14 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
         </p>
       )}
 
-      <div className="mt-auto grid grid-cols-2 gap-2 md:grid-cols-1">
+      {/* what the crowd is doing, right where the direction is chosen */}
+      {sentimentEnabled && (
+        <div className="mt-auto">
+          <Sentiment sentiment={asset.sentiment} minTrades={sentimentMinTrades} />
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-1">
         <button
           onClick={() => void place('UP')}
           disabled={blocked || busy !== null}
