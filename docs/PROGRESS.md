@@ -4,6 +4,18 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-18**: Phase 3 — **Renderer**. The terminal draws its own charts now: `web/src/chart/` is a canvas engine written for this platform, and `lightweight-charts` is gone from the dependencies. The production bundle fell from 599KB to 446KB (180KB to 131KB gzipped).
+
+  **Three canvases, one animation frame, a dirty flag each.** The grid and axes, the series and its overlays, and the crosshair are separate layers, so moving the pointer repaints a few lines and a label while the candles keep the pixels they already have; a tick repaints the series; nothing paints at all when nothing changed, so an idle chart costs nothing. A frame is only scheduled when a layer is marked dirty, and every layer draws from one `Frame` object so they cannot disagree about the scale. Each canvas's backing store is sized by `devicePixelRatio` with the context transformed to CSS pixels, which the e2e suite asserts — a blurry chart on a retina screen is the kind of thing nobody files a bug about and everybody notices.
+
+  **The arithmetic is pure and tested** (`chart/scales.ts`, 19 unit tests): bars to pixels and back, prices to pixels and back, the visible slice, a padded price range that stretches to include an open trade's strike, 1/2/5 tick steps so the axis reads 1.0850 rather than 1.08517, and a viewport that cannot be panned into empty space or zoomed past a hairline. Zooming keeps the bar under the cursor still — the half-bar offset in the x mapping does not scale with the zoom, and getting that wrong slides the chart out from under the pointer, so there is a test that pins it.
+
+  What ships in this first pass matches what the library was doing for us: candles and a filled line, drag to pan, wheel zoom anchored at the pointer, a crosshair that snaps to the bar it is reading with an OHLC box and axis labels in the reader's own timezone, a strike line per open position with its stake, the last price in the gutter, and a "Scroll to live" button that only appears once the live edge is off screen. Time labels are measured before they are drawn and skipped when they would collide, rather than spaced by a guess at font width.
+
+  The series types, the deeper interaction (pinch, kinetic scrolling, autoscale), the trading overlays and the indicator set are the next four roadmap items; this one had to carry enough to remove the dependency without the terminal losing anything.
+
+  19 unit tests, a new e2e test for the layers and the pixel density, and the existing charting, layouts and positions specs green unchanged. Verified with lint, format, typecheck, 131 web unit tests, a production build, the full Playwright suite at 48 passed, and the terminal driven by hand at 1440px and 390px — pan, zoom, crosshair, a live trade's strike line.
+
 - **2026-09-18**: Phase 2 — **Mobile terminal**. At 390px the terminal is now a screen rather than a page: a full-bleed chart between the header and a dock, the ticket and the positions in sheets, and nothing that scrolls.
 
   **The dock is the trade.** Stake, expiry, open count and the two buy buttons sit under the thumb at all times; a trade is one tap, with no sheet to open first. The ticket still owns the stake and the expiry — it is the one place that knows what a valid stake is — so it reports a small summary upwards for the dock to render, and the dock's buttons reach it through the same imperative handle the keyboard shortcuts use. It stays mounted behind its sheet for exactly that reason.

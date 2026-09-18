@@ -58,7 +58,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 
 ## Phase 3 — Own charting engine (remove TradingView / lightweight-charts)
 
-- [ ] **Renderer.** A canvas chart in `web/src/chart/` with no third-party charting library, and `lightweight-charts` removed from dependencies. There's a layered render loop (grid, series, overlays, crosshair) on `requestAnimationFrame` with dirty flags, and HiDPI support.
+- [x] **Renderer.** A canvas chart in `web/src/chart/` with no third-party charting library, and `lightweight-charts` removed from dependencies. There's a layered render loop (grid, series, overlays, crosshair) on `requestAnimationFrame` with dirty flags, and HiDPI support.
 - [ ] **Series types.** Area/line, candles, bars and Heikin-Ashi, switchable without refetch.
 - [ ] **Interaction.** Pan (drag, wheel, touch), zoom (wheel, pinch, buttons), autoscale, crosshair with OHLC tooltip, price and time axis labels in the user's timezone, "scroll to live" button, and kinetic scrolling on touch.
 - [ ] **Trading overlays.** Strike lines per open trade with stake and live P/L tags, an expiry vertical line with countdown, the purchase cut-off zone for clock-time mode, and a current price line with a pulsing last-tick dot.

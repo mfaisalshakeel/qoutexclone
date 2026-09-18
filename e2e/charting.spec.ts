@@ -38,6 +38,44 @@ test.describe('charting', () => {
     expect(errors).toEqual([]);
   });
 
+  test("draws with the platform's own canvas engine, at the screen's pixel density", async ({ page }) => {
+    const errors = failOnPageErrors(page);
+    await login(page, TRADER);
+    await page.waitForSelector('canvas');
+
+    // three layers: the grid, the series, and the crosshair that repaints alone
+    const layers = page.locator('canvas');
+    await expect(layers).toHaveCount(3);
+
+    // each one's backing store is sized for the display it is on, or the chart
+    // is a blurry upscale on every phone and retina laptop
+    const sharp = await page.evaluate(() => {
+      const dpr = window.devicePixelRatio || 1;
+      return [...document.querySelectorAll('canvas')].every((canvas) => {
+        const box = canvas.getBoundingClientRect();
+        return (
+          Math.abs(canvas.width - Math.round(box.width * dpr)) <= 1 &&
+          Math.abs(canvas.height - Math.round(box.height * dpr)) <= 1
+        );
+      });
+    });
+    expect(sharp).toBe(true);
+
+    // panning into the past offers the way back, and it works
+    const box = (await layers.first().boundingBox())!;
+    await page.mouse.move(box.x + box.width * 0.25, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.9, box.y + box.height / 2, { steps: 12 });
+    await page.mouse.up();
+
+    const live = page.getByRole('button', { name: /Scroll to live/ });
+    await expect(live).toBeVisible();
+    await live.click();
+    await expect(live).toBeHidden();
+
+    expect(errors).toEqual([]);
+  });
+
   test('switches to any of the fourteen timeframes', async ({ page }) => {
     const errors = failOnPageErrors(page);
     await login(page, TRADER);
