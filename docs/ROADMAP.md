@@ -52,7 +52,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **Positions panel.** Open trades show a live countdown and progress, a winning/losing tint, and potential result. Closed trades show the result, and a detail modal shows the entry/exit chart snippet. There's also a "Trade again" action.
 - [x] **Trader sentiment.** Per asset, the % of stake on UP vs DOWN over the last N minutes, from real platform data.
 - [x] **Top traders today.** A leaderboard by daily profit, with anonymised names, country flag, and an opt-out in settings.
-- [ ] **Signals / notifications.** In-app notification centre (trade results, deposits, tournament starts, support replies), sound effects with a mute toggle, and browser notifications with permission.
+- [x] **Signals / notifications.** In-app notification centre (trade results, deposits, tournament starts, support replies), sound effects with a mute toggle, and browser notifications with permission.
 - [ ] **Account switcher.** Live, practice and each joined tournament. Practice refill is available when the balance is below a configured amount.
 - [ ] **Mobile terminal.** Full-bleed chart, bottom sheet ticket, swipeable positions, safe areas, and no layout shift. It must feel like a native app at 390px.
 

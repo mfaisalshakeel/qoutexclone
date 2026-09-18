@@ -1,4 +1,12 @@
-import type { Deposit, PendingTrade, Trade, Transaction, User, Withdrawal } from '@prisma/client';
+import type {
+  Deposit,
+  Notification,
+  PendingTrade,
+  Trade,
+  Transaction,
+  User,
+  Withdrawal,
+} from '@prisma/client';
 import { findNetwork } from './crypto-networks.js';
 
 export function publicUser(user: User) {
@@ -128,5 +136,18 @@ export function publicOrder(order: PendingTrade) {
     triggeredAt: order.triggeredAt,
     createdAt: order.createdAt,
     tournamentId: order.tournamentId,
+  };
+}
+
+/** The dedupe key is internal bookkeeping and stays on the server. */
+export function publicNotification(notification: Notification) {
+  return {
+    id: notification.id,
+    kind: notification.kind,
+    title: notification.title,
+    body: notification.body,
+    href: notification.href,
+    read: !!notification.readAt,
+    createdAt: notification.createdAt,
   };
 }

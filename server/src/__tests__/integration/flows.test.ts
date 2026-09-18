@@ -2161,3 +2161,282 @@ suite('top traders today', () => {
     }
   });
 });
+
+suite('the notification centre', () => {
+  let prisma: (typeof import('../../lib/prisma.js'))['prisma'];
+  let notifications: typeof import('../../services/notifications.js');
+  let trading: typeof import('../../services/trading.js');
+  let deposits: typeof import('../../services/deposits.js');
+  let settings: (typeof import('../../services/settings.js'))['settings'];
+  let feed: (typeof import('../../engine/feed.js'))['marketFeed'];
+
+  const symbol = `NOTUSD_${Date.now()}`;
+  const made = { users: [] as string[], assets: [] as string[] };
+  let assetId = '';
+
+  beforeAll(async () => {
+    prisma = (await import('../../lib/prisma.js')).prisma;
+    notifications = await import('../../services/notifications.js');
+    trading = await import('../../services/trading.js');
+    deposits = await import('../../services/deposits.js');
+    settings = (await import('../../services/settings.js')).settings;
+    feed = (await import('../../engine/feed.js')).marketFeed;
+    await settings.load();
+    // the listeners, without the prune timer a test has no use for
+    notifications.attach();
+
+    const asset = await prisma.asset.create({
+      data: {
+        symbol,
+        name: 'Notify Coin',
+        pair: 'NOT/USD',
+        assetClass: 'CRYPTO',
+        base: 'NOT',
+        quote: 'USD',
+        feedSymbol: symbol,
+        basePrice: 100,
+        volatility: 0.001,
+        precision: 2,
+        pipSize: 0.01,
+        payoutPct: 80,
+      },
+    });
+    made.assets.push(asset.id);
+    assetId = asset.id;
+    feed.load([{ symbol, feedSymbol: symbol, basePrice: 100, volatility: 0.001, precision: 2 }]);
+  });
+
+  afterAll(async () => {
+    if (!prisma) return;
+    await prisma.trade.deleteMany({ where: { symbol } });
+    await prisma.user.deleteMany({ where: { id: { in: made.users } } });
+    await prisma.asset.deleteMany({ where: { id: { in: made.assets } } });
+    await prisma.$disconnect();
+  });
+
+  const makeTrader = async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: `ntf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@test.dev`,
+        name: 'Notified Trader',
+        passwordHash: 'x',
+        referralCode: `NTF${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+        realBalance: 100_000,
+        demoBalance: 100_000,
+      },
+    });
+    made.users.push(user.id);
+    return user;
+  };
+
+  /** An expired position that wins, so settling it is a payout. */
+  const expiredWinner = (userId: string, accountType = 'REAL') =>
+    prisma.trade.create({
+      data: {
+        userId,
+        assetId,
+        symbol,
+        accountType,
+        direction: 'UP',
+        stake: 1_000,
+        payoutPct: 80,
+        entryPrice: 90, // under the feed price, so UP wins
+        durationSec: 30,
+        expiresAt: new Date(Date.now() - 1_000),
+        status: 'OPEN',
+      },
+    });
+
+  /** The listeners are fire-and-forget, so the assertion waits for the write. */
+  const waitFor = async <T>(read: () => Promise<T>, until: (value: T) => boolean): Promise<T> => {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const value = await read();
+      if (until(value)) return value;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    return read();
+  };
+
+  const centre = (userId: string) => notifications.list(userId);
+
+  it('tells a trader their live position settled, exactly once', async () => {
+    const user = await makeTrader();
+    const trade = await expiredWinner(user.id);
+
+    // both sweepers race, as they do in production; only one payout happens
+    await Promise.all([trading.settleTrade(trade.id), trading.settleTrade(trade.id)]);
+    const page = await waitFor(
+      () => centre(user.id),
+      (value) => value.items.length > 0,
+    );
+
+    expect(page.items).toHaveLength(1);
+    expect(page.unread).toBe(1);
+    expect(page.items[0].kind).toBe('TRADE');
+    expect(page.items[0].title).toContain('NOT/USD');
+    expect(page.items[0].body).toContain('$18.00');
+    expect(page.items[0].href).toBe('/history');
+  });
+
+  it('cannot tell the same trader the same thing twice', async () => {
+    const user = await makeTrader();
+    const draft = {
+      kind: 'SYSTEM' as const,
+      title: 'Scheduled maintenance',
+      body: 'Trading pauses at 02:00 UTC.',
+      href: null,
+      key: 'maintenance:2026-09-18',
+    };
+
+    expect(await notifications.notify(user.id, draft)).not.toBeNull();
+    // a retried webhook, a second sweeper, a restart mid-write
+    expect(await notifications.notify(user.id, draft)).toBeNull();
+    expect((await centre(user.id)).items).toHaveLength(1);
+
+    // the same event for a different trader is a different notification
+    const other = await makeTrader();
+    expect(await notifications.notify(other.id, draft)).not.toBeNull();
+  });
+
+  it('leaves practice results alone unless an operator asks for them', async () => {
+    const user = await makeTrader();
+    const practice = await expiredWinner(user.id, 'DEMO');
+    await trading.settleTrade(practice.id);
+    // nothing to wait for, so give the listener a moment to be wrong
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect((await centre(user.id)).items).toHaveLength(0);
+
+    await settings.set('notifications.practiceResults', true);
+    try {
+      const second = await expiredWinner(user.id, 'DEMO');
+      await trading.settleTrade(second.id);
+      const page = await waitFor(
+        () => centre(user.id),
+        (value) => value.items.length > 0,
+      );
+      expect(page.items[0].body).toContain('on practice');
+    } finally {
+      await settings.reset('notifications.practiceResults');
+    }
+  });
+
+  it('announces a credited deposit', async () => {
+    const user = await makeTrader();
+    const deposit = await deposits.createDeposit({
+      userId: user.id,
+      currency: 'USDT',
+      network: 'TRC20',
+      usdAmount: 150,
+    });
+    await deposits.completeDeposit(deposit.id, { txHash: 'notify-hash' });
+    // a webhook retry must not produce a second line
+    await deposits.completeDeposit(deposit.id, { txHash: 'notify-hash' });
+
+    const page = await waitFor(
+      () => centre(user.id),
+      (value) => value.items.some((item) => item.kind === 'DEPOSIT'),
+    );
+    const deposited = page.items.filter((item) => item.kind === 'DEPOSIT');
+    expect(deposited).toHaveLength(1);
+    expect(deposited[0].body).toContain('$150.00');
+    expect(deposited[0].body).not.toContain('NaN');
+    expect(deposited[0].href).toBe('/wallet');
+  });
+
+  it('marks read only what belongs to the reader', async () => {
+    const mine = await makeTrader();
+    const theirs = await makeTrader();
+    const draft = (key: string) => ({
+      kind: 'SYSTEM' as const,
+      title: 'Notice',
+      body: 'Something happened.',
+      href: null,
+      key,
+    });
+    const a = (await notifications.notify(mine.id, draft('a')))!;
+    await notifications.notify(mine.id, draft('b'));
+    const hers = (await notifications.notify(theirs.id, draft('a')))!;
+
+    // another trader's id matches nothing rather than being marked
+    expect(await notifications.markRead(mine.id, [hers.id])).toBe(0);
+    expect(await notifications.unreadCount(theirs.id)).toBe(1);
+
+    expect(await notifications.markRead(mine.id, [a.id])).toBe(1);
+    expect(await notifications.unreadCount(mine.id)).toBe(1);
+
+    // and "all" means all of the reader's, not everyone's
+    expect(await notifications.markRead(mine.id)).toBe(1);
+    expect(await notifications.unreadCount(mine.id)).toBe(0);
+    expect(await notifications.unreadCount(theirs.id)).toBe(1);
+
+    // the same goes for deleting one
+    expect(await notifications.remove(mine.id, hers.id)).toBe(false);
+    expect(await notifications.remove(mine.id, a.id)).toBe(true);
+  });
+
+  it('pages backwards from newest', async () => {
+    const user = await makeTrader();
+    for (let index = 0; index < 5; index += 1) {
+      await notifications.notify(user.id, {
+        kind: 'SYSTEM',
+        title: `Notice ${index}`,
+        body: 'Something happened.',
+        href: null,
+        key: `page:${index}`,
+      });
+      // the cursor is a timestamp, so the rows need distinguishable ones
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+
+    const first = await notifications.list(user.id, { limit: 2 });
+    expect(first.items.map((item) => item.title)).toEqual(['Notice 4', 'Notice 3']);
+    expect(first.cursor).not.toBeNull();
+
+    const second = await notifications.list(user.id, {
+      limit: 2,
+      before: new Date(first.cursor!),
+    });
+    expect(second.items.map((item) => item.title)).toEqual(['Notice 2', 'Notice 1']);
+
+    const last = await notifications.list(user.id, { limit: 2, before: new Date(second.cursor!) });
+    expect(last.items.map((item) => item.title)).toEqual(['Notice 0']);
+    // a short page is the end of the list
+    expect(last.cursor).toBeNull();
+
+    const unreadOnly = await notifications.list(user.id, { limit: 10, unreadOnly: true });
+    expect(unreadOnly.items).toHaveLength(5);
+    await notifications.markRead(user.id, [first.items[0].id]);
+    expect((await notifications.list(user.id, { limit: 10, unreadOnly: true })).items).toHaveLength(4);
+  });
+
+  it('drops notifications past the retention an operator set', async () => {
+    const user = await makeTrader();
+    const old = (await notifications.notify(user.id, {
+      kind: 'SYSTEM',
+      title: 'Ancient history',
+      body: 'Long ago.',
+      href: null,
+      key: 'old',
+    }))!;
+    await prisma.notification.update({
+      where: { id: old.id },
+      data: { createdAt: new Date(Date.now() - 400 * 86_400_000) },
+    });
+
+    await notifications.prune();
+    expect(await prisma.notification.findUnique({ where: { id: old.id } })).toBeNull();
+  });
+
+  it('writes nothing at all when an operator turns the centre off', async () => {
+    const user = await makeTrader();
+    await settings.set('notifications.enabled', false);
+    try {
+      const trade = await expiredWinner(user.id);
+      await trading.settleTrade(trade.id);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect((await centre(user.id)).items).toHaveLength(0);
+    } finally {
+      await settings.reset('notifications.enabled');
+    }
+  });
+});

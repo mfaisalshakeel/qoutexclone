@@ -55,8 +55,31 @@ model User {
   promoRedemptions  PromoRedemption[]
   commissionsEarned ReferralCommission[] @relation("CommissionReferrer")
   commissionsGiven  ReferralCommission[] @relation("CommissionReferred")
+  notifications     Notification[]
 
   @@index([referredById])
+}
+
+/// One line in a trader's notification centre. `dedupeKey` is the natural key of
+/// whatever happened, so a retried webhook or a second sweeper pass can never
+/// tell the same trader the same thing twice.
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  kind      String // TRADE | DEPOSIT | WITHDRAWAL | TOURNAMENT | SUPPORT | SYSTEM
+  title     String
+  body      String    @db.Text
+  /// Where the notification takes the reader, if anywhere.
+  href      String?
+  dedupeKey String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
 }
 
 model RefreshToken {

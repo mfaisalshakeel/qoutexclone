@@ -1,11 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { TRADER, failOnPageErrors, login } from './helpers';
+import { TRADER, failOnPageErrors, login, openMarket } from './helpers';
 
 test.describe('ticket', () => {
   test('steps, presets and balance shares all stay inside the market range', async ({ page }) => {
     const errors = failOnPageErrors(page);
     await login(page, TRADER);
-    await page.waitForSelector('canvas');
+    // an always-open market, so these specs do not depend on the clock or on
+    // whichever market another spec left on the account
+    await openMarket(page, 'EURUSD_OTC', 'EUR/USD (OTC)');
 
     const ticket = page.getByRole('region', { name: 'Order ticket' });
     const investment = ticket.getByRole('group', { name: 'Investment' });
@@ -65,7 +67,9 @@ test.describe('ticket', () => {
   test('repeats and doubles an open position', async ({ page }) => {
     const errors = failOnPageErrors(page);
     await login(page, TRADER);
-    await page.waitForSelector('canvas');
+    // an always-open market, so these specs do not depend on the clock or on
+    // whichever market another spec left on the account
+    await openMarket(page, 'EURUSD_OTC', 'EUR/USD (OTC)');
 
     const ticket = page.getByRole('region', { name: 'Order ticket' });
     const panel = page.getByRole('region', { name: 'Positions' });

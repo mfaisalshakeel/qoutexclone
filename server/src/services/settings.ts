@@ -54,6 +54,29 @@ export const SETTINGS = {
     public: true,
   }),
 
+  'notifications.enabled': define({
+    schema: z.boolean(),
+    default: true,
+    group: 'general',
+    label: 'Notification centre',
+    help: 'Trade results, payments, tournaments and support replies collected in one place.',
+    public: true,
+  }),
+  'notifications.practiceResults': define({
+    schema: z.boolean(),
+    default: false,
+    group: 'general',
+    label: 'Notify practice trade results',
+    help: 'Off by default: a practice trader can settle a position every five seconds, and the centre fills with them.',
+    public: true,
+  }),
+  'notifications.retentionDays': define({
+    schema: z.number().int().min(1).max(365),
+    default: 60,
+    group: 'general',
+    label: 'Keep notifications for (days)',
+  }),
+
   'trading.durations': define({
     schema: z.array(z.number().int().min(5).max(86400)).min(1).max(20),
     default: [5, 10, 15, 30, 60, 120, 180, 300, 600, 900, 1800, 3600, 14400],

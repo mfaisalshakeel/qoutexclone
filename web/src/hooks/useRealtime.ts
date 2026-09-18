@@ -4,6 +4,7 @@ import { useAuth } from '../store/auth';
 import { useTradingAccount } from '../store/tradingAccount';
 import { useMarket } from '../store/market';
 import { toast } from '../store/toast';
+import { useNotifications } from '../store/notifications';
 import { money } from '../lib/format';
 
 /**
@@ -59,6 +60,11 @@ export function useRealtime(): void {
       void refreshUser();
     });
 
+    // the centre is fed from the same socket, and announced by the store
+    const offNotification = realtime.on('notification', ({ notification }) => {
+      useNotifications.getState().receive(notification);
+    });
+
     return () => {
       offQuotes();
       offPayouts();
@@ -67,6 +73,7 @@ export function useRealtime(): void {
       offSettled();
       offDeposit();
       offWithdrawal();
+      offNotification();
     };
   }, [setPrices, setPayouts, setSentiment, setConnected, patchBalance, refreshUser]);
 }

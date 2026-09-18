@@ -91,6 +91,14 @@ interface MarketState {
   setPaneSymbol: (index: number, symbol: string) => void;
   setPaneTimeframe: (index: number, timeframe: string) => void;
   adoptLayout: (stored: unknown) => void;
+  /**
+   * True once the trader has moved the workspace themselves in this session.
+   * The stored layout arrives with the account, which can be well after the
+   * terminal is usable, and it must never overwrite a market just chosen.
+   */
+  layoutTouched: boolean;
+  /** Forgets that, so the next account adopts its own workspace. */
+  forgetLayout: () => void;
   timeframes: string[];
   prices: Record<string, number>;
   symbol: string;
@@ -129,6 +137,7 @@ export const useMarket = create<MarketState>((set, get) => ({
   favourites: loadFavourites(),
   recents: loadRecents(),
   layout: defaultLayout(localStorage.getItem(LAST_SYMBOL_KEY) ?? 'EURUSD', '1m'),
+  layoutTouched: false,
   // the catalogue's lead market; `load` corrects a stored symbol that no longer exists
   symbol: localStorage.getItem(LAST_SYMBOL_KEY) ?? 'EURUSD',
   timeframe: '1m',
@@ -167,6 +176,7 @@ export const useMarket = create<MarketState>((set, get) => ({
       symbol,
       recents: pushRecent(get().recents, symbol),
       layout: updatePane(layout, layout.focused, { symbol }),
+      layoutTouched: true,
     });
     persistLayout(get().layout);
   },
@@ -177,7 +187,7 @@ export const useMarket = create<MarketState>((set, get) => ({
 
   setTimeframe(timeframe) {
     const { layout } = get();
-    set({ timeframe, layout: updatePane(layout, layout.focused, { timeframe }) });
+    set({ timeframe, layout: updatePane(layout, layout.focused, { timeframe }), layoutTouched: true });
     persistLayout(get().layout);
   },
 
@@ -186,7 +196,12 @@ export const useMarket = create<MarketState>((set, get) => ({
     const panes = resize(layout.panes, kind, { symbol, timeframe });
     const focused = clampFocus(layout.focused, kind);
     const next = { kind, panes, focused };
-    set({ layout: next, symbol: panes[focused].symbol, timeframe: panes[focused].timeframe });
+    set({
+      layout: next,
+      symbol: panes[focused].symbol,
+      timeframe: panes[focused].timeframe,
+      layoutTouched: true,
+    });
     persistLayout(next);
   },
 
@@ -196,7 +211,7 @@ export const useMarket = create<MarketState>((set, get) => ({
     const pane = layout.panes[focused];
     if (!pane) return;
     const next = { ...layout, focused };
-    set({ layout: next, symbol: pane.symbol, timeframe: pane.timeframe });
+    set({ layout: next, symbol: pane.symbol, timeframe: pane.timeframe, layoutTouched: true });
     persistLayout(next);
   },
 
@@ -206,6 +221,7 @@ export const useMarket = create<MarketState>((set, get) => ({
     set({
       layout: next,
       recents: pushRecent(get().recents, symbol),
+      layoutTouched: true,
       ...(index === layout.focused ? { symbol } : {}),
     });
     persistLayout(next);
@@ -214,16 +230,27 @@ export const useMarket = create<MarketState>((set, get) => ({
   setPaneTimeframe(index, timeframe) {
     const { layout } = get();
     const next = updatePane(layout, index, { timeframe });
-    set({ layout: next, ...(index === layout.focused ? { timeframe } : {}) });
+    set({ layout: next, layoutTouched: true, ...(index === layout.focused ? { timeframe } : {}) });
     persistLayout(next);
   },
 
-  /** Takes the layout stored on the account, whatever shape it is in. */
+  /**
+   * Takes the layout stored on the account, whatever shape it is in.
+   *
+   * Ignored once the trader has moved the workspace in this session: the
+   * account arrives after the terminal is already usable, and a market chosen
+   * in between must not be thrown away by a layout saved yesterday.
+   */
   adoptLayout(stored) {
+    if (get().layoutTouched) return;
     const { symbol, timeframe } = get();
     const layout = parseLayout(stored, defaultLayout(symbol, timeframe));
     const pane = layout.panes[layout.focused];
     set({ layout, symbol: pane.symbol, timeframe: pane.timeframe });
+  },
+
+  forgetLayout() {
+    set({ layoutTouched: false });
   },
 
   setPrices(prices) {

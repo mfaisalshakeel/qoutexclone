@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { badRequest, notFound, wrap } from '../lib/errors.js';
-import { publicUser } from '../lib/serialize.js';
+import { publicNotification, publicUser } from '../lib/serialize.js';
 import { requireAuth } from '../middleware/auth.js';
 import { applyLedger } from '../services/wallet.js';
 import { tradingStats } from '../services/trading.js';
@@ -11,6 +11,7 @@ import { DOCUMENT_TYPES, latestKycSubmission, submitKyc } from '../services/kyc.
 import { referralSummary } from '../services/referrals.js';
 import { settings } from '../services/settings.js';
 import { leaderboard } from '../services/leaderboard.js';
+import * as notifications from '../services/notifications.js';
 
 // mounted at /api/me — every route here needs a signed-in user
 const router = Router();
@@ -78,6 +79,57 @@ router.patch(
     // the next refresh
     await leaderboard.refresh();
     res.json({ optedOut: user.leaderboardOptOut });
+  }),
+);
+
+/**
+ * The notification centre.
+ *
+ * Paged backwards from newest with a `createdAt` cursor, so a centre that has
+ * been open for a while does not re-read the whole list to reach the end.
+ */
+router.get(
+  '/notifications',
+  wrap(async (req, res) => {
+    const query = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(50).optional(),
+        before: z.string().datetime().optional(),
+        unread: z.enum(['true', 'false']).optional(),
+      })
+      .parse(req.query);
+
+    const page = await notifications.list(req.user!.id, {
+      limit: query.limit,
+      before: query.before ? new Date(query.before) : undefined,
+      unreadOnly: query.unread === 'true',
+    });
+    res.json({
+      items: page.items.map(publicNotification),
+      unread: page.unread,
+      cursor: page.cursor,
+      enabled: settings.get('notifications.enabled'),
+    });
+  }),
+);
+
+/** Marks the given notifications read, or all of them when none are named. */
+router.post(
+  '/notifications/read',
+  wrap(async (req, res) => {
+    const body = z.object({ ids: z.array(z.string().min(1)).max(100).optional() }).parse(req.body ?? {});
+    // scoped to the reader inside the service: another trader's id matches nothing
+    const marked = await notifications.markRead(req.user!.id, body.ids);
+    res.json({ marked, unread: await notifications.unreadCount(req.user!.id) });
+  }),
+);
+
+router.delete(
+  '/notifications/:id',
+  wrap(async (req, res) => {
+    const removed = await notifications.remove(req.user!.id, req.params.id);
+    if (!removed) throw notFound('Notification not found');
+    res.json({ ok: true, unread: await notifications.unreadCount(req.user!.id) });
   }),
 );
 

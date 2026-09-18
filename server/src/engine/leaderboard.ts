@@ -79,9 +79,7 @@ export function rank(
   const limit = Math.min(Math.max(options.limit ?? 20, 1), 100);
 
   return [...entries]
-    .sort(
-      (a, b) => b.profit - a.profit || a.trades - b.trades || a.userId.localeCompare(b.userId),
-    )
+    .sort((a, b) => b.profit - a.profit || a.trades - b.trades || a.userId.localeCompare(b.userId))
     .slice(0, limit)
     .map((entry, index) => ({
       rank: index + 1,

@@ -6,6 +6,7 @@ import { useRealtime } from '../hooks/useRealtime';
 import { BalanceSwitcher } from './BalanceSwitcher';
 import { ErrorBoundary } from './ErrorBoundary';
 import { SupportChat } from './SupportChat';
+import { NotificationCentre } from './NotificationCentre';
 import { Toasts } from './Toasts';
 import { IconChart, IconCup, IconHistory, IconLogo, IconShield, IconUser, IconWallet } from './Icons';
 
@@ -69,6 +70,7 @@ export function Layout() {
               title={connected ? 'Live market data connected' : 'Reconnecting…'}
               className={`hidden h-2 w-2 rounded-full sm:block ${connected ? 'bg-up' : 'bg-amber-400'}`}
             />
+            <NotificationCentre />
             <BalanceSwitcher />
             <Link to="/wallet?tab=deposit" className="btn-primary hidden !px-3 !py-2 sm:inline-flex">
               Deposit

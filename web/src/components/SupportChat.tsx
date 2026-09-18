@@ -3,6 +3,7 @@ import { ApiError, api } from '../lib/api';
 import { dateTime } from '../lib/format';
 import { realtime } from '../lib/ws';
 import { toast } from '../store/toast';
+import { useSupport } from '../store/support';
 import type { SupportTicket } from '../lib/types';
 import { Skeleton, SkeletonGroup } from './Skeleton';
 
@@ -11,7 +12,9 @@ import { Skeleton, SkeletonGroup } from './Skeleton';
  * socket, and the launcher carries an unread badge.
  */
 export function SupportChat() {
-  const [open, setOpen] = useState(false);
+  // held in a store so a notification about a reply can open the desk
+  const open = useSupport((s) => s.open);
+  const setOpen = useSupport((s) => s.setOpen);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -117,7 +120,7 @@ export function SupportChat() {
   return (
     <>
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(!open)}
         aria-label="Support chat"
         className="fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-white shadow-xl transition hover:brightness-110 md:bottom-6"
       >

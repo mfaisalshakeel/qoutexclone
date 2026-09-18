@@ -1,4 +1,5 @@
 import { api, tokens } from './api';
+import type { TraderNotification } from './notifications';
 import type {
   AccountType,
   Candle,
@@ -34,6 +35,7 @@ export interface RealtimeEvents {
   'deposit:created': { deposit: Deposit };
   'deposit:updated': { deposit: Deposit };
   'withdrawal:updated': { withdrawal: Withdrawal };
+  notification: { notification: TraderNotification };
   'support:message': { message: SupportMessage };
   'support:incoming': { message: SupportMessage; userId: string; subject: string };
   'support:ticket': { ticket: SupportTicket };

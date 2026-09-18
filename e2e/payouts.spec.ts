@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ADMIN, TRADER, failOnPageErrors, login } from './helpers';
+import { ADMIN, TRADER, failOnPageErrors, login, openMarket } from './helpers';
 
 /** Removes any rule this suite created before, however a run ended. */
 async function clearRules(page: Page): Promise<void> {
@@ -38,6 +38,8 @@ test.describe('payout rules', () => {
       await clearRules(admin);
 
       await login(trader, TRADER);
+      // an always-open market, so the quoted payout is there to be compared
+      await openMarket(trader, 'EURUSD_OTC', 'EUR/USD (OTC)');
       const ticket = trader.getByRole('region', { name: 'Order ticket' });
       const figure = ticket.getByText(/^\d+%$/).first();
       await expect(figure).toBeVisible({ timeout: 15_000 });

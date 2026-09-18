@@ -67,6 +67,32 @@ export const IconCup = ({ className = base }: Props) => (
   </svg>
 );
 
+export const IconBell = ({ className = base }: Props) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
+    <path
+      d="M6 9a6 6 0 0 1 12 0c0 3.2.6 4.8 1.5 6H4.5C5.4 13.8 6 12.2 6 9z"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path d="M10 18a2 2 0 0 0 4 0" strokeLinecap="round" />
+  </svg>
+);
+
+export const IconBellOff = ({ className = base }: Props) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
+    <path d="M8.2 6.2A6 6 0 0 1 18 9c0 3.2.6 4.8 1.5 6H8" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M6 9v0c0 3.2-.6 4.8-1.5 6" strokeLinecap="round" />
+    <path d="M4 4l16 16" strokeLinecap="round" />
+  </svg>
+);
+
+export const IconVolume = ({ className = base }: Props) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
+    <path d="M4 10v4h3l4 3V7l-4 3H4z" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M15 9.5a3.5 3.5 0 0 1 0 5M17.5 7a7 7 0 0 1 0 10" strokeLinecap="round" />
+  </svg>
+);
+
 export const IconLogo = ({ className = 'h-7 w-7' }: Props) => (
   <svg viewBox="0 0 32 32" fill="none" className={className}>
     <rect width="32" height="32" rx="9" fill="#3d7bff" />

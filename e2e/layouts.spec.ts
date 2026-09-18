@@ -1,11 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { TRADER, failOnPageErrors, login } from './helpers';
+import { TRADER, failOnPageErrors, login, openMarket } from './helpers';
 
 test.describe('chart layouts', () => {
   test('splits into panes, trades from the focused one, and follows the account', async ({ page }) => {
     const errors = failOnPageErrors(page);
     await login(page, TRADER);
-    await page.waitForSelector('canvas');
+    // an always-open market, so these specs do not depend on the clock or on
+    // whichever market another spec left on the account
+    await openMarket(page, 'EURUSD_OTC', 'EUR/USD (OTC)');
 
     // start from a known layout rather than whatever the account last held
     const layoutGroup = page.getByRole('group', { name: 'Chart layout' });
@@ -70,7 +72,9 @@ test.describe('chart layouts', () => {
     });
 
     await login(page, TRADER);
-    await page.waitForSelector('canvas');
+    // an always-open market, so these specs do not depend on the clock or on
+    // whichever market another spec left on the account
+    await openMarket(page, 'EURUSD_OTC', 'EUR/USD (OTC)');
     await page.getByRole('group', { name: 'Chart layout' }).getByRole('button', { name: 'Single' }).click();
 
     await page

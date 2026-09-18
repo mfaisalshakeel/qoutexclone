@@ -1,11 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { TRADER, failOnPageErrors, login } from './helpers';
+import { TRADER, failOnPageErrors, login, openMarket } from './helpers';
 
 test.describe('expiry modes', () => {
   test('buys a clock-time expiry with a live countdown to its cut-off', async ({ page }) => {
     const errors = failOnPageErrors(page);
     await login(page, TRADER);
-    await page.waitForSelector('canvas');
+    // an always-open market, so these specs do not depend on the clock or on
+    // whichever market another spec left on the account
+    await openMarket(page, 'EURUSD_OTC', 'EUR/USD (OTC)');
 
     const ticket = page.getByRole('region', { name: 'Order ticket' });
     const expiry = ticket.getByRole('group', { name: 'Expiry' });
@@ -41,7 +43,9 @@ test.describe('expiry modes', () => {
   test('offers the durations a market allows, and nothing else', async ({ page }) => {
     const errors = failOnPageErrors(page);
     await login(page, TRADER);
-    await page.waitForSelector('canvas');
+    // an always-open market, so these specs do not depend on the clock or on
+    // whichever market another spec left on the account
+    await openMarket(page, 'EURUSD_OTC', 'EUR/USD (OTC)');
 
     const expiry = page.getByRole('region', { name: 'Order ticket' }).getByRole('group', { name: 'Expiry' });
 

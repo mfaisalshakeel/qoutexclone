@@ -36,6 +36,25 @@ export async function login(page: Page, credentials: { email: string; password: 
   await page.waitForURL('**/trade');
 }
 
+/**
+ * Puts the terminal on a named market.
+ *
+ * The workspace is saved on the account, so the seeded trader opens on whatever
+ * market was last used — which, after a spec that walks through the catalogue,
+ * can be a stock that is closed out of hours and has no ticket at all. Any spec
+ * that needs to trade says which market it means rather than inheriting one.
+ */
+export async function openMarket(page: Page, search: string, pair: string): Promise<void> {
+  await page.waitForSelector('canvas');
+  const rail = page.getByRole('complementary').filter({ has: page.getByLabel('Search markets') });
+  await rail.getByLabel('Search markets').fill(search);
+  await rail.getByRole('button', { name: pair, exact: true }).first().click();
+  await rail.getByLabel('Search markets').fill('');
+  // leaving the search box focused would swallow every hotkey that follows
+  await rail.getByLabel('Search markets').blur();
+  await expect(page.locator('button:visible:has-text("Higher")').first()).toBeVisible();
+}
+
 /** Places a position on the account currently selected in the header. */
 export async function placeTrade(page: Page, direction: 'Higher' | 'Lower', expiry = '30s'): Promise<void> {
   await page.waitForSelector('canvas');

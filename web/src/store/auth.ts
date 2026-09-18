@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { api, tokens } from '../lib/api';
 import { realtime } from '../lib/ws';
+import { useNotifications } from './notifications';
+import { useMarket } from './market';
 import type { AccountType, User } from '../lib/types';
 
 interface AuthState {
@@ -83,6 +85,10 @@ export const useAuth = create<AuthState>((set, get) => ({
     }
     tokens.clear();
     realtime.disconnect();
+    // the next trader on this browser must not inherit anyone's notifications,
+    // nor keep this session's claim on the workspace
+    useNotifications.getState().reset();
+    useMarket.getState().forgetLayout();
     set({ user: null });
   },
 

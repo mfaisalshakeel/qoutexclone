@@ -12,8 +12,15 @@ import { settingsEvents } from './services/settings.js';
 import { payouts } from './services/payouts.js';
 import { sentiment } from './services/sentiment.js';
 import { orderEvents } from './services/orders.js';
+import { notificationEvents } from './services/notifications.js';
 import { prisma } from './lib/prisma.js';
-import { publicDeposit, publicOrder, publicTrade, publicWithdrawal } from './lib/serialize.js';
+import {
+  publicDeposit,
+  publicNotification,
+  publicOrder,
+  publicTrade,
+  publicWithdrawal,
+} from './lib/serialize.js';
 import { log } from './lib/logger.js';
 
 /** One chart a client is watching. */
@@ -298,6 +305,15 @@ export function attachWebsocket(server: Server) {
   withdrawalEvents.on('updated', (withdrawal) => {
     if (withdrawal)
       toUser(withdrawal.userId, { type: 'withdrawal:updated', withdrawal: publicWithdrawal(withdrawal) });
+  });
+
+  // the centre updates itself: a notification written server-side arrives at
+  // whichever tabs the trader has open, unread count and all
+  notificationEvents.on('created', (notification) => {
+    toUser(notification.userId, {
+      type: 'notification',
+      notification: publicNotification(notification),
+    });
   });
 
   supportEvents.on('message', ({ message, userId, subject }) => {

@@ -184,6 +184,7 @@ export async function startTournament(tournamentId: string): Promise<Tournament>
     data: { status: 'RUNNING', startsAt: new Date() },
   });
   tournamentEvents.emit('updated', updated);
+  tournamentEvents.emit('started', updated);
   return updated;
 }
 
@@ -239,6 +240,8 @@ export async function finishTournament(tournamentId: string): Promise<Tournament
   });
 
   tournamentEvents.emit('updated', finished);
+  // a separate event, because the ranks and prizes are only known now
+  tournamentEvents.emit('finished', finished);
   return finished as Tournament;
 }
 
@@ -260,6 +263,7 @@ export async function finishDueTournaments(): Promise<number> {
       data: { status: 'RUNNING' },
     });
     tournamentEvents.emit('updated', updated);
+    tournamentEvents.emit('started', updated);
   }
   return due.length;
 }

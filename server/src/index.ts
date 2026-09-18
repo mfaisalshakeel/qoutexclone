@@ -14,6 +14,7 @@ import { candleStore } from './services/candles.js';
 import { payouts } from './services/payouts.js';
 import { sentiment } from './services/sentiment.js';
 import { leaderboard } from './services/leaderboard.js';
+import { startNotifications, stopNotifications } from './services/notifications.js';
 import type { OtcParams } from './engine/otc.js';
 
 /** How long a shutdown may take before in-flight work is abandoned. */
@@ -74,6 +75,7 @@ async function main() {
   payouts.start();
   sentiment.start();
   leaderboard.start();
+  startNotifications();
   // a closed exchange stops printing prices; OTC and crypto never close
   const sessionByAsset = new Map(assets.map((asset) => [asset.symbol, asset.scheduleId]));
   marketFeed.setSessionResolver((symbol) => marketHours.stateFor(sessionByAsset.get(symbol) ?? null).isOpen);
@@ -126,6 +128,7 @@ async function main() {
       payouts.stop();
       sentiment.stop();
       leaderboard.stop();
+      stopNotifications();
       candleStore.stop();
       await candleStore.flush();
       chainWatcher.stop();

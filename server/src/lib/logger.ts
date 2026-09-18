@@ -49,4 +49,5 @@ export const log = {
   chain: logger.child({ component: 'chain' }),
   ws: logger.child({ component: 'ws' }),
   http: logger.child({ component: 'http' }),
+  notify: logger.child({ component: 'notify' }),
 };
