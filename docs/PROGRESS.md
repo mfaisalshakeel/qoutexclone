@@ -4,6 +4,18 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-18**: Phase 2 — **Mobile terminal**. At 390px the terminal is now a screen rather than a page: a full-bleed chart between the header and a dock, the ticket and the positions in sheets, and nothing that scrolls.
+
+  **The dock is the trade.** Stake, expiry, open count and the two buy buttons sit under the thumb at all times; a trade is one tap, with no sheet to open first. The ticket still owns the stake and the expiry — it is the one place that knows what a valid stake is — so it reports a small summary upwards for the dock to render, and the dock's buttons reach it through the same imperative handle the keyboard shortcuts use. It stays mounted behind its sheet for exactly that reason.
+
+  **Gestures are logic, so they are tested.** `lib/gestures.ts` decides what counts as a swipe (far enough, straight enough), which tab a swipe lands on (following the finger, stopping at the ends rather than wrapping) and whether a downward drag should dismiss a sheet (a third of its height, or a flick). The positions list changes tab on a horizontal swipe and the sheets pull closed, while every tab remains a real button — nothing is reachable by gesture alone.
+
+  **The chrome is measured once.** `.app-nav`, `.app-main` and `.terminal-viewport` in `index.css` share one set of figures — a 3.5rem header, a 3.75rem bottom bar plus the home indicator — so the terminal is exactly the space between them and the page never scrolls. The bottom bar had six items in a five-column grid, which wrapped to a second row and ate a chunk of the screen; it is five now, with the leaderboard in the account menu.
+
+  Two things were quietly in the way on a phone and are not any more: the floating support launcher sat on top of the Lower button, so it steps aside on the terminal and support moved into the account menu where it is reachable from anywhere; and toasts rose from the bottom over the buy buttons, so they now drop from under the header.
+
+  9 unit tests for the gestures, and a phone e2e project that drives a real Chromium touchscreen: edge-to-edge canvases, no page scroll, a stake changed in the sheet showing on the dock, a trade placed from the dock alone, and swiping through the positions tabs and pulling the sheet closed. Verified with lint, format, typecheck, 112 web unit tests, a production build, the full Playwright suite at 47 passed, and the terminal used by hand on a Pixel 7 viewport.
+
 - **2026-09-18**: Phase 2 — **Account switcher**. The header pill now lists live money, practice money and a set of chips for every tournament the trader is in, and tops the practice balance up when it has run down.
 
   The three kinds of money never mix, so the pill always names the one a position would be staked from — including the tournament, by name — and the accounts a trader can actually stake from are decided in `lib/accounts.ts` rather than in the markup: a tournament that has not started, or whose clock has run out, is listed so they know they are in it but cannot be selected, which is the same answer the server would give. Chips are always labelled chips and never dollars.

@@ -92,6 +92,35 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+
+  /*
+   * The app's fixed chrome, in one place: a 3.5rem header, and on a phone a
+   * bottom bar of 3.75rem plus whatever the home indicator needs. Pages reserve
+   * exactly that, so nothing is hidden underneath and nothing shifts when the
+   * bar renders.
+   */
+  .app-nav {
+    height: calc(3.75rem + env(safe-area-inset-bottom));
+  }
+
+  .app-main {
+    padding-bottom: calc(3.75rem + env(safe-area-inset-bottom));
+  }
+
+  /* A terminal fills the space between the two, and never scrolls the page. */
+  .terminal-viewport {
+    height: calc(100dvh - 3.5rem - 3.75rem - env(safe-area-inset-bottom));
+  }
+
+  @media (min-width: 768px) {
+    .app-main {
+      padding-bottom: 0;
+    }
+
+    .terminal-viewport {
+      height: calc(100dvh - 3.5rem);
+    }
+  }
 }
 
 @keyframes skeleton-sweep {

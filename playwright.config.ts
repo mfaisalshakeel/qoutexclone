@@ -34,8 +34,15 @@ export default defineConfig({
   },
 
   projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
-    { name: 'mobile', use: { ...devices['Pixel 7'] }, testMatch: /responsive\.spec\.ts/ },
+    {
+      name: 'desktop',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
+      // the phone terminal has no desktop equivalent: its dock and its sheets
+      // only exist below the md breakpoint
+      testIgnore: /mobile\.spec\.ts/,
+    },
+    // the phone project runs the specs written for it, not the whole suite
+    { name: 'mobile', use: { ...devices['Pixel 7'] }, testMatch: /(responsive|mobile)\.spec\.ts/ },
   ],
 
   ...(process.env.E2E_MANAGE_SERVERS

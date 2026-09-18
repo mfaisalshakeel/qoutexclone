@@ -54,7 +54,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **Top traders today.** A leaderboard by daily profit, with anonymised names, country flag, and an opt-out in settings.
 - [x] **Signals / notifications.** In-app notification centre (trade results, deposits, tournament starts, support replies), sound effects with a mute toggle, and browser notifications with permission.
 - [x] **Account switcher.** Live, practice and each joined tournament. Practice refill is available when the balance is below a configured amount.
-- [ ] **Mobile terminal.** Full-bleed chart, bottom sheet ticket, swipeable positions, safe areas, and no layout shift. It must feel like a native app at 390px.
+- [x] **Mobile terminal.** Full-bleed chart, bottom sheet ticket, swipeable positions, safe areas, and no layout shift. It must feel like a native app at 390px.
 
 ## Phase 3 — Own charting engine (remove TradingView / lightweight-charts)
 

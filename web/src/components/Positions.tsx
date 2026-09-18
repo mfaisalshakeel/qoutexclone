@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMarket } from '../store/market';
 import { countdown, dateTime, money, price } from '../lib/format';
+import { swipeOf, tabAfterSwipe, type Point } from '../lib/gestures';
 import type { PendingOrder, Trade } from '../lib/types';
 import { Skeleton, SkeletonGroup } from './Skeleton';
 import { TradeDetail } from './TradeDetail';
+
+const TABS = ['open', 'pending', 'closed'] as const;
 
 interface Props {
   open: Trade[];
@@ -21,6 +24,9 @@ export function Positions({ open, closed, pending, onCancel, onRepeat, loading =
   const prices = useMarket((s) => s.prices);
   const assets = useMarket((s) => s.assets);
   const [tab, setTab] = useState<'open' | 'pending' | 'closed'>('open');
+  // a phone changes tab by swiping the list, the way a native app does; the
+  // tabs stay real buttons, so nothing here is only reachable by gesture
+  const touchStart = useRef<Point | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [repeating, setRepeating] = useState<string | null>(null);
   const [detail, setDetail] = useState<Trade | null>(null);
@@ -55,6 +61,20 @@ export function Positions({ open, closed, pending, onCancel, onRepeat, loading =
     }
   };
 
+  const onTouchStart = (event: React.TouchEvent) => {
+    const touch = event.touches[0];
+    touchStart.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+  };
+
+  const onTouchEnd = (event: React.TouchEvent) => {
+    const from = touchStart.current;
+    const touch = event.changedTouches[0];
+    touchStart.current = null;
+    if (!from || !touch) return;
+    const direction = swipeOf(from, { x: touch.clientX, y: touch.clientY });
+    if (direction) setTab(tabAfterSwipe(TABS, tab, direction));
+  };
+
   return (
     <div role="region" aria-label="Positions" className="card flex h-full min-h-0 flex-col">
       {detail && (
@@ -71,7 +91,7 @@ export function Positions({ open, closed, pending, onCancel, onRepeat, loading =
         aria-label="Positions"
         className="flex shrink-0 gap-1 border-b border-ink-600 p-1.5"
       >
-        {(['open', 'pending', 'closed'] as const).map((key) => (
+        {TABS.map((key) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -94,7 +114,12 @@ export function Positions({ open, closed, pending, onCancel, onRepeat, loading =
         ))}
       </div>
 
-      <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto p-1.5">
+      <div
+        role="tabpanel"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        className="min-h-0 flex-1 overflow-y-auto p-1.5"
+      >
         {loading && <PositionSkeletons />}
 
         {!loading &&

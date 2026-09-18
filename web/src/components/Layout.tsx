@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/auth';
 import { useMarket } from '../store/market';
+import { useSupport } from '../store/support';
 import { useRealtime } from '../hooks/useRealtime';
 import { BalanceSwitcher } from './BalanceSwitcher';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -19,9 +20,17 @@ const NAV = [
   { to: '/account', label: 'Account', icon: IconUser },
 ];
 
+/**
+ * The phone's bottom bar holds five, because a sixth wraps to a second row and
+ * eats a chunk of a 390px screen. The leaderboard is one tap away in the
+ * account menu, which is where the rest of the account lives anyway.
+ */
+const MOBILE_NAV = NAV.filter((item) => item.to !== '/leaderboard');
+
 export function Layout() {
   const { user, logout } = useAuth();
   const connected = useMarket((s) => s.connected);
+  const openSupport = useSupport((s) => s.setOpen);
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -100,6 +109,17 @@ export function Layout() {
                       {item.label}
                     </Link>
                   ))}
+                  {/* the terminal's dock covers the floating launcher on a
+                      phone, so support is reachable from here too */}
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      openSupport(true);
+                    }}
+                    className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-ink-700"
+                  >
+                    Support
+                  </button>
                   <div className="my-1 h-px bg-ink-600" />
                   <button
                     onClick={async () => {
@@ -119,15 +139,18 @@ export function Layout() {
       </header>
 
       <main
-        className={`flex-1 pb-20 md:pb-0 ${isTerminal ? '' : 'mx-auto w-full max-w-[1400px] px-3 py-5 sm:px-4'}`}
+        className={`app-main flex-1 ${isTerminal ? '' : 'mx-auto w-full max-w-[1400px] px-3 py-5 sm:px-4'}`}
       >
         <ErrorBoundary resetKey={location.pathname}>
           <Outlet />
         </ErrorBoundary>
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-ink-700 bg-ink-900/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-        {NAV.map((item) => (
+      <nav
+        aria-label="Sections"
+        className="app-nav fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-ink-700 bg-ink-900/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+      >
+        {MOBILE_NAV.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

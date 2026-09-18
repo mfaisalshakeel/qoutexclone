@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, api } from '../lib/api';
 import { realtime } from '../lib/ws';
-import { percent, price, untilShort } from '../lib/format';
+import { money, percent, price, untilShort } from '../lib/format';
 import { assetOf, useMarket } from '../store/market';
 import { LAYOUTS, gridClass } from '../lib/layout';
 import { useAuth } from '../store/auth';
@@ -9,11 +9,13 @@ import { useTradingAccount } from '../store/tradingAccount';
 import { toast } from '../store/toast';
 import { DESKTOP_QUERY, useMediaQuery } from '../hooks/useMediaQuery';
 import { AssetPicker } from '../components/AssetPicker';
+import { BottomSheet } from '../components/BottomSheet';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { PriceChart, type ChartType, type IndicatorSettings } from '../components/PriceChart';
 import { Positions } from '../components/Positions';
-import { TradeTicket, type TicketHandle } from '../components/TradeTicket';
+import { TradeTicket, type TicketHandle, type TicketSummary } from '../components/TradeTicket';
 import { HotkeyHelp } from '../components/HotkeyHelp';
+import { IconArrowDown, IconArrowUp } from '../components/Icons';
 import { useHotkeys } from '../hooks/useHotkeys';
 import { ChartSkeleton, Skeleton, SkeletonGroup } from '../components/Skeleton';
 import type { Asset, PendingOrder, Trade } from '../lib/types';
@@ -50,7 +52,10 @@ export function Terminal() {
   const [closedTrades, setClosedTrades] = useState<Trade[]>([]);
   const [orders, setOrders] = useState<PendingOrder[]>([]);
   const [tradesLoaded, setTradesLoaded] = useState(false);
-  const [mobilePanel, setMobilePanel] = useState<'trade' | 'positions'>('trade');
+  // on a phone the ticket and the positions live in sheets, and a dock at the
+  // bottom of the screen shows what the ticket holds
+  const [sheet, setSheet] = useState<'ticket' | 'positions' | null>(null);
+  const [summary, setSummary] = useState<TicketSummary | null>(null);
   const [marketsOpen, setMarketsOpen] = useState(false);
   const [chartType, setChartType] = useState<ChartType>('candles');
   const [indicators, setIndicators] = useState<IndicatorSettings>({
@@ -225,7 +230,7 @@ export function Terminal() {
   }, []);
 
   return (
-    <div className="flex flex-col gap-2 p-2 md:h-[calc(100dvh-3.5rem)] md:flex-row">
+    <div className="terminal-viewport flex flex-col md:flex-row md:gap-2 md:p-2">
       {helpOpen && <HotkeyHelp state={hotkeys} onClose={() => setHelpOpen(false)} />}
       {/* markets — rail on desktop, sheet on mobile */}
       {isDesktop && (
@@ -234,8 +239,9 @@ export function Terminal() {
         </aside>
       )}
 
-      <section className="flex min-h-0 flex-1 flex-col gap-2">
-        <header className="card flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 p-2.5">
+      <section className="flex min-h-0 flex-1 flex-col md:gap-2">
+        {/* edge to edge on a phone: a card inside a card reads as a mockup */}
+        <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-ink-600 bg-ink-800 p-2.5 md:rounded-xl md:border">
           {!asset ? (
             <SkeletonGroup label="Loading market" className="flex items-center gap-3">
               <Skeleton className="h-9 w-9 !rounded-full" />
@@ -451,7 +457,7 @@ export function Terminal() {
           </div>
         )}
 
-        <div className={`grid h-[42dvh] min-h-[240px] gap-2 md:h-auto md:flex-1 ${gridClass(layout.kind)}`}>
+        <div className={`grid min-h-0 flex-1 gap-1 md:gap-2 ${gridClass(layout.kind)}`}>
           {layout.panes.map((pane, index) => {
             const paneAsset = assetOf(pane.symbol, assets);
             const isFocused = index === layout.focused;
@@ -459,7 +465,7 @@ export function Terminal() {
             return (
               <div
                 key={`${index}:${pane.symbol}:${pane.timeframe}`}
-                className={`card relative min-h-0 overflow-hidden ${
+                className={`relative min-h-0 overflow-hidden border-ink-600 bg-ink-800 md:rounded-xl md:border ${
                   single ? '' : isFocused ? 'ring-1 ring-accent/60' : 'opacity-90'
                 }`}
               >
@@ -525,41 +531,75 @@ export function Terminal() {
           })}
         </div>
 
-        {/* narrow viewports swap between the ticket and the positions list */}
+        {/* A phone docks the trade at the bottom of the screen, the way a
+            native app does: the stake, the expiry and the two buy buttons are
+            always under the thumb, and the ticket itself is a sheet away. */}
         {!isDesktop && (
-          <>
-            <div className="grid shrink-0 grid-cols-2 gap-1">
-              {(['trade', 'positions'] as const).map((panel) => (
-                <button
-                  key={panel}
-                  onClick={() => setMobilePanel(panel)}
-                  className={`rounded-lg py-2 text-xs font-semibold capitalize transition ${
-                    mobilePanel === panel ? 'bg-ink-600 text-white' : 'bg-ink-800 text-slate-400'
-                  }`}
-                >
-                  {panel === 'trade' ? 'Trade' : `Positions (${openTrades.length})`}
-                </button>
-              ))}
+          <div className="shrink-0 border-t border-ink-600 bg-ink-900 px-2 pb-2 pt-2">
+            <div className="mb-2 grid grid-cols-3 gap-1.5">
+              <button
+                onClick={() => setSheet('ticket')}
+                className="rounded-lg bg-ink-700 px-2.5 py-1.5 text-left"
+              >
+                <span className="block text-[10px] uppercase tracking-wide text-slate-400">Amount</span>
+                <span className="tabular block text-sm font-semibold text-slate-100">
+                  {summary ? money(summary.stake) : '—'}
+                </span>
+              </button>
+              <button
+                onClick={() => setSheet('ticket')}
+                className="rounded-lg bg-ink-700 px-2.5 py-1.5 text-left"
+              >
+                <span className="block text-[10px] uppercase tracking-wide text-slate-400">Expiry</span>
+                <span className="tabular block text-sm font-semibold text-slate-100">
+                  {summary?.expiryLabel ?? '—'}
+                </span>
+              </button>
+              <button
+                onClick={() => setSheet('positions')}
+                className="rounded-lg bg-ink-700 px-2.5 py-1.5 text-left"
+              >
+                <span className="block text-[10px] uppercase tracking-wide text-slate-400">Positions</span>
+                <span className="block text-sm font-semibold text-slate-100">{openTrades.length} open</span>
+              </button>
             </div>
-            <div>
-              {mobilePanel === 'trade' ? (
-                <TradeTicket
-                  asset={asset}
-                  onPlaced={(trade) => setOpenTrades((c) => [trade, ...c])}
-                  onOrdered={patchOrder}
-                />
-              ) : (
-                <Positions
-                  open={openTrades}
-                  closed={closedTrades}
-                  pending={orders}
-                  onCancel={cancelOrder}
-                  onRepeat={repeatTrade}
-                  loading={!tradesLoaded}
-                />
-              )}
-            </div>
-          </>
+
+            {summary?.tradable ? (
+              <>
+                <p className="mb-1.5 flex items-baseline justify-between text-[11px] text-slate-400">
+                  <span>
+                    Payout <span className="font-semibold text-up">{summary.payoutPct}%</span>
+                  </span>
+                  <span>
+                    Profit{' '}
+                    <span className="tabular font-semibold text-slate-200">+{money(summary.profit)}</span>
+                  </span>
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => ticketRef.current?.higher()}
+                    disabled={summary.placing}
+                    className="btn-up !py-3.5 text-base"
+                  >
+                    <IconArrowUp className="h-5 w-5" />
+                    {summary.orderType === 'PENDING' ? 'Order higher' : 'Higher'}
+                  </button>
+                  <button
+                    onClick={() => ticketRef.current?.lower()}
+                    disabled={summary.placing}
+                    className="btn-down !py-3.5 text-base"
+                  >
+                    <IconArrowDown className="h-5 w-5" />
+                    {summary.orderType === 'PENDING' ? 'Order lower' : 'Lower'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button onClick={() => setSheet('ticket')} className="btn-ghost w-full !py-3.5 text-sm">
+                {asset ? `${asset.pair.replace(' (OTC)', '')} is closed — see options` : 'Loading market…'}
+              </button>
+            )}
+          </div>
         )}
       </section>
 
@@ -592,6 +632,47 @@ export function Terminal() {
             />
           </div>
         </aside>
+      )}
+
+      {/* The ticket stays mounted behind its sheet: it owns the stake and the
+          expiry, and the dock's buttons reach it through the same handle the
+          keyboard shortcuts use. */}
+      {!isDesktop && (
+        <>
+          <BottomSheet
+            open={sheet === 'ticket'}
+            onClose={() => setSheet(null)}
+            title="Order ticket"
+            keepMounted
+          >
+            <TradeTicket
+              ref={ticketRef}
+              asset={asset}
+              onPlaced={(trade) => {
+                setOpenTrades((c) => [trade, ...c]);
+                setSheet(null);
+              }}
+              onOrdered={(order) => {
+                patchOrder(order);
+                setSheet(null);
+              }}
+              onSummary={setSummary}
+            />
+          </BottomSheet>
+
+          <BottomSheet open={sheet === 'positions'} onClose={() => setSheet(null)} title="Positions">
+            <div className="h-[62dvh]">
+              <Positions
+                open={openTrades}
+                closed={closedTrades}
+                pending={orders}
+                onCancel={cancelOrder}
+                onRepeat={repeatTrade}
+                loading={!tradesLoaded}
+              />
+            </div>
+          </BottomSheet>
+        </>
       )}
 
       {marketsOpen && (

@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { duration as fmtDuration, dateTime, money, price, untilShort } from '../lib/format';
 import { useAuth, activeBalance } from '../store/auth';
@@ -36,6 +36,27 @@ interface Props {
   onPlaced: (trade: Trade) => void;
   /** Called when a pending order is created, so the list can show it at once. */
   onOrdered?: (order: PendingOrder) => void;
+  /**
+   * What the ticket currently holds, for anything that shows it elsewhere —
+   * the phone's dock, which has to read the stake and the expiry without
+   * owning them.
+   */
+  onSummary?: (summary: TicketSummary) => void;
+}
+
+/** The ticket's state as somewhere else needs to read it. */
+export interface TicketSummary {
+  /** Stake in cents. */
+  stake: number;
+  /** "1m", or a clock boundary as "13:05". */
+  expiryLabel: string;
+  payoutPct: number;
+  /** What a win returns, in cents. */
+  profit: number;
+  /** Whether the two buy buttons would do anything. */
+  tradable: boolean;
+  placing: boolean;
+  orderType: 'MARKET' | 'PENDING';
 }
 
 /** Shares of the active balance the shortcuts offer. */
@@ -59,7 +80,7 @@ export interface TicketHandle {
 
 /** Stake + expiry + direction: the order ticket that places a binary option. */
 export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
-  { asset, onPlaced, onOrdered },
+  { asset, onPlaced, onOrdered, onSummary },
   ref,
 ) {
   const { user, patchBalance } = useAuth();
@@ -181,6 +202,31 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
     .map((slot) => ({ ...slot, secondsToClose: Math.ceil((slot.closesAt - tick) / 1000) }))
     .filter((slot) => slot.secondsToClose > 0);
   const selectedSlot = liveSlots.find((slot) => slot.expiresAt === clockExpiresAt) ?? liveSlots[0];
+
+  // the dock on a phone shows the stake, the expiry and the payout without
+  // holding any of them: the ticket stays the one place that knows what a
+  // valid stake is, and simply says what it has
+  const summary = useMemo<TicketSummary>(
+    () => ({
+      stake: Math.round(amount * 100),
+      expiryLabel:
+        expiryMode === 'CLOCK'
+          ? selectedSlot
+            ? clockLabel(selectedSlot.expiresAt)
+            : '—'
+          : fmtDuration(durationSec),
+      payoutPct: asset?.payoutPct ?? 0,
+      profit: Math.floor((Math.round(amount * 100) * (asset?.payoutPct ?? 0)) / 100),
+      tradable: !!asset?.isOpen && !!user,
+      placing: busy !== null,
+      orderType,
+    }),
+    [amount, expiryMode, selectedSlot, durationSec, asset, user, busy, orderType],
+  );
+
+  useEffect(() => {
+    onSummary?.(summary);
+  }, [onSummary, summary]);
 
   if (!asset || !user) {
     return <div className="card h-full animate-pulse bg-ink-800/60" />;

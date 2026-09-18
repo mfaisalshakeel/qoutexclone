@@ -10,7 +10,9 @@ export function Toasts() {
   const { toasts, dismiss } = useToasts();
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex flex-col items-center gap-2 px-4 sm:bottom-auto sm:right-4 sm:top-[4.25rem] sm:items-end">
+    // below the header on a phone, not above the terminal's dock: a toast that
+    // covers the buy buttons is in the way of the next trade
+    <div className="pointer-events-none fixed inset-x-0 top-[4.25rem] z-50 flex flex-col items-center gap-2 px-4 sm:right-4 sm:items-end">
       {toasts.map((t) => (
         <button
           key={t.id}

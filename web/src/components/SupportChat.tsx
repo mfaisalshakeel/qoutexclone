@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { ApiError, api } from '../lib/api';
 import { dateTime } from '../lib/format';
 import { realtime } from '../lib/ws';
@@ -13,6 +14,9 @@ import { Skeleton, SkeletonGroup } from './Skeleton';
  */
 export function SupportChat() {
   // held in a store so a notification about a reply can open the desk
+  // the terminal's dock owns the bottom of a phone screen, so the launcher
+  // steps aside there rather than sitting on top of the buy buttons
+  const onTerminal = useLocation().pathname.startsWith('/trade');
   const open = useSupport((s) => s.open);
   const setOpen = useSupport((s) => s.setOpen);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -122,7 +126,9 @@ export function SupportChat() {
       <button
         onClick={() => setOpen(!open)}
         aria-label="Support chat"
-        className="fixed bottom-24 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-white shadow-xl transition hover:brightness-110 md:bottom-6"
+        className={`fixed bottom-24 right-4 z-40 h-12 w-12 items-center justify-center rounded-full bg-accent text-white shadow-xl transition hover:brightness-110 md:bottom-6 ${
+          onTerminal && !open ? 'hidden md:flex' : 'flex'
+        }`}
       >
         {open ? (
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
