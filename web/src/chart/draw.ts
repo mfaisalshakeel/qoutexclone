@@ -1,5 +1,17 @@
 import type { Candle } from '../lib/types';
 import { barWidth, indexAt, priceTicks, timeTicks, visibleSlice, xOf, yOf } from './scales';
+import {
+  clampLabel,
+  collides,
+  countdownTo,
+  cutoffBand,
+  liveProfit,
+  onScreen,
+  pulseAlpha,
+  pulseRadius,
+  standingOf,
+  xOfTime,
+} from './overlays';
 import { isBarSeries } from './series';
 import { THEME, type Frame } from './types';
 
@@ -338,4 +350,137 @@ function drawTooltip(ctx: CanvasRenderingContext2D, frame: Frame, candle: Candle
     ctx.fillText(value, left + width - 10, y);
   });
   ctx.restore();
+}
+
+/**
+ * A trader's own positions, the live price and the clock.
+ *
+ * This is the layer that changes every second without the data changing, which
+ * is why it has a canvas of its own: the candles underneath keep their pixels
+ * while the countdown ticks.
+ */
+export function drawTradeOverlays(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  options: {
+    /** The live price, which is the real close even on a smoothed series. */
+    price: number | null;
+    nowMs: number;
+    /** Seconds before a clock boundary at which buying closes. */
+    cutoffSec: number;
+    /** Milliseconds since the last tick arrived, for the pulse. */
+    sinceTickMs: number;
+  },
+): void {
+  const { plot, range, view, candles, trades, precision } = frame;
+  ctx.clearRect(0, 0, plot.width + PRICE_AXIS_WIDTH, plot.height + TIME_AXIS_HEIGHT);
+  if (candles.length === 0) return;
+
+  const open = trades.filter((trade) => trade.status === 'OPEN');
+
+  // the shaded stretch where a clock boundary can no longer be bought
+  for (const trade of open) {
+    if (trade.expiryMode !== 'CLOCK') continue;
+    const band = cutoffBand({
+      expiresAtMs: new Date(trade.expiresAt).getTime(),
+      cutoffSec: options.cutoffSec,
+      nowMs: options.nowMs,
+    });
+    if (!band) continue;
+    const from = xOfTime(band.fromMs / 1000, candles, view, plot);
+    const to = xOfTime(band.toMs / 1000, candles, view, plot);
+    if (from == null || to == null) continue;
+    ctx.save();
+    ctx.fillStyle = 'rgba(240,69,94,0.10)';
+    ctx.fillRect(from, 0, Math.max(to - from, 1), plot.height);
+    ctx.restore();
+  }
+
+  // one strike line per position, with what it is worth right now
+  const used: number[] = [];
+  for (const trade of open) {
+    const winning = standingOf(trade, options.price);
+    const colour = trade.direction === 'UP' ? THEME.up : THEME.down;
+    const profit = liveProfit(trade, options.price);
+    const money = `${profit > 0 ? '+' : profit < 0 ? '−' : ''}$${Math.abs(profit / 100).toFixed(2)}`;
+    const tag = `${trade.direction === 'UP' ? '▲' : '▼'} $${(trade.stake / 100).toFixed(0)} · ${money}`;
+
+    const y = yOf(trade.entryPrice, range, plot);
+    // a second position at nearly the same price would print over the first
+    const shifted = used.some((each) => collides(each, y)) ? y + 20 : y;
+    used.push(shifted);
+
+    drawPriceLine(ctx, frame, { price: trade.entryPrice, color: colour, dashed: true });
+    if (shifted >= -10 && shifted <= plot.height + 10) {
+      ctx.save();
+      ctx.font = FONT;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      const width = ctx.measureText(tag).width + 12;
+      ctx.fillStyle = winning === 'winning' ? THEME.up : winning === 'losing' ? THEME.down : THEME.label;
+      ctx.beginPath();
+      ctx.roundRect(6, shifted - 9, width, 18, 5);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(tag, 12, shifted);
+      ctx.restore();
+    }
+
+    // and a line at the instant it settles, with the time left on it
+    const expiresAtMs = new Date(trade.expiresAt).getTime();
+    const x = xOfTime(expiresAtMs / 1000, candles, view, plot);
+    if (!onScreen(x, plot)) continue;
+    ctx.save();
+    ctx.strokeStyle = colour;
+    ctx.globalAlpha = 0.8;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(Math.round(x) + 0.5, 0);
+    ctx.lineTo(Math.round(x) + 0.5, plot.height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+
+    const left = countdownTo(expiresAtMs, options.nowMs);
+    ctx.font = FONT;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    const width = ctx.measureText(left).width + 12;
+    const boxX = clampLabel(x, width, plot);
+    ctx.fillStyle = colour;
+    ctx.beginPath();
+    ctx.roundRect(boxX, 6, width, 17, 5);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(left, boxX + width / 2, 15);
+    ctx.restore();
+  }
+
+  // the live price, and a dot that breathes with each tick
+  const last = candles[candles.length - 1];
+  const price = options.price ?? last.close;
+  drawPriceLine(ctx, frame, {
+    price,
+    color: price >= last.open ? THEME.up : THEME.down,
+    dashed: true,
+    label: formatPrice(price, precision),
+  });
+
+  const dotX = xOf(candles.length - 1, view, plot);
+  const dotY = yOf(price, range, plot);
+  if (dotX >= 0 && dotX <= plot.width && dotY >= 0 && dotY <= plot.height) {
+    const colour = price >= last.open ? THEME.up : THEME.down;
+    ctx.save();
+    ctx.fillStyle = colour;
+    ctx.globalAlpha = pulseAlpha(options.sinceTickMs) * 0.35;
+    ctx.beginPath();
+    ctx.arc(dotX, dotY, pulseRadius(options.sinceTickMs), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.arc(dotX, dotY, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 }

@@ -5,13 +5,13 @@ import {
   drawCrosshair,
   drawGrid,
   drawIndicators,
-  drawPriceLine,
   drawSeries,
+  drawTradeOverlays,
 } from './draw';
 import { atLive, clampView, liveView, panBy, priceRange, visibleSlice, zoomAt } from './scales';
 import { gapBetween, glide, pinchFactor, scaleRange, shiftRange, velocityOf } from './motion';
 import { heikinAshi } from './series';
-import { THEME, type Frame, type PriceRange, type SeriesType, type Viewport } from './types';
+import type { Frame, PriceRange, SeriesType, Viewport } from './types';
 
 /**
  * The chart engine: three stacked canvases, one animation frame, and a dirty
@@ -24,7 +24,13 @@ import { THEME, type Frame, type PriceRange, type SeriesType, type Viewport } fr
  * so an idle chart costs nothing.
  */
 
-type Layer = 'grid' | 'series' | 'cursor';
+type Layer = 'grid' | 'series' | 'overlay' | 'cursor';
+
+/** How often the overlays repaint while a position is open: once a second is
+ *  enough for a countdown, and the pulse rides the same beat. */
+const OVERLAY_MS = 250;
+
+const LAYERS = ['grid', 'series', 'overlay', 'cursor'] as const;
 
 /** Someone who has asked for less movement does not want a chart coasting. */
 function prefersReducedMotion(): boolean {
@@ -48,7 +54,12 @@ export class ChartEngine {
   private readonly container: HTMLElement;
   private readonly canvases: Record<Layer, HTMLCanvasElement>;
   private readonly contexts: Record<Layer, CanvasRenderingContext2D>;
-  private readonly dirty: Record<Layer, boolean> = { grid: true, series: true, cursor: true };
+  private readonly dirty: Record<Layer, boolean> = {
+    grid: true,
+    series: true,
+    overlay: true,
+    cursor: true,
+  };
   private readonly observer: ResizeObserver;
 
   private candles: Candle[] = [];
@@ -81,6 +92,10 @@ export class ChartEngine {
   private manualRange: PriceRange | null = null;
   private axisDrag: { y: number; range: PriceRange } | null = null;
   private onView?: EngineOptions['onView'];
+  /** Seconds before a clock boundary at which buying closes; from settings. */
+  private cutoffSec = 0;
+  private lastTickAt = Date.now();
+  private overlayTimer: ReturnType<typeof setInterval> | null = null;
   private destroyed = false;
 
   constructor(container: HTMLElement, options: EngineOptions) {
@@ -98,10 +113,11 @@ export class ChartEngine {
       container.appendChild(canvas);
       return canvas;
     };
-    this.canvases = { grid: make(0), series: make(1), cursor: make(2) };
+    this.canvases = { grid: make(0), series: make(1), overlay: make(2), cursor: make(3) };
     this.contexts = {
       grid: this.canvases.grid.getContext('2d')!,
       series: this.canvases.series.getContext('2d')!,
+      overlay: this.canvases.overlay.getContext('2d')!,
       cursor: this.canvases.cursor.getContext('2d')!,
     };
 
@@ -148,12 +164,37 @@ export class ChartEngine {
       if (following) this.view = { ...this.view, rightIndex: this.view.rightIndex + 1 };
     }
     this.reshape();
-    this.mark('grid', 'series');
+    this.lastTickAt = Date.now();
+    this.mark('grid', 'series', 'overlay');
   }
 
   setTrades(trades: Trade[]): void {
     this.trades = trades;
-    this.mark('grid', 'series');
+    // an open position widens the price range to keep its strike on screen
+    this.mark('grid', 'series', 'overlay');
+    this.watchClock();
+  }
+
+  /** The purchase cut-off for clock expiries, which the platform configures. */
+  setCutoff(seconds: number): void {
+    this.cutoffSec = seconds;
+    this.mark('overlay');
+  }
+
+  /**
+   * The overlays tick on their own: a countdown and a pulse change with the
+   * clock rather than with the data. The timer only runs while there is
+   * something to count down, so an idle chart still costs nothing.
+   */
+  private watchClock(): void {
+    const wanted = this.trades.some((trade) => trade.status === 'OPEN');
+    if (wanted && !this.overlayTimer) {
+      this.overlayTimer = setInterval(() => this.mark('overlay'), OVERLAY_MS);
+    } else if (!wanted && this.overlayTimer) {
+      clearInterval(this.overlayTimer);
+      this.overlayTimer = null;
+      this.mark('overlay');
+    }
   }
 
   setIndicators(lines: IndicatorLine[]): void {
@@ -387,7 +428,7 @@ export class ChartEngine {
     if (clientWidth === 0 || clientHeight === 0) return;
 
     const dpr = window.devicePixelRatio || 1;
-    for (const layer of ['grid', 'series', 'cursor'] as const) {
+    for (const layer of LAYERS) {
       const canvas = this.canvases[layer];
       canvas.style.width = `${clientWidth}px`;
       canvas.style.height = `${clientHeight}px`;
@@ -451,35 +492,21 @@ export class ChartEngine {
       const ctx = this.contexts.series;
       drawSeries(ctx, frame);
       drawIndicators(ctx, frame);
-      this.drawOverlays(ctx, frame);
       this.dirty.series = false;
+    }
+    if (this.dirty.overlay) {
+      drawTradeOverlays(this.contexts.overlay, frame, {
+        price: this.candles[this.candles.length - 1]?.close ?? null,
+        nowMs: Date.now(),
+        cutoffSec: this.cutoffSec,
+        sinceTickMs: Date.now() - this.lastTickAt,
+      });
+      this.dirty.overlay = false;
     }
     if (this.dirty.cursor) {
       drawCrosshair(this.contexts.cursor, frame);
       this.dirty.cursor = false;
     }
-  }
-
-  /** The last price, and every open position's strike. */
-  private drawOverlays(ctx: CanvasRenderingContext2D, frame: Frame): void {
-    for (const trade of this.openTrades()) {
-      drawPriceLine(ctx, frame, {
-        price: trade.entryPrice,
-        color: trade.direction === 'UP' ? THEME.up : THEME.down,
-        dashed: true,
-        tag: `${trade.direction === 'UP' ? '▲' : '▼'} $${(trade.stake / 100).toFixed(0)}`,
-      });
-    }
-
-    // the real close, never the smoothed one: a Heikin-Ashi close is an average
-    // of four numbers and nobody trades at it
-    const last = this.candles[this.candles.length - 1];
-    if (!last) return;
-    drawPriceLine(ctx, frame, {
-      price: last.close,
-      color: last.close >= last.open ? THEME.up : THEME.down,
-      dashed: true,
-    });
   }
 
   private report(): void {
@@ -491,6 +518,8 @@ export class ChartEngine {
   destroy(): void {
     this.destroyed = true;
     this.stopGlide();
+    if (this.overlayTimer) clearInterval(this.overlayTimer);
+    this.overlayTimer = null;
     if (this.frameHandle !== null) cancelAnimationFrame(this.frameHandle);
     this.observer.disconnect();
     document.removeEventListener('pointerdown', this.onAnyPointerDown, true);
@@ -502,6 +531,6 @@ export class ChartEngine {
     canvas.removeEventListener('pointerleave', this.onPointerLeave);
     canvas.removeEventListener('dblclick', this.onDoubleClick);
     canvas.removeEventListener('wheel', this.onWheel);
-    for (const layer of ['grid', 'series', 'cursor'] as const) this.canvases[layer].remove();
+    for (const layer of LAYERS) this.canvases[layer].remove();
   }
 }

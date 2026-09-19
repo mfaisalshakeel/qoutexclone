@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { failOnPageErrors, login, TRADER } from './helpers';
+import { TRADER, failOnPageErrors, login, openMarket, placeTrade } from './helpers';
 
 test.describe('charting', () => {
   test('pages history backwards as you scroll into the past', async ({ page }) => {
@@ -43,9 +43,10 @@ test.describe('charting', () => {
     await login(page, TRADER);
     await page.waitForSelector('canvas');
 
-    // three layers: the grid, the series, and the crosshair that repaints alone
+    // four layers: the grid, the series, the trade overlays on their own clock,
+    // and the crosshair that repaints alone as the pointer moves
     const layers = page.locator('canvas');
-    await expect(layers).toHaveCount(3);
+    await expect(layers).toHaveCount(4);
 
     // each one's backing store is sized for the display it is on, or the chart
     // is a blurry upscale on every phone and retina laptop
@@ -128,6 +129,42 @@ test.describe('charting', () => {
 
     await auto.click();
     await expect(auto).toBeHidden();
+
+    expect(errors).toEqual([]);
+  });
+
+  test('draws an open position on its own layer, and keeps its clock ticking', async ({ page }) => {
+    const errors = failOnPageErrors(page);
+    await login(page, TRADER);
+    await openMarket(page, 'EURUSD_OTC', 'EUR/USD (OTC)');
+
+    /** The overlay layer: trades, the live price and the countdown. */
+    const overlay = () =>
+      page.evaluate(() => {
+        const canvas = document.querySelectorAll('canvas')[2] as HTMLCanvasElement;
+        const ctx = canvas.getContext('2d')!;
+        const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        let ink = 0;
+        let green = 0;
+        for (let at = 0; at < data.length; at += 4) {
+          if (data[at + 3] === 0) continue;
+          ink += 1;
+          // the winning tint the tag and the strike line are drawn in
+          if (data[at + 1] > 150 && data[at] < 120 && data[at + 2] < 180) green += 1;
+        }
+        return { ink, green, sample: canvas.toDataURL().length };
+      });
+
+    const before = await overlay();
+    await placeTrade(page, 'Higher', '3m');
+
+    // the position's strike, stake and live result are painted on that layer
+    await expect.poll(async () => (await overlay()).green, { timeout: 20_000 }).toBeGreaterThan(before.green);
+
+    // and it repaints on its own clock: the countdown moves while the bars do not
+    const first = await overlay();
+    await page.waitForTimeout(1_500);
+    await expect.poll(async () => (await overlay()).sample).not.toBe(first.sample);
 
     expect(errors).toEqual([]);
   });

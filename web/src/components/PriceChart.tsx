@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { realtime } from '../lib/ws';
 import { bollinger, ema, sma } from '../lib/indicators';
+import { useMarket } from '../store/market';
 import { ChartEngine, type IndicatorLine } from '../chart/engine';
 import type { SeriesKind } from '../chart/series';
 import { THEME } from '../chart/types';
@@ -48,6 +49,7 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
   const [loading, setLoading] = useState(true);
   const [live, setLive] = useState(true);
   const [autoScaled, setAutoScaled] = useState(true);
+  const cutoffSec = useMarket((s) => s.expiry.clock.cutoffSec);
 
   const dataRef = useRef<Candle[]>([]);
   /** Paging cursor for older history; null when the market has no more. */
@@ -181,6 +183,10 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
   useEffect(() => {
     engineRef.current?.setType(chartType);
   }, [chartType]);
+
+  useEffect(() => {
+    engineRef.current?.setCutoff(cutoffSec);
+  }, [cutoffSec]);
 
   useEffect(() => {
     paintOverlays();
