@@ -3,6 +3,7 @@ import {
   expectNoHorizontalScroll,
   failOnPageErrors,
   fundAccount,
+  openMarket,
   placeTrade,
   register,
   useLiveAccount,
@@ -20,7 +21,8 @@ test.describe('notification centre', () => {
 
     // and a settled live position is the second
     await page.goto('/trade');
-    await page.waitForSelector('canvas');
+    // an always-open market, so the spec does not depend on the day of the week
+    await openMarket(page, 'EURUSD_OTC', 'EUR/USD (OTC)');
     await useLiveAccount(page);
     await placeTrade(page, 'Higher', '30s');
     await expect(bell).toHaveAttribute('aria-label', /2 unread/, { timeout: 90_000 });

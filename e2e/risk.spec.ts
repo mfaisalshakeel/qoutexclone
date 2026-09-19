@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ADMIN, TRADER, failOnPageErrors, login, placeTrade } from './helpers';
+import { ADMIN, TRADER, failOnPageErrors, login, openMarket, placeTrade } from './helpers';
 
 test.describe('risk limits', () => {
   test('the back office shows the book and caps what one trader can hold', async ({ browser }) => {
@@ -22,7 +22,8 @@ test.describe('risk limits', () => {
 
       // every market, so a limit can be set before anyone has traded it
       await admin.getByLabel('Only markets with open positions').uncheck();
-      const row = admin.getByRole('row', { name: /EUR\/USD/ }).first();
+      // the OTC twin, because that is the market the trader can always trade
+      const row = admin.getByRole('row', { name: /EUR\/USD \(OTC\)/ }).first();
       await expect(row).toBeVisible();
 
       // a per-trader cap of $15 on this market
@@ -34,14 +35,10 @@ test.describe('risk limits', () => {
       // a practice trader is never held back by the house's book, but their own
       // per-market cap still applies
       await login(trader, TRADER);
-      // the workspace is saved on the account now, so the terminal opens on
-      // whatever market was last used — this spec caps EUR/USD, so it has to
-      // put the trader there rather than assume it
-      await trader.waitForSelector('canvas');
-      const rail = trader.getByRole('complementary').filter({ has: trader.getByLabel('Search markets') });
-      await rail.getByLabel('Search markets').fill('EURUSD');
-      await rail.getByRole('button', { name: 'EUR/USD', exact: true }).first().click();
-      await rail.getByLabel('Search markets').fill('');
+      // the workspace is saved on the account, so the terminal opens on
+      // whatever market was last used: this spec caps one market, so it puts
+      // the trader on that market rather than assuming it
+      await openMarket(trader, 'EURUSD_OTC', 'EUR/USD (OTC)');
 
       await placeTrade(trader, 'Higher', '1m');
       await placeTrade(trader, 'Higher', '1m');
@@ -60,7 +57,7 @@ test.describe('risk limits', () => {
       await login(page, ADMIN);
       await page.goto('/admin/risk');
       await page.getByLabel('Only markets with open positions').uncheck();
-      const row = page.getByRole('row', { name: /EUR\/USD/ }).first();
+      const row = page.getByRole('row', { name: /EUR\/USD \(OTC\)/ }).first();
       await row.getByRole('button', { name: 'Limits' }).click();
       await row.getByLabel(/per-trader limit in cents/).fill('0');
       await row.getByRole('button', { name: 'Save' }).click();

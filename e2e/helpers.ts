@@ -46,15 +46,22 @@ export async function login(page: Page, credentials: { email: string; password: 
  */
 export async function openMarket(page: Page, search: string, pair: string): Promise<void> {
   await page.waitForSelector('canvas');
-  const rail = page.getByRole('complementary').filter({ has: page.getByLabel('Search markets') });
-  await rail.getByLabel('Search markets').fill(search);
-  await rail.getByRole('button', { name: pair, exact: true }).first().click();
-  await rail.getByLabel('Search markets').fill('');
-  // leaving the search box focused would swallow every hotkey that follows
-  await rail.getByLabel('Search markets').blur();
-  await expect(
-    page.getByRole('region', { name: 'Order ticket' }).getByRole('button', { name: 'Higher', exact: true }),
-  ).toBeVisible();
+
+  // the rail is a column on a desktop and a sheet behind the header on a phone
+  const field = page.getByLabel('Search markets');
+  if (!(await field.isVisible().catch(() => false))) {
+    await page.getByRole('button', { name: 'Change market' }).first().click();
+    await expect(field).toBeVisible();
+  }
+
+  await field.fill(search);
+  await page.getByRole('button', { name: pair, exact: true }).first().click();
+  if (await field.isVisible().catch(() => false)) {
+    await field.fill('');
+    // leaving the search box focused would swallow every hotkey that follows
+    await field.blur();
+  }
+  await expect(page.locator('button:visible:has-text("Higher")').first()).toBeVisible();
 }
 
 /** The account switcher pill, whichever account it currently names. */

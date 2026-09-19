@@ -71,6 +71,60 @@ test.describe('the terminal on a phone', () => {
     expect(errors).toEqual([]);
   });
 
+  test('pinches the chart to zoom and carries a flick after the finger lifts', async ({ page }) => {
+    const errors = failOnPageErrors(page);
+    await login(page, TRADER);
+    await page.waitForSelector('canvas');
+
+    const box = (await page.locator('canvas').first().boundingBox())!;
+    const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    const cdp = await page.context().newCDPSession(page);
+    const finger = (x: number, y: number) => ({ x, y, radiusX: 8, radiusY: 8, force: 1 });
+    const live = page.getByRole('button', { name: /Scroll to live/ });
+    // two fingers spreading zoom in about the point between them, so pinching
+    // the middle of the chart pulls the live edge off the right of the screen
+    await expect(live).toBeHidden();
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [finger(centre.x - 60, centre.y), finger(centre.x + 60, centre.y)],
+    });
+    for (let step = 1; step <= 6; step += 1) {
+      const gap = 60 + step * 20;
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [finger(centre.x - gap, centre.y), finger(centre.x + gap, centre.y)],
+      });
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(live).toBeVisible();
+    await live.tap();
+    await expect(live).toBeHidden();
+
+    // and a flick throws the chart into the past, carrying on after the finger
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [finger(centre.x - 120, centre.y)],
+    });
+    for (let step = 1; step <= 5; step += 1) {
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [finger(centre.x - 120 + step * 40, centre.y)],
+      });
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await cdp.detach();
+    await expect(live).toBeVisible();
+
+    // the first tap stops the coast — a browser swallows the click that would
+    // have followed a touch made while a gesture is still in flight, which is
+    // also how a native list behaves — so the second one is the one that acts
+    await live.tap();
+    await live.tap();
+    await expect(live).toBeHidden();
+
+    expect(errors).toEqual([]);
+  });
+
   test('opens the positions sheet, swipes between its tabs and pulls it closed', async ({ page }) => {
     const errors = failOnPageErrors(page);
     await login(page, TRADER);

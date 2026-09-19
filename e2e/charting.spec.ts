@@ -102,6 +102,36 @@ test.describe('charting', () => {
     expect(errors).toEqual([]);
   });
 
+  test('zooms, pans with the wheel, and hands the price scale back when asked', async ({ page }) => {
+    const errors = failOnPageErrors(page);
+    await login(page, TRADER);
+    await page.waitForSelector('canvas');
+
+    const box = (await page.locator('canvas').first().boundingBox())!;
+    await page.getByRole('button', { name: 'Zoom in' }).click();
+    await page.getByRole('button', { name: 'Zoom out' }).click();
+
+    // a sideways wheel pans, which walks the view off the live edge
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    for (let nudge = 0; nudge < 8; nudge += 1) await page.mouse.wheel(-240, 0);
+    await expect(page.getByRole('button', { name: /Scroll to live/ })).toBeVisible();
+    await page.getByRole('button', { name: /Scroll to live/ }).click();
+
+    // dragging the price gutter takes the scale off autoscale, and says so
+    const auto = page.getByRole('button', { name: 'Autoscale the price' });
+    await expect(auto).toBeHidden();
+    await page.mouse.move(box.x + box.width - 25, box.y + box.height * 0.5);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width - 25, box.y + box.height * 0.75, { steps: 8 });
+    await page.mouse.up();
+    await expect(auto).toBeVisible();
+
+    await auto.click();
+    await expect(auto).toBeHidden();
+
+    expect(errors).toEqual([]);
+  });
+
   test('switches to any of the fourteen timeframes', async ({ page }) => {
     const errors = failOnPageErrors(page);
     await login(page, TRADER);

@@ -4,6 +4,16 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-19**: Phase 3 — **Interaction**. The chart now handles a hand as well as a mouse: pinch to zoom, a flick that coasts and slows, sideways wheel and shift+wheel to pan, zoom buttons for anyone using neither, and a price scale that can be dragged, stretched and handed back.
+
+  `chart/motion.ts` holds the arithmetic — how a flick decays (and that it dies in about half a second rather than grinding on forever), the zoom factor a pinch asks for, and how a dragged axis moves a price range — with 11 unit tests. Pinching zooms about the point between the fingers, which is the same anchor property the wheel uses, so the bar under the fingers stays where it is. A manual price range stops the chart following the market's extremes, which is the point of it: watching a level means keeping that level on screen even when the price runs away. Double-clicking the gutter, or the **Auto** button that appears whenever the scale has been touched, gives it back.
+
+  **A coasting chart stops when a finger lands on it**, anywhere on the page. That is how a native list behaves, and it turns out to be necessary rather than decorative: a browser swallows the click that would follow a touch made while a gesture is still in flight, so without it a trader tapping "Scroll to live" during a coast would see nothing happen. The e2e spec documents that two-tap sequence rather than papering over it. Kinetic scrolling is skipped entirely under `prefers-reduced-motion`.
+
+  **A whole-suite lesson, recorded for next time**: the suite ran on a Saturday for the first time and five specs failed at once. Forex is closed at weekends, so every spec that placed a trade on the default market found a ticket that said "EUR/USD is closed" instead of an expiry to click. They now open the always-open OTC twin by name, through a helper that works on both a desktop rail and a phone sheet, and the risk spec caps that market instead. A suite that only passes Monday to Friday is a suite that will fail the one weekend somebody needs it.
+
+  11 unit tests, two new e2e specs (a desktop one for wheel panning, the zoom buttons and the autoscale round trip; a phone one for pinch and flick driven through a real Chromium touchscreen). Verified with lint, format, typecheck, 150 web unit tests, a production build, and the full Playwright suite at 51 passed.
+
 - **2026-09-18**: Phase 3 — **Series types**. Five shapes for the same data: candlesticks, OHLC bars, Heikin-Ashi, a plain line and a filled area, switched from the chart header with no request and no gap while one comes back.
 
   Heikin-Ashi is the only one that is not a drawing choice — it is a different set of bars — so it lives in `chart/series.ts` as a transform and is tested as arithmetic: the close is the bar's own average, the open is the midpoint of the *previous* synthetic bar (the first has none, so it opens on the real one), and the high and low take in both, or a candle would show a body outside its own wick. One test asserts the point of it, that the synthetic series swings less than the real one. The transform is cached on the engine and rebuilt only when the data or the shape changes, never per frame.

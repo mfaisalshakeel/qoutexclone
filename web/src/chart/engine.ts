@@ -9,8 +9,9 @@ import {
   drawSeries,
 } from './draw';
 import { atLive, clampView, liveView, panBy, priceRange, visibleSlice, zoomAt } from './scales';
+import { gapBetween, glide, pinchFactor, scaleRange, shiftRange, velocityOf } from './motion';
 import { heikinAshi } from './series';
-import { THEME, type Frame, type SeriesType, type Viewport } from './types';
+import { THEME, type Frame, type PriceRange, type SeriesType, type Viewport } from './types';
 
 /**
  * The chart engine: three stacked canvases, one animation frame, and a dirty
@@ -24,6 +25,11 @@ import { THEME, type Frame, type SeriesType, type Viewport } from './types';
  */
 
 type Layer = 'grid' | 'series' | 'cursor';
+
+/** Someone who has asked for less movement does not want a chart coasting. */
+function prefersReducedMotion(): boolean {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+}
 
 export interface IndicatorLine {
   color: string;
@@ -60,7 +66,20 @@ export class ChartEngine {
   private crosshair: { x: number; y: number } | null = null;
   private plot = { width: 0, height: 0 };
   private frameHandle: number | null = null;
-  private dragging: { x: number; pointerId: number } | null = null;
+  private dragging: { x: number; pointerId: number; at: number } | null = null;
+  /** Every pointer currently down, so two of them can be a pinch. */
+  private readonly pointers = new Map<number, { x: number; y: number }>();
+  private pinch: { gap: number; barsVisible: number; x: number } | null = null;
+  /** A flick's remaining speed, in pixels per millisecond. */
+  private glideVelocity = 0;
+  private glideHandle: number | null = null;
+  /**
+   * A price range the trader set by hand. While it is set the chart stops
+   * following the market's own extremes, which is the point — watching a level
+   * means keeping it on screen even when the price runs away from it.
+   */
+  private manualRange: PriceRange | null = null;
+  private axisDrag: { y: number; range: PriceRange } | null = null;
   private onView?: EngineOptions['onView'];
   private destroyed = false;
 
@@ -90,6 +109,10 @@ export class ChartEngine {
     this.observer.observe(container);
     this.resize();
     this.bind();
+    // a touch anywhere stops a coasting chart, the way a finger stops a
+    // scrolling list — including a touch meant for a button over the chart,
+    // which the browser swallows while a gesture is in flight
+    document.addEventListener('pointerdown', this.onAnyPointerDown, true);
   }
 
   /* ------------------------------ data in ------------------------------- */
@@ -159,13 +182,28 @@ export class ChartEngine {
 
   /* ----------------------------- the view ------------------------------- */
 
+  /** Hands the price scale back to the chart. */
+  autoScale(): void {
+    this.manualRange = null;
+    this.mark('grid', 'series', 'cursor');
+    this.report();
+  }
+
+  get isAutoScaled(): boolean {
+    return this.manualRange === null;
+  }
+
   scrollToLive(): void {
+    // any deliberate jump cancels a coast: a chart that slides back off the
+    // live edge a moment after the trader asked for it looks broken
+    this.stopGlide();
     this.view = liveView(this.candles.length, this.view.barsVisible);
     this.mark('grid', 'series');
     this.report();
   }
 
   zoom(factor: number, atX = this.plot.width / 2): void {
+    this.stopGlide();
     this.view = clampView(zoomAt(this.view, factor, atX, this.plot), this.candles.length, this.plot);
     this.mark('grid', 'series');
     this.report();
@@ -184,31 +222,91 @@ export class ChartEngine {
     canvas.addEventListener('pointerup', this.onPointerUp);
     canvas.addEventListener('pointercancel', this.onPointerUp);
     canvas.addEventListener('pointerleave', this.onPointerLeave);
+    canvas.addEventListener('dblclick', this.onDoubleClick);
     canvas.addEventListener('wheel', this.onWheel, { passive: false });
   }
 
+  private readonly onAnyPointerDown = () => {
+    this.stopGlide();
+  };
+
   private readonly onPointerDown = (event: PointerEvent) => {
-    this.dragging = { x: event.clientX, pointerId: event.pointerId };
+    const box = this.canvases.cursor.getBoundingClientRect();
+    const local = { x: event.clientX - box.left, y: event.clientY - box.top };
+    this.pointers.set(event.pointerId, local);
+    this.stopGlide();
     this.canvases.cursor.setPointerCapture(event.pointerId);
+
+    // the gutter scales the price by hand; the plot pans and zooms
+    if (local.x > this.plot.width) {
+      this.axisDrag = { y: local.y, range: this.manualRange ?? this.frame().range };
+      return;
+    }
+
+    if (this.pointers.size === 2) {
+      const [a, b] = [...this.pointers.values()];
+      this.pinch = { gap: gapBetween(a, b), barsVisible: this.view.barsVisible, x: (a.x + b.x) / 2 };
+      this.dragging = null;
+      return;
+    }
+    this.dragging = { x: event.clientX, pointerId: event.pointerId, at: Date.now() };
   };
 
   private readonly onPointerMove = (event: PointerEvent) => {
     const box = this.canvases.cursor.getBoundingClientRect();
+    const local = { x: event.clientX - box.left, y: event.clientY - box.top };
+    if (this.pointers.has(event.pointerId)) this.pointers.set(event.pointerId, local);
+
+    if (this.axisDrag) {
+      // dragging the price gutter moves the range with the finger
+      this.manualRange = shiftRange(this.axisDrag.range, local.y - this.axisDrag.y, this.plot);
+      this.mark('grid', 'series', 'cursor');
+      this.report();
+      return;
+    }
+
+    if (this.pinch && this.pointers.size >= 2) {
+      const [a, b] = [...this.pointers.values()];
+      const factor = pinchFactor(this.pinch.gap, gapBetween(a, b));
+      this.view = clampView(
+        zoomAt({ ...this.view, barsVisible: this.pinch.barsVisible }, factor, this.pinch.x, this.plot),
+        this.candles.length,
+        this.plot,
+      );
+      this.mark('grid', 'series');
+      this.report();
+      return;
+    }
+
     if (this.dragging) {
       const dx = event.clientX - this.dragging.x;
+      const elapsed = Date.now() - this.dragging.at;
       this.dragging.x = event.clientX;
+      this.dragging.at = Date.now();
+      // the speed of the last leg is what a flick carries on with
+      this.glideVelocity = velocityOf(dx, elapsed);
+      this.lastMoveAt = Date.now();
       this.view = clampView(panBy(this.view, dx, this.plot), this.candles.length, this.plot);
       this.mark('grid', 'series');
       this.report();
     }
-    this.crosshair = { x: event.clientX - box.left, y: event.clientY - box.top };
+
+    this.crosshair = local;
     this.mark('cursor');
   };
 
   private readonly onPointerUp = (event: PointerEvent) => {
+    this.pointers.delete(event.pointerId);
+    this.canvases.cursor.releasePointerCapture?.(event.pointerId);
+    this.axisDrag = null;
+    if (this.pointers.size < 2) this.pinch = null;
+
     if (this.dragging?.pointerId === event.pointerId) {
-      this.canvases.cursor.releasePointerCapture?.(event.pointerId);
       this.dragging = null;
+      // a flick keeps going and slows down, the way a list does on a phone
+      const stale = Date.now() - (this.lastMoveAt ?? 0) > 120;
+      if (!stale && Math.abs(this.glideVelocity) > 0.05 && !prefersReducedMotion()) this.startGlide();
+      else this.glideVelocity = 0;
     }
   };
 
@@ -217,12 +315,72 @@ export class ChartEngine {
     this.mark('cursor');
   };
 
+  private readonly onDoubleClick = (event: MouseEvent) => {
+    const box = this.canvases.cursor.getBoundingClientRect();
+    // a double click on the gutter hands the price scale back to the chart
+    if (event.clientX - box.left > this.plot.width) this.autoScale();
+  };
+
   private readonly onWheel = (event: WheelEvent) => {
     event.preventDefault();
     const box = this.canvases.cursor.getBoundingClientRect();
+    const x = event.clientX - box.left;
+
+    // over the gutter, the wheel stretches the price scale by hand
+    if (x > this.plot.width) {
+      const current = this.manualRange ?? this.frame().range;
+      this.manualRange = scaleRange(current, event.deltaY > 0 ? 1.1 : 0.9);
+      this.mark('grid', 'series', 'cursor');
+      this.report();
+      return;
+    }
+
+    // a trackpad's sideways scroll, or shift+wheel, pans instead of zooming
+    if (Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.shiftKey) {
+      const dx = event.shiftKey && event.deltaX === 0 ? -event.deltaY : -event.deltaX;
+      this.view = clampView(panBy(this.view, dx, this.plot), this.candles.length, this.plot);
+      this.mark('grid', 'series');
+      this.report();
+      return;
+    }
     // a notch of the wheel is about 10% either way
-    this.zoom(event.deltaY > 0 ? 1.1 : 0.9, event.clientX - box.left);
+    this.zoom(event.deltaY > 0 ? 1.1 : 0.9, x);
   };
+
+  private lastMoveAt: number | null = null;
+
+  private startGlide(): void {
+    let previous = performance.now();
+    const step = () => {
+      const now = performance.now();
+      const moved = glide(this.glideVelocity, now - previous);
+      previous = now;
+      if (!moved || this.destroyed) {
+        this.glideHandle = null;
+        this.glideVelocity = 0;
+        return;
+      }
+      this.glideVelocity = moved.velocity;
+      const before = this.view.rightIndex;
+      this.view = clampView(panBy(this.view, moved.dxPx, this.plot), this.candles.length, this.plot);
+      // hitting the end of the data stops the glide rather than grinding on it
+      if (this.view.rightIndex === before) {
+        this.glideHandle = null;
+        this.glideVelocity = 0;
+        return;
+      }
+      this.mark('grid', 'series');
+      this.report();
+      this.glideHandle = requestAnimationFrame(step);
+    };
+    this.glideHandle = requestAnimationFrame(step);
+  }
+
+  private stopGlide(): void {
+    if (this.glideHandle !== null) cancelAnimationFrame(this.glideHandle);
+    this.glideHandle = null;
+    this.glideVelocity = 0;
+  }
 
   private resize(): void {
     const { clientWidth, clientHeight } = this.container;
@@ -266,7 +424,7 @@ export class ChartEngine {
     return {
       candles: this.drawn,
       view: this.view,
-      range: priceRange(this.drawn, slice, strikes),
+      range: this.manualRange ?? priceRange(this.drawn, slice, strikes),
       plot: this.plot,
       precision: this.precision,
       timeframeSec: 60,
@@ -332,14 +490,17 @@ export class ChartEngine {
 
   destroy(): void {
     this.destroyed = true;
+    this.stopGlide();
     if (this.frameHandle !== null) cancelAnimationFrame(this.frameHandle);
     this.observer.disconnect();
+    document.removeEventListener('pointerdown', this.onAnyPointerDown, true);
     const canvas = this.canvases.cursor;
     canvas.removeEventListener('pointerdown', this.onPointerDown);
     canvas.removeEventListener('pointermove', this.onPointerMove);
     canvas.removeEventListener('pointerup', this.onPointerUp);
     canvas.removeEventListener('pointercancel', this.onPointerUp);
     canvas.removeEventListener('pointerleave', this.onPointerLeave);
+    canvas.removeEventListener('dblclick', this.onDoubleClick);
     canvas.removeEventListener('wheel', this.onWheel);
     for (const layer of ['grid', 'series', 'cursor'] as const) this.canvases[layer].remove();
   }

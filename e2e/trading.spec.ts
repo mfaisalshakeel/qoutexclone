@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { accountPill, failOnPageErrors, newCredentials, placeTrade, register } from './helpers';
+import { accountPill, failOnPageErrors, newCredentials, openMarket, placeTrade, register } from './helpers';
 
 test.describe('trading', () => {
   test('register, place a practice trade, see it settle and land in history', async ({ page }) => {
@@ -12,6 +12,8 @@ test.describe('trading', () => {
     await expect(accountButton).toHaveAttribute('aria-label', 'Trading account: Practice');
     await expect(accountButton).toContainText('$10,000.00');
 
+    // an always-open market, so the spec does not depend on the day of the week
+    await openMarket(page, 'EURUSD_OTC', 'EUR/USD (OTC)');
     await placeTrade(page, 'Higher', '30s');
     await expect(page.getByText('Open (1)')).toBeVisible();
 
@@ -33,7 +35,8 @@ test.describe('trading', () => {
 
   test('rejects a stake above the practice balance', async ({ page }) => {
     await register(page, newCredentials('stake'));
-    await page.waitForSelector('canvas');
+    // an always-open market, or there is no ticket to type a stake into
+    await openMarket(page, 'EURUSD_OTC', 'EUR/USD (OTC)');
     // the terminal mounts a ticket for each breakpoint; drive the visible one
     await page.locator('input[type=number]:visible').first().fill('99999');
     await expect(page.getByText(/Not enough balance/i)).toBeVisible();

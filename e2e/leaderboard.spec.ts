@@ -3,6 +3,7 @@ import {
   expectNoHorizontalScroll,
   failOnPageErrors,
   fundAccount,
+  openMarket,
   placeTrade,
   register,
   useLiveAccount,
@@ -16,7 +17,8 @@ test.describe('top traders today', () => {
     // the board counts live money only, so the position has to be a funded one
     await fundAccount(page, '$250');
     await page.goto('/trade');
-    await page.waitForSelector('canvas');
+    // an always-open market, so the spec does not depend on the day of the week
+    await openMarket(page, 'EURUSD_OTC', 'EUR/USD (OTC)');
     await useLiveAccount(page);
 
     await placeTrade(page, 'Higher', '30s');

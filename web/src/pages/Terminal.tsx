@@ -75,6 +75,7 @@ export function Terminal() {
   });
   const [studiesOpen, setStudiesOpen] = useState(false);
   const [timeframesOpen, setTimeframesOpen] = useState(false);
+  const [seriesOpen, setSeriesOpen] = useState(false);
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const ticketRef = useRef<TicketHandle>(null);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -234,6 +235,7 @@ export function Terminal() {
       setMarketsOpen(false);
       setStudiesOpen(false);
       setTimeframesOpen(false);
+      setSeriesOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -268,6 +270,7 @@ export function Terminal() {
             <>
               <button
                 onClick={() => setMarketsOpen(true)}
+                aria-label="Change market"
                 className="flex items-center gap-2 rounded-lg px-1 py-0.5 text-left md:pointer-events-none"
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-600 text-[10px] font-bold text-slate-300">
@@ -393,22 +396,61 @@ export function Terminal() {
               </div>
             )}
 
-            <div role="group" aria-label="Series type" className="flex gap-1">
-              {SERIES_TYPES.map((type) => (
+            {/* five shapes side by side on a desktop; on a phone that would
+                push the studies off the row, so they fold into a menu */}
+            {isDesktop ? (
+              <div role="group" aria-label="Series type" className="flex gap-1">
+                {SERIES_TYPES.map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setChartType(type)}
+                    title={SERIES_LABELS[type]}
+                    aria-label={SERIES_LABELS[type]}
+                    aria-pressed={chartType === type}
+                    className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${
+                      chartType === type ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {SERIES_GLYPHS[type]}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="relative">
                 <button
-                  key={type}
-                  onClick={() => setChartType(type)}
-                  title={SERIES_LABELS[type]}
-                  aria-label={SERIES_LABELS[type]}
-                  aria-pressed={chartType === type}
-                  className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${
-                    chartType === type ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
-                  }`}
+                  onClick={() => setSeriesOpen((open) => !open)}
+                  aria-label="Series type"
+                  aria-expanded={seriesOpen}
+                  className="rounded-md bg-ink-600 px-2 py-1.5 text-xs font-semibold text-white"
                 >
-                  {SERIES_GLYPHS[type]}
+                  {SERIES_GLYPHS[chartType]}
                 </button>
-              ))}
-            </div>
+                {seriesOpen && (
+                  <div
+                    role="group"
+                    aria-label="Series type"
+                    className="absolute right-0 z-30 mt-2 w-40 rounded-xl border border-ink-500 bg-ink-800 p-1.5 shadow-2xl"
+                  >
+                    {SERIES_TYPES.map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => {
+                          setChartType(type);
+                          setSeriesOpen(false);
+                        }}
+                        aria-pressed={chartType === type}
+                        className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs font-semibold transition ${
+                          chartType === type ? 'bg-accent text-white' : 'text-slate-300 hover:bg-ink-700'
+                        }`}
+                      >
+                        <span aria-hidden="true">{SERIES_GLYPHS[type]}</span>
+                        {SERIES_LABELS[type]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="relative">
               <button

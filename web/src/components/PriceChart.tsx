@@ -47,6 +47,7 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
   const engineRef = useRef<ChartEngine | null>(null);
   const [loading, setLoading] = useState(true);
   const [live, setLive] = useState(true);
+  const [autoScaled, setAutoScaled] = useState(true);
 
   const dataRef = useRef<Candle[]>([]);
   /** Paging cursor for older history; null when the market has no more. */
@@ -64,6 +65,7 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
       precision,
       onView: ({ oldestVisible, atLive }) => {
         setLive(atLive);
+        setAutoScaled(engineRef.current?.isAutoScaled ?? true);
         // a few bars of margin, so the next page is there before it is needed
         if (oldestVisible < 10) loadOlderRef.current();
       },
@@ -188,14 +190,50 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
     engineRef.current?.setTrades(trades.filter((trade) => trade.symbol === symbol));
   }, [trades, symbol]);
 
+  const zoom = (factor: number) => {
+    engineRef.current?.zoom(factor);
+    setAutoScaled(engineRef.current?.isAutoScaled ?? true);
+  };
+
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
       {loading && <ChartSkeleton />}
+
+      {/* the controls a mouse has on the wheel, for a finger and a keyboard */}
+      <div className="absolute bottom-7 left-2 z-10 flex gap-1">
+        <button
+          onClick={() => zoom(0.8)}
+          aria-label="Zoom in"
+          className="h-7 w-7 rounded-lg border border-ink-500 bg-ink-800/90 text-sm font-semibold text-slate-300 transition hover:bg-ink-700"
+        >
+          +
+        </button>
+        <button
+          onClick={() => zoom(1.25)}
+          aria-label="Zoom out"
+          className="h-7 w-7 rounded-lg border border-ink-500 bg-ink-800/90 text-sm font-semibold text-slate-300 transition hover:bg-ink-700"
+        >
+          −
+        </button>
+        {!autoScaled && (
+          <button
+            onClick={() => {
+              engineRef.current?.autoScale();
+              setAutoScaled(true);
+            }}
+            aria-label="Autoscale the price"
+            className="h-7 rounded-lg border border-ink-500 bg-ink-800/90 px-2 text-[11px] font-semibold text-slate-300 transition hover:bg-ink-700"
+          >
+            Auto
+          </button>
+        )}
+      </div>
+
       {!live && !loading && (
         <button
           onClick={() => engineRef.current?.scrollToLive()}
-          className="absolute bottom-8 right-[70px] z-10 rounded-full border border-ink-500 bg-ink-800/90 px-3 py-1.5 text-[11px] font-semibold text-slate-200 shadow-lg transition hover:bg-ink-700"
+          className="absolute bottom-7 right-[70px] z-10 rounded-full border border-ink-500 bg-ink-800/90 px-3 py-1.5 text-[11px] font-semibold text-slate-200 shadow-lg transition hover:bg-ink-700"
         >
           Scroll to live ›
         </button>
