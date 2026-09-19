@@ -218,6 +218,47 @@ test.describe('charting', () => {
     expect(errors).toEqual([]);
   });
 
+  test('draws on the chart, keeps the marks with the market, and rubs them out', async ({ page }) => {
+    const errors = failOnPageErrors(page);
+    await login(page, TRADER);
+    await openMarket(page, 'EURUSD_OTC', 'EUR/USD (OTC)');
+
+    const clear = page.getByRole('button', { name: 'Clear all drawings' });
+    if (await clear.isVisible().catch(() => false)) await clear.click();
+    await expect(clear).toBeHidden();
+
+    // a horizontal line is one click of the tool and one on the chart
+    const box = (await page.locator('canvas').first().boundingBox())!;
+    const spot = { x: box.x + box.width * 0.5, y: box.y + box.height * 0.45 };
+    await page.getByRole('button', { name: 'Horizontal line' }).click();
+    await page.mouse.click(spot.x, spot.y);
+
+    // the tool puts itself away after one mark, and leaves it selected
+    await expect(page.getByRole('button', { name: 'Horizontal line' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    const lock = page.getByRole('button', { name: 'Lock drawing' });
+    await expect(lock).toBeVisible();
+    await lock.click();
+    await expect(page.getByRole('button', { name: 'Unlock drawing' })).toBeVisible();
+
+    // and the marks belong to the market, so they are still there on a reload
+    await page.reload();
+    await page.waitForSelector('canvas');
+    await expect(clear).toBeVisible();
+
+    // clicking it selects it again; deleting it sticks
+    await page.mouse.click(spot.x, spot.y);
+    await page.getByRole('button', { name: 'Delete drawing' }).click();
+    await expect(clear).toBeHidden();
+    await page.reload();
+    await page.waitForSelector('canvas');
+    await expect(clear).toBeHidden();
+
+    expect(errors).toEqual([]);
+  });
+
   test('switches to any of the fourteen timeframes', async ({ page }) => {
     const errors = failOnPageErrors(page);
     await login(page, TRADER);

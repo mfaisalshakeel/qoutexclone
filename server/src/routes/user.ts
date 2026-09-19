@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { Router } from 'express';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { badRequest, notFound, wrap } from '../lib/errors.js';
@@ -163,6 +164,63 @@ router.patch(
       prisma.user.update({ where: { id: req.user!.id }, data: { chartStudies: body.studies } }),
     );
     res.json({ chartStudies: user.chartStudies });
+  }),
+);
+
+/**
+ * The marks a trader has drawn, keyed by market.
+ *
+ * Per user per asset: a trend line belongs to the chart it was drawn on, and
+ * carrying it to another market would be drawing a line through prices it was
+ * never about. Capped so one account cannot fill a column with them.
+ */
+router.patch(
+  '/drawings',
+  wrap(async (req, res) => {
+    const body = z
+      .object({
+        symbol: z.string().min(1).max(24),
+        drawings: z
+          .array(
+            z.object({
+              id: z.string().min(1).max(40),
+              kind: z.string().min(1).max(20),
+              points: z
+                .array(z.object({ time: z.number(), price: z.number() }))
+                .min(1)
+                .max(2),
+              color: z.string().max(32),
+              locked: z.boolean().optional(),
+              text: z.string().max(120).optional(),
+            }),
+          )
+          .max(60),
+      })
+      .parse(req.body);
+
+    const current = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { chartDrawings: true },
+    });
+    const all =
+      current?.chartDrawings && typeof current.chartDrawings === 'object'
+        ? ({ ...(current.chartDrawings as Record<string, unknown>) } as Record<string, unknown>)
+        : {};
+
+    if (body.drawings.length === 0) delete all[body.symbol];
+    else all[body.symbol] = body.drawings;
+
+    // a trader with marks on hundreds of markets keeps the newest ones
+    const symbols = Object.keys(all);
+    if (symbols.length > 40) for (const symbol of symbols.slice(0, symbols.length - 40)) delete all[symbol];
+
+    const user = await retryOnConflict(() =>
+      prisma.user.update({
+        where: { id: req.user!.id },
+        data: { chartDrawings: all as Prisma.InputJsonValue },
+      }),
+    );
+    res.json({ chartDrawings: user.chartDrawings });
   }),
 );
 

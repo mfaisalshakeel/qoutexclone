@@ -12,6 +12,7 @@ import {
   standingOf,
   xOfTime,
 } from './overlays';
+import { extend, fibLevels, type Drawing, type Screen } from './drawings';
 import { isBarSeries } from './series';
 import { THEME, type Frame } from './types';
 
@@ -640,4 +641,117 @@ export function drawDots(
     ctx.fill();
   }
   ctx.restore();
+}
+
+/**
+ * The trader's own marks: lines, boxes, retracements and notes.
+ *
+ * Drawn over the series and under the crosshair, with the selected one wearing
+ * handles so it is obvious what a drag would move.
+ */
+export function drawDrawings(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  drawings: Drawing[],
+  options: { selectedId: string | null; screen: Screen },
+): void {
+  const { plot } = frame;
+  const { screen } = options;
+
+  for (const drawing of drawings) {
+    const points = drawing.points.map((point) => ({
+      x: screen.x(point.time),
+      y: screen.y(point.price),
+    }));
+    const [first, second] = points;
+    if (!first) continue;
+    const selected = drawing.id === options.selectedId;
+
+    ctx.save();
+    ctx.strokeStyle = drawing.color;
+    ctx.fillStyle = drawing.color;
+    ctx.lineWidth = selected ? 2 : 1.4;
+    ctx.font = FONT;
+    ctx.textBaseline = 'middle';
+
+    switch (drawing.kind) {
+      case 'horizontal':
+        ctx.beginPath();
+        ctx.moveTo(0, Math.round(first.y) + 0.5);
+        ctx.lineTo(plot.width, Math.round(first.y) + 0.5);
+        ctx.stroke();
+        break;
+      case 'vertical':
+        ctx.beginPath();
+        ctx.moveTo(Math.round(first.x) + 0.5, 0);
+        ctx.lineTo(Math.round(first.x) + 0.5, plot.height);
+        ctx.stroke();
+        break;
+      case 'trend':
+      case 'ray': {
+        if (!second) break;
+        const end = drawing.kind === 'ray' ? extend(first, second, plot.width) : second;
+        ctx.beginPath();
+        ctx.moveTo(first.x, first.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
+        break;
+      }
+      case 'rect': {
+        if (!second) break;
+        const left = Math.min(first.x, second.x);
+        const top = Math.min(first.y, second.y);
+        const width = Math.abs(second.x - first.x);
+        const height = Math.abs(second.y - first.y);
+        ctx.globalAlpha = 0.08;
+        ctx.fillRect(left, top, width, height);
+        ctx.globalAlpha = 1;
+        ctx.strokeRect(left, top, width, height);
+        break;
+      }
+      case 'fib': {
+        if (!second) break;
+        const left = Math.min(first.x, second.x);
+        const right = Math.max(first.x, second.x);
+        for (const level of fibLevels(drawing.points[0], drawing.points[1])) {
+          const y = Math.round(screen.y(level.price)) + 0.5;
+          ctx.globalAlpha = level.ratio === 0 || level.ratio === 1 ? 1 : 0.65;
+          ctx.beginPath();
+          ctx.moveTo(left, y);
+          ctx.lineTo(right, y);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+          ctx.textAlign = 'left';
+          ctx.fillText(`${(level.ratio * 100).toFixed(1)}%`, right + 4, y);
+        }
+        break;
+      }
+      case 'text': {
+        ctx.textAlign = 'left';
+        const label = drawing.text ?? 'Note';
+        const width = ctx.measureText(label).width + 12;
+        ctx.globalAlpha = 0.15;
+        ctx.beginPath();
+        ctx.roundRect(first.x, first.y - 10, width, 20, 5);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillText(label, first.x + 6, first.y);
+        break;
+      }
+    }
+
+    // handles, so it is obvious what a drag would move — and a lock is shown
+    if (selected) {
+      for (const point of points) {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = drawing.locked ? THEME.text : '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = drawing.color;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
 }

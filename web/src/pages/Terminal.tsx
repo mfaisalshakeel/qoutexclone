@@ -100,6 +100,11 @@ export function Terminal() {
 
     // the studies come with it, filtered through the registry: one from a newer
     // version of the terminal is dropped rather than drawn wrong
+    setDrawings(
+      user.chartDrawings && typeof user.chartDrawings === 'object'
+        ? (user.chartDrawings as Record<string, unknown>)
+        : {},
+    );
     const stored = Array.isArray(user.chartStudies) ? (user.chartStudies as StudySettings[]) : [];
     setStudies(
       stored.filter((study) => study && STUDY_BY_ID.has(study.id)).map((study) => normaliseSettings(study)),
@@ -110,6 +115,13 @@ export function Terminal() {
   const saveStudies = useCallback((next: StudySettings[]) => {
     setStudies(next);
     void api.patch('/me/studies', { studies: next }).catch(() => undefined);
+  }, []);
+
+  /** The marks drawn on each market, saved under the market they belong to. */
+  const [drawings, setDrawings] = useState<Record<string, unknown>>({});
+  const saveDrawings = useCallback((market: string, marks: unknown[]) => {
+    setDrawings((current) => ({ ...current, [market]: marks }));
+    void api.patch('/me/drawings', { symbol: market, drawings: marks }).catch(() => undefined);
   }, []);
 
   const loadTrades = useCallback(async () => {
@@ -568,6 +580,8 @@ export function Terminal() {
                       trades={openTrades}
                       chartType={chartType}
                       studies={studies}
+                      drawings={drawings[pane.symbol]}
+                      onDrawingsChange={saveDrawings}
                     />
                   </ErrorBoundary>
                 )}

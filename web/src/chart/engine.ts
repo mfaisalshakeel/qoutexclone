@@ -7,12 +7,36 @@ import {
   drawIndicators,
   drawCloud,
   drawDots,
+  drawDrawings,
   drawSeries,
   drawStudyPane,
   drawTradeOverlays,
 } from './draw';
-import { atLive, clampView, liveView, panBy, priceRange, visibleSlice, zoomAt } from './scales';
+import {
+  atLive,
+  clampView,
+  indexAt,
+  liveView,
+  panBy,
+  priceAt,
+  priceRange,
+  visibleSlice,
+  yOf as yOfPrice,
+  zoomAt,
+} from './scales';
 import { gapBetween, glide, pinchFactor, scaleRange, shiftRange, velocityOf } from './motion';
+import {
+  create as createDrawing,
+  handleAt,
+  isMeaningful,
+  moveBy,
+  moveHandle,
+  type Drawing,
+  type DrawingKind,
+  type Point as DataPoint,
+  type Screen,
+} from './drawings';
+import { xOfTime, spacingOf } from './overlays';
 import { heikinAshi } from './series';
 import type { BuiltStudy } from './studies';
 import { THEME, type Frame, type PriceRange, type SeriesType, type Viewport } from './types';
@@ -38,6 +62,11 @@ const OVERLAY_MS = 250;
 
 const LAYERS = ['grid', 'series', 'overlay', 'cursor'] as const;
 
+/** Ids only have to be unique within one trader's own marks. */
+function newId(): string {
+  return `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
 /** Someone who has asked for less movement does not want a chart coasting. */
 function prefersReducedMotion(): boolean {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
@@ -54,6 +83,12 @@ export interface EngineOptions {
   precision: number;
   /** Called when the view moves, so the page can page history or show "live". */
   onView?: (state: { oldestVisible: number; atLive: boolean }) => void;
+  /** Called whenever the trader's marks change, so they can be saved. */
+  onDrawings?: (drawings: Drawing[]) => void;
+  /** Called when the selection changes, so the page can offer its controls. */
+  onSelect?: (drawing: Drawing | null) => void;
+  /** Called when the engine puts a tool away, having drawn one mark with it. */
+  onTool?: (tool: DrawingKind | null) => void;
 }
 
 export class ChartEngine {
@@ -101,6 +136,19 @@ export class ChartEngine {
   private onView?: EngineOptions['onView'];
   /** Seconds before a clock boundary at which buying closes; from settings. */
   private cutoffSec = 0;
+  private drawings: Drawing[] = [];
+  private tool: DrawingKind | null = null;
+  private selectedId: string | null = null;
+  /** The mark being drawn or dragged right now. */
+  private sketch: {
+    drawing: Drawing;
+    handle: number | 'body';
+    from: DataPoint;
+    original: Drawing;
+  } | null = null;
+  private onDrawings?: EngineOptions['onDrawings'];
+  private onSelect?: EngineOptions['onSelect'];
+  private onTool?: EngineOptions['onTool'];
   private lastTickAt = Date.now();
   private overlayTimer: ReturnType<typeof setInterval> | null = null;
   private destroyed = false;
@@ -109,6 +157,9 @@ export class ChartEngine {
     this.container = container;
     this.precision = options.precision;
     this.onView = options.onView;
+    this.onDrawings = options.onDrawings;
+    this.onSelect = options.onSelect;
+    this.onTool = options.onTool;
 
     container.style.position = 'relative';
     container.style.touchAction = 'none';
@@ -292,6 +343,91 @@ export class ChartEngine {
 
   /* ----------------------------- the view ------------------------------- */
 
+  setDrawings(drawings: Drawing[]): void {
+    this.drawings = drawings;
+    if (this.selectedId && !drawings.some((each) => each.id === this.selectedId)) {
+      this.selectedId = null;
+      this.onSelect?.(null);
+    }
+    this.mark('overlay');
+  }
+
+  /** The tool a drag will draw with, or null to select and move instead. */
+  setTool(tool: DrawingKind | null): void {
+    this.tool = tool;
+    if (tool) this.select(null);
+  }
+
+  select(id: string | null): void {
+    this.selectedId = id;
+    this.onSelect?.(this.drawings.find((each) => each.id === id) ?? null);
+    this.mark('overlay');
+  }
+
+  get selected(): Drawing | null {
+    return this.drawings.find((each) => each.id === this.selectedId) ?? null;
+  }
+
+  /** The topmost mark under a pixel, and what a drag there would move. */
+  private pickAt(
+    local: { x: number; y: number },
+    screen: Screen,
+  ): { drawing: Drawing; handle: number | 'body' | 'select' } | null {
+    // the selected one first, so its handles stay grabbable under another mark
+    const order = [...this.drawings].sort((a, b) =>
+      a.id === this.selectedId ? 1 : b.id === this.selectedId ? -1 : 0,
+    );
+    for (let index = order.length - 1; index >= 0; index -= 1) {
+      const handle = handleAt(order[index], local, screen);
+      if (handle !== null) return { drawing: order[index], handle };
+    }
+    return null;
+  }
+
+  /** The colour new marks are drawn in. */
+  drawColor = '#f6c445';
+
+  /** Changes something about a mark: its colour, its lock, its text. */
+  updateDrawing(id: string, patch: Partial<Drawing>): void {
+    this.drawings = this.drawings.map((each) => (each.id === id ? { ...each, ...patch } : each));
+    this.onDrawings?.(this.drawings);
+    this.onSelect?.(this.drawings.find((each) => each.id === id) ?? null);
+    this.mark('overlay');
+  }
+
+  removeDrawing(id: string): void {
+    this.drawings = this.drawings.filter((each) => each.id !== id);
+    if (this.selectedId === id) this.select(null);
+    this.onDrawings?.(this.drawings);
+    this.mark('overlay');
+  }
+
+  clearDrawings(): void {
+    this.drawings = [];
+    this.select(null);
+    this.onDrawings?.(this.drawings);
+    this.mark('overlay');
+  }
+
+  /** Where a pixel lands in the chart's own coordinates, and back again. */
+  private screen(): Screen {
+    const frame = this.frame();
+    const spacing = spacingOf(this.candles);
+    const last = this.candles[this.candles.length - 1];
+    return {
+      x: (time) => xOfTime(time, this.candles, this.view, this.plot) ?? 0,
+      y: (price) => yOfPrice(price, frame.range, this.plot),
+      time: (x) => {
+        if (!last) return 0;
+        const index = indexAt(x, this.view, this.plot);
+        return Math.round(last.time + (index - (this.candles.length - 1)) * spacing);
+      },
+      price: (y) => priceAt(y, frame.range, this.plot),
+      width: this.plot.width,
+      height: this.plot.height,
+    };
+  }
+
   /** Hands the price scale back to the chart. */
   autoScale(): void {
     this.manualRange = null;
@@ -357,8 +493,34 @@ export class ChartEngine {
       const [a, b] = [...this.pointers.values()];
       this.pinch = { gap: gapBetween(a, b), barsVisible: this.view.barsVisible, x: (a.x + b.x) / 2 };
       this.dragging = null;
+      this.sketch = null;
       return;
     }
+
+    // a tool draws; without one, a click selects a mark and drags it
+    const screen = this.screen();
+    const at: DataPoint = { time: screen.time(local.x), price: screen.price(local.y) };
+    if (this.tool) {
+      const drawing = createDrawing(this.tool, at, at, { color: this.drawColor, id: newId() });
+      this.sketch = { drawing, handle: 1, from: at, original: drawing };
+      this.mark('overlay');
+      return;
+    }
+
+    const grabbed = this.pickAt(local, screen);
+    if (grabbed?.handle === 'select') {
+      // locked: selected so it can be unlocked or deleted, but never dragged
+      this.select(grabbed.drawing.id);
+      this.dragging = { x: event.clientX, pointerId: event.pointerId, at: Date.now() };
+      return;
+    }
+    if (grabbed) {
+      this.sketch = { drawing: grabbed.drawing, handle: grabbed.handle, from: at, original: grabbed.drawing };
+      this.select(grabbed.drawing.id);
+      return;
+    }
+    if (this.selectedId) this.select(null);
+
     this.dragging = { x: event.clientX, pointerId: event.pointerId, at: Date.now() };
   };
 
@@ -388,6 +550,19 @@ export class ChartEngine {
       return;
     }
 
+    if (this.sketch) {
+      const screen = this.screen();
+      const at: DataPoint = { time: screen.time(local.x), price: screen.price(local.y) };
+      const { handle, original, from } = this.sketch;
+      this.sketch.drawing =
+        handle === 'body'
+          ? moveBy(original, { time: at.time - from.time, price: at.price - from.price })
+          : moveHandle(this.sketch.drawing, handle, at);
+      this.crosshair = local;
+      this.mark('overlay', 'cursor');
+      return;
+    }
+
     if (this.dragging) {
       const dx = event.clientX - this.dragging.x;
       const elapsed = Date.now() - this.dragging.at;
@@ -410,6 +585,32 @@ export class ChartEngine {
     this.canvases.cursor.releasePointerCapture?.(event.pointerId);
     this.axisDrag = null;
     if (this.pointers.size < 2) this.pinch = null;
+
+    if (this.sketch) {
+      const { drawing, original, handle } = this.sketch;
+      const fresh = !this.drawings.some((each) => each.id === drawing.id);
+      this.sketch = null;
+      const screen = this.screen();
+      // a drag too short to have been meant leaves nothing behind
+      const keep = !fresh || isMeaningful(drawing.kind, drawing.points[0], drawing.points.at(-1)!, screen);
+      if (keep) {
+        this.drawings = fresh
+          ? [...this.drawings, drawing]
+          : this.drawings.map((each) => (each.id === drawing.id ? drawing : each));
+        this.onDrawings?.(this.drawings);
+        if (fresh) {
+          // one mark per click of a tool: the tool puts itself away afterwards,
+          // and says so, or the button would stay lit over a chart that pans
+          this.tool = null;
+          this.onTool?.(null);
+          this.select(drawing.id);
+        }
+      } else if (handle !== 'body') {
+        this.drawings = this.drawings.map((each) => (each.id === original.id ? original : each));
+      }
+      this.mark('overlay');
+      return;
+    }
 
     if (this.dragging?.pointerId === event.pointerId) {
       this.dragging = null;
@@ -613,14 +814,21 @@ export class ChartEngine {
       const ctx = this.contexts.overlay;
       ctx.clearRect(0, 0, this.plot.width + PRICE_AXIS_WIDTH, this.plot.height + TIME_AXIS_HEIGHT);
       const priceFrame = this.frameFor(frame, main);
-      this.inPane(ctx, main, () =>
+      this.inPane(ctx, main, () => {
         drawTradeOverlays(ctx, priceFrame, {
           price: this.candles[this.candles.length - 1]?.close ?? null,
           nowMs: Date.now(),
           cutoffSec: this.cutoffSec,
           sinceTickMs: Date.now() - this.lastTickAt,
-        }),
-      );
+        });
+        const marks = this.sketch
+          ? [...this.drawings.filter((each) => each.id !== this.sketch!.drawing.id), this.sketch.drawing]
+          : this.drawings;
+        drawDrawings(ctx, priceFrame, marks, {
+          selectedId: this.sketch?.drawing.id ?? this.selectedId,
+          screen: this.screen(),
+        });
+      });
       this.dirty.overlay = false;
     }
 

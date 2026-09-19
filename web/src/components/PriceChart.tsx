@@ -4,6 +4,8 @@ import { realtime } from '../lib/ws';
 import { useMarket } from '../store/market';
 import { ChartEngine } from '../chart/engine';
 import { buildStudy, type StudySettings } from '../chart/studies';
+import { sanitise, type Drawing, type DrawingKind } from '../chart/drawings';
+import { DrawingTools } from './DrawingTools';
 import type { SeriesKind } from '../chart/series';
 import { THEME } from '../chart/types';
 import type { Candle, Trade } from '../lib/types';
@@ -25,6 +27,9 @@ interface Props {
   chartType: ChartType;
   /** The studies the trader has on the chart, already configured. */
   studies: StudySettings[];
+  /** The marks this market carries, and a way to save them when they change. */
+  drawings?: unknown;
+  onDrawingsChange?: (symbol: string, drawings: Drawing[]) => void;
 }
 
 /**
@@ -34,12 +39,25 @@ interface Props {
  * owns the data and the engine owns the pixels. Every open position is drawn as
  * a strike line so a trader can see exactly what has to happen to win.
  */
-export function PriceChart({ symbol, timeframe, precision, trades, chartType, studies }: Props) {
+export function PriceChart({
+  symbol,
+  timeframe,
+  precision,
+  trades,
+  chartType,
+  studies,
+  drawings: storedDrawings,
+  onDrawingsChange,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<ChartEngine | null>(null);
   const [loading, setLoading] = useState(true);
   const [live, setLive] = useState(true);
   const [autoScaled, setAutoScaled] = useState(true);
+  const [tool, setTool] = useState<DrawingKind | null>(null);
+  const [selected, setSelected] = useState<Drawing | null>(null);
+  const [drawings, setDrawings] = useState<Drawing[]>([]);
+  const [color, setColor] = useState('#f6c445');
   const cutoffSec = useMarket((s) => s.expiry.clock.cutoffSec);
 
   const dataRef = useRef<Candle[]>([]);
@@ -47,6 +65,8 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, st
   const beforeRef = useRef<number | null>(null);
   const loadingOlderRef = useRef(false);
   const loadOlderRef = useRef<() => void>(() => {});
+  const saveDrawingsRef = useRef<(marks: Drawing[]) => void>(() => {});
+  saveDrawingsRef.current = (marks: Drawing[]) => onDrawingsChange?.(symbol, marks);
   const studiesRef = useRef(studies);
   studiesRef.current = studies;
 
@@ -62,6 +82,12 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, st
         // a few bars of margin, so the next page is there before it is needed
         if (oldestVisible < 10) loadOlderRef.current();
       },
+      onDrawings: (marks) => {
+        setDrawings(marks);
+        saveDrawingsRef.current(marks);
+      },
+      onSelect: setSelected,
+      onTool: setTool,
     });
     engineRef.current = engine;
     return () => {
@@ -167,6 +193,52 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, st
     engineRef.current?.setCutoff(cutoffSec);
   }, [cutoffSec]);
 
+  /**
+   * Marks belong to a market: switching markets swaps them, rather than
+   * carrying yesterday's trend line onto another chart.
+   *
+   * Keyed on the market alone. The stored set is the source of truth when a
+   * chart opens; after that the engine owns them, and re-applying the prop as
+   * it echoes back through the account would undo the selection the trader is
+   * working with.
+   */
+  const storedRef = useRef(storedDrawings);
+  storedRef.current = storedDrawings;
+  useEffect(() => {
+    const marks = sanitise(storedRef.current);
+    setDrawings(marks);
+    setSelected(null);
+    setTool(null);
+    engineRef.current?.setDrawings(marks);
+    engineRef.current?.setTool(null);
+  }, [symbol]);
+
+  useEffect(() => {
+    engineRef.current?.setTool(tool);
+  }, [tool]);
+
+  useEffect(() => {
+    if (engineRef.current) engineRef.current.drawColor = color;
+  }, [color]);
+
+  // a selected mark is deleted with the keyboard, as in every other package
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setTool(null);
+        engineRef.current?.select(null);
+        return;
+      }
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+      const target = event.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      const current = engineRef.current?.selected;
+      if (current && !current.locked) engineRef.current?.removeDrawing(current.id);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   useEffect(() => {
     // the studies are rebuilt whenever their configuration changes
     paintOverlays();
@@ -185,6 +257,18 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, st
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
       {loading && <ChartSkeleton />}
+
+      <DrawingTools
+        tool={tool}
+        onTool={setTool}
+        color={selected?.color ?? color}
+        onColor={setColor}
+        selected={selected}
+        onUpdate={(patch) => selected && engineRef.current?.updateDrawing(selected.id, patch)}
+        onDelete={() => selected && engineRef.current?.removeDrawing(selected.id)}
+        onClear={() => engineRef.current?.clearDrawings()}
+        count={drawings.length}
+      />
 
       {/* the controls a mouse has on the wheel, for a finger and a keyboard */}
       <div className="absolute bottom-7 left-2 z-10 flex gap-1">

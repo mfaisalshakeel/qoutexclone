@@ -18,6 +18,8 @@ export interface User {
   terminalLayout?: unknown;
   /** The studies on their chart, validated by the terminal that reads them. */
   chartStudies?: unknown;
+  /** The marks they have drawn, keyed by market symbol. */
+  chartDrawings?: unknown;
   createdAt: string;
 }
 

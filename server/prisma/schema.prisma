@@ -40,6 +40,8 @@ model User {
   terminalLayout Json?
   /// The studies on their chart, with the periods and colours they chose.
   chartStudies   Json?
+  /// The marks they have drawn, keyed by market symbol.
+  chartDrawings  Json?
 
   /// When true, this trader never appears on the public leaderboard.
   leaderboardOptOut Boolean              @default(false)

@@ -4,6 +4,16 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-19**: Phase 3 — **Drawing tools**. Trend lines, horizontal lines and rays, vertical lines, rectangles, Fibonacci retracements and text notes, down the left edge of the chart — selectable, draggable by either end or as a whole, lockable, deletable, and kept with the market they were drawn on.
+
+  **Every mark is stored as a time and a price, never as pixels.** That is the difference between a trend line and a scratch on the screen: pan, zoom, switch timeframe or come back tomorrow on another machine and it still runs between the same two bars. The marks live on the account keyed by symbol, so a level drawn on gold is not waiting on EUR/USD, and the set is capped at sixty marks across forty markets so one account cannot fill a column with them.
+
+  **The picking is arithmetic, and tested** (19 unit tests): the distance from a click to a segment, a ray that carries on past its second point to the edge of the plot, a rectangle clicked by its edges rather than its middle so it can be drawn over candles, a retracement clicked anywhere inside it because that is where its levels are, and a Fibonacci that runs from the second point back to the first — the same way on a fall as on a rise. A drag too short to have been meant leaves nothing behind.
+
+  **A locked mark can still be selected, just not moved.** The first version returned "nothing here" for a locked drawing, which locked it out of ever being unlocked again; now a click selects it, the handles go grey, and only the lock and the delete remain. Drawing with a tool puts the tool away and leaves the mark selected, which is what every other charting package does and what stops the next drag drawing a second line instead of panning. Escape clears both; Delete removes the selection unless it is locked or the trader is typing.
+
+  19 unit tests and an e2e spec that draws a line, locks it, reloads to prove it belongs to the market, selects it again and rubs it out. Verified with lint, format, typecheck, 214 web unit tests, a production build, the full Playwright suite at 54 passed, and four kinds of mark drawn by hand and watched through a reload.
+
 - **2026-09-19**: Phase 3 — **Indicators**. Twenty-one studies, each configurable and saved to the account: SMA, EMA, WMA, Bollinger, Donchian, Keltner, Ichimoku, Alligator, Parabolic SAR, SuperTrend, ZigZag and Fractals over the price; RSI, MACD, Stochastic, ATR, ADX, CCI, Williams %R, Momentum and the Awesome oscillator in panes of their own.
 
   **The maths is pure and tested against figures worked out by hand** (`chart/maths.ts`, 28 unit tests). Every function returns one value per candle with `null` where it has nothing to say yet, because a 20-period average has no value on bar 3 and pretending otherwise draws a line from nowhere. The tests pin the things that are easy to get subtly wrong: Wilder's smoothing is not an EMA, RSI pegs at 100 in an unbroken rise and 0 in an unbroken fall, Ichimoku's spans are drawn 26 bars ahead and its lagging line 26 behind, a fractal cannot be known until two bars later, a parabolic stop flips sides when the market turns, and an average never averages across a gap. An indicator that is subtly wrong is worse than one that is missing, because it will be traded on.

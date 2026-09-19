@@ -28,6 +28,7 @@ export function publicUser(user: User) {
     kycStatus: user.kycStatus,
     terminalLayout: user.terminalLayout,
     chartStudies: user.chartStudies,
+    chartDrawings: user.chartDrawings,
     leaderboardOptOut: user.leaderboardOptOut,
     createdAt: user.createdAt,
   };
