@@ -4,6 +4,18 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-19**: Phase 3 — **Indicators**. Twenty-one studies, each configurable and saved to the account: SMA, EMA, WMA, Bollinger, Donchian, Keltner, Ichimoku, Alligator, Parabolic SAR, SuperTrend, ZigZag and Fractals over the price; RSI, MACD, Stochastic, ATR, ADX, CCI, Williams %R, Momentum and the Awesome oscillator in panes of their own.
+
+  **The maths is pure and tested against figures worked out by hand** (`chart/maths.ts`, 28 unit tests). Every function returns one value per candle with `null` where it has nothing to say yet, because a 20-period average has no value on bar 3 and pretending otherwise draws a line from nowhere. The tests pin the things that are easy to get subtly wrong: Wilder's smoothing is not an EMA, RSI pegs at 100 in an unbroken rise and 0 in an unbroken fall, Ichimoku's spans are drawn 26 bars ahead and its lagging line 26 behind, a fractal cannot be known until two bars later, a parabolic stop flips sides when the market turns, and an average never averages across a gap. An indicator that is subtly wrong is worse than one that is missing, because it will be traded on.
+
+  **The registry is the single source of truth.** Each study declares its label, its pane, its parameters with their ranges, and its colours; the settings panel is generated from that, so an indicator cannot reach the engine without the controls to configure it, and a stored configuration from an older version is filled in and clamped rather than trusted. A study whose definition has gone is dropped rather than drawn wrong.
+
+  **Panes.** The renderer now divides the plot: the price keeps at least half the height, each oscillator takes a fifth down to a floor, and every pane draws in its own coordinates through one translate-and-clip, with its own scale, its own levels (70/30, zero, ±100) and its name in the corner. The time axis belongs to the bottom pane, because a chart has several panes but only one clock. The crosshair reads the pane the pointer is actually in, so the price label belongs to that pane's scale.
+
+  **A real bug the suite caught**: saving a chart preference could lose a race with a settlement touching the same account row, and MySQL refused one of them — a 500 over a colour. Preference writes (layout, studies, leaderboard opt-out) now retry a write conflict up to three times; money never comes through that path, because a ledger entry that lost its race must fail loudly rather than be replayed.
+
+  28 unit tests for the maths, 5 for the retry, and an e2e spec that adds a study, changes its period, reloads to prove it lives on the account, and takes it off again. Verified with lint, format, typecheck, 195 web and 343 server unit tests, a production build, the full Playwright suite at 53 passed, and four studies watched on screen at 1440px.
+
 - **2026-09-19**: Phase 3 — **Trading overlays**. Every open position is now drawn on the chart the way a trader thinks about it: a strike line carrying the stake and what the position is worth *right now*, a vertical line at the instant it settles with the time left on it, the shaded stretch where a clock boundary can no longer be bought, and a live price line with a dot that breathes on each tick.
 
   **The live figure is the whole result, not a fraction of one.** A binary option is all or nothing, so the tag says what the position would settle at if the market stopped this second — the payout if it is in front, the stake if it is behind, and nothing at all at exactly the entry, because a tie refunds. Green when winning, red when losing, and a second position at almost the same price is nudged clear rather than printed over the first.

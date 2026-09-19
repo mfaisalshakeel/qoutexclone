@@ -1,21 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { realtime } from '../lib/ws';
-import { bollinger, ema, sma } from '../lib/indicators';
 import { useMarket } from '../store/market';
-import { ChartEngine, type IndicatorLine } from '../chart/engine';
+import { ChartEngine } from '../chart/engine';
+import { buildStudy, type StudySettings } from '../chart/studies';
 import type { SeriesKind } from '../chart/series';
 import { THEME } from '../chart/types';
 import type { Candle, Trade } from '../lib/types';
 import { ChartSkeleton } from './Skeleton';
 
 export type ChartType = SeriesKind;
-
-export interface IndicatorSettings {
-  sma: boolean;
-  ema: boolean;
-  bollinger: boolean;
-}
 
 interface HistoryPage {
   candles: Candle[];
@@ -29,12 +23,9 @@ interface Props {
   precision: number;
   trades: Trade[];
   chartType: ChartType;
-  indicators: IndicatorSettings;
+  /** The studies the trader has on the chart, already configured. */
+  studies: StudySettings[];
 }
-
-const SMA_PERIOD = 20;
-const EMA_PERIOD = 50;
-const COLOURS = { sma: '#f6c445', ema: '#3d7bff', band: '#7c8aa5' };
 
 /**
  * The terminal chart, drawn by this project's own canvas engine.
@@ -43,7 +34,7 @@ const COLOURS = { sma: '#f6c445', ema: '#3d7bff', band: '#7c8aa5' };
  * owns the data and the engine owns the pixels. Every open position is drawn as
  * a strike line so a trader can see exactly what has to happen to win.
  */
-export function PriceChart({ symbol, timeframe, precision, trades, chartType, indicators }: Props) {
+export function PriceChart({ symbol, timeframe, precision, trades, chartType, studies }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<ChartEngine | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,8 +47,8 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
   const beforeRef = useRef<number | null>(null);
   const loadingOlderRef = useRef(false);
   const loadOlderRef = useRef<() => void>(() => {});
-  const settingsRef = useRef(indicators);
-  settingsRef.current = indicators;
+  const studiesRef = useRef(studies);
+  studiesRef.current = studies;
 
   // the engine outlives the data: it is created once and fed
   useEffect(() => {
@@ -81,25 +72,13 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Indicator lines, aligned to the candles by index. */
+  /** Rebuilds every study from the candles currently held. */
   const paintOverlays = () => {
     const candles = dataRef.current;
-    const active = settingsRef.current;
-    const lines: IndicatorLine[] = [];
-
-    const align = (points: { time: number; value: number }[]): (number | null)[] => {
-      const byTime = new Map(points.map((point) => [point.time, point.value]));
-      return candles.map((candle) => byTime.get(candle.time) ?? null);
-    };
-
-    if (active.sma) lines.push({ color: COLOURS.sma, points: align(sma(candles, SMA_PERIOD)) });
-    if (active.ema) lines.push({ color: COLOURS.ema, points: align(ema(candles, EMA_PERIOD)) });
-    if (active.bollinger) {
-      const bands = bollinger(candles);
-      lines.push({ color: COLOURS.band, dashed: true, points: align(bands.upper) });
-      lines.push({ color: COLOURS.band, dashed: true, points: align(bands.lower) });
-    }
-    engineRef.current?.setIndicators(lines);
+    const built = studiesRef.current
+      .map((study) => buildStudy(candles, study))
+      .filter((study): study is NonNullable<typeof study> => study !== null);
+    engineRef.current?.setStudies(built);
   };
 
   // history + live updates for the selected market
@@ -189,8 +168,9 @@ export function PriceChart({ symbol, timeframe, precision, trades, chartType, in
   }, [cutoffSec]);
 
   useEffect(() => {
+    // the studies are rebuilt whenever their configuration changes
     paintOverlays();
-  }, [indicators.sma, indicators.ema, indicators.bollinger]);
+  }, [studies]);
 
   useEffect(() => {
     engineRef.current?.setTrades(trades.filter((trade) => trade.symbol === symbol));

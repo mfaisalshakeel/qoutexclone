@@ -16,6 +16,8 @@ export interface User {
   kycStatus: 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
   /** The saved chart workspace; validated by the reader, so it is unknown here. */
   terminalLayout?: unknown;
+  /** The studies on their chart, validated by the terminal that reads them. */
+  chartStudies?: unknown;
   createdAt: string;
 }
 

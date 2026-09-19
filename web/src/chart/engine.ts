@@ -5,13 +5,19 @@ import {
   drawCrosshair,
   drawGrid,
   drawIndicators,
+  drawCloud,
+  drawDots,
   drawSeries,
+  drawStudyPane,
   drawTradeOverlays,
 } from './draw';
 import { atLive, clampView, liveView, panBy, priceRange, visibleSlice, zoomAt } from './scales';
 import { gapBetween, glide, pinchFactor, scaleRange, shiftRange, velocityOf } from './motion';
 import { heikinAshi } from './series';
-import type { Frame, PriceRange, SeriesType, Viewport } from './types';
+import type { BuiltStudy } from './studies';
+import { THEME, type Frame, type PriceRange, type SeriesType, type Viewport } from './types';
+
+const THEME_AXIS = THEME.axis;
 
 /**
  * The chart engine: three stacked canvases, one animation frame, and a dirty
@@ -71,6 +77,7 @@ export class ChartEngine {
   private drawn: Candle[] = [];
   private trades: Trade[] = [];
   private lines: IndicatorLine[] = [];
+  private studies: BuiltStudy[] = [];
   private type: SeriesType = 'candles';
   private precision: number;
   private view: Viewport = { rightIndex: 0, barsVisible: 120 };
@@ -200,6 +207,68 @@ export class ChartEngine {
   setIndicators(lines: IndicatorLine[]): void {
     this.lines = lines;
     this.mark('series');
+  }
+
+  /**
+   * The studies on the chart. Those with a pane of their own change the
+   * layout — the price loses height to them — so the grid is redrawn too.
+   */
+  setStudies(studies: BuiltStudy[]): void {
+    const panesBefore = this.studies.filter((study) => study.pane === 'own').length;
+    this.studies = studies;
+    const panesAfter = studies.filter((study) => study.pane === 'own').length;
+    this.mark('series', 'overlay', 'cursor');
+    if (panesBefore !== panesAfter) this.mark('grid');
+    else this.mark('grid');
+  }
+
+  /**
+   * How the plot is divided between the price and the study panes.
+   *
+   * A pane takes a fifth of the plot, floored at 64px and capped so the price
+   * always keeps at least half the height: four oscillators should squeeze the
+   * chart, never swallow it.
+   */
+  private panes(): { top: number; height: number; study: BuiltStudy | null }[] {
+    const own = this.studies.filter((study) => study.pane === 'own');
+    if (own.length === 0) return [{ top: 0, height: this.plot.height, study: null }];
+
+    const each = Math.max(Math.min(this.plot.height * 0.2, 130), 52);
+    const total = Math.min(each * own.length, this.plot.height * 0.5);
+    const paneHeight = total / own.length;
+    const mainHeight = this.plot.height - total;
+
+    const boxes = [{ top: 0, height: mainHeight, study: null as BuiltStudy | null }];
+    own.forEach((study, index) => {
+      boxes.push({ top: mainHeight + index * paneHeight, height: paneHeight, study });
+    });
+    return boxes;
+  }
+
+  /** The price range a study pane is drawn on: its own, or fixed. */
+  private paneRange(study: BuiltStudy): PriceRange {
+    if (study.fixedRange) return { min: study.fixedRange[0], max: study.fixedRange[1] };
+    const slice = visibleSlice(this.candles.length, this.view);
+    let min = Infinity;
+    let max = -Infinity;
+    const consider = (points: (number | null)[]) => {
+      for (let index = slice.from; index <= slice.to; index += 1) {
+        const value = points[index];
+        if (value == null) continue;
+        if (value < min) min = value;
+        if (value > max) max = value;
+      }
+    };
+    for (const each of study.lines) consider(each.points);
+    if (study.histogram) consider(study.histogram.points);
+    for (const level of study.levels ?? []) {
+      if (level < min) min = level;
+      if (level > max) max = level;
+    }
+    if (!Number.isFinite(min) || !Number.isFinite(max)) return { min: 0, max: 1 };
+    if (max - min < Number.EPSILON) return { min: min - 1, max: max + 1 };
+    const pad = (max - min) * 0.1;
+    return { min: min - pad, max: max + pad };
   }
 
   setType(type: SeriesType): void {
@@ -483,30 +552,137 @@ export class ChartEngine {
   private paint(): void {
     if (this.destroyed || this.plot.width <= 0) return;
     const frame = this.frame();
+    const boxes = this.panes();
+    const main = boxes[0];
 
     if (this.dirty.grid) {
-      drawGrid(this.contexts.grid, frame);
+      const ctx = this.contexts.grid;
+      ctx.clearRect(0, 0, this.plot.width + PRICE_AXIS_WIDTH, this.plot.height + TIME_AXIS_HEIGHT);
+      // the price keeps the grid and the time axis; a study pane gets a rule
+      // above it and its own levels, drawn with the pane itself
+      this.inPane(ctx, main, () => drawGrid(ctx, this.frameFor(frame, main), { time: boxes.length === 1 }));
+      boxes.slice(1).forEach((box, index) => {
+        const last = index === boxes.length - 2;
+        // a study pane takes the vertical grid and, if it is the bottom one,
+        // the clock; its own levels are drawn with the study
+        this.inPane(ctx, box, () => drawGrid(ctx, this.frameFor(frame, box), { prices: false, time: last }));
+        ctx.save();
+        ctx.strokeStyle = THEME_AXIS;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, Math.round(box.top) + 0.5);
+        ctx.lineTo(this.plot.width + PRICE_AXIS_WIDTH, Math.round(box.top) + 0.5);
+        ctx.stroke();
+        ctx.restore();
+      });
       this.dirty.grid = false;
     }
+
     if (this.dirty.series) {
       const ctx = this.contexts.series;
-      drawSeries(ctx, frame);
-      drawIndicators(ctx, frame);
+      ctx.clearRect(0, 0, this.plot.width + PRICE_AXIS_WIDTH, this.plot.height + TIME_AXIS_HEIGHT);
+      const priceFrame = this.frameFor(frame, main);
+      this.inPane(ctx, main, () => {
+        // clouds sit under the series; dotted studies over it
+        for (const study of this.studies) {
+          if (study.pane !== 'main' || !study.cloud) continue;
+          drawCloud(ctx, priceFrame, study.cloud);
+        }
+        drawSeries(ctx, priceFrame);
+        drawIndicators(ctx, {
+          ...priceFrame,
+          lines: this.mainLines(),
+        });
+        for (const study of this.studies) {
+          if (study.pane !== 'main') continue;
+          for (const each of study.lines) {
+            if (each.dots) drawDots(ctx, priceFrame, each.points, each.color);
+          }
+        }
+      });
+
+      for (const box of boxes.slice(1)) {
+        if (!box.study) continue;
+        const paneFrame = this.frameFor(frame, box, this.paneRange(box.study));
+        this.inPane(ctx, box, () => drawStudyPane(ctx, paneFrame, box.study!));
+      }
       this.dirty.series = false;
     }
+
     if (this.dirty.overlay) {
-      drawTradeOverlays(this.contexts.overlay, frame, {
-        price: this.candles[this.candles.length - 1]?.close ?? null,
-        nowMs: Date.now(),
-        cutoffSec: this.cutoffSec,
-        sinceTickMs: Date.now() - this.lastTickAt,
-      });
+      const ctx = this.contexts.overlay;
+      ctx.clearRect(0, 0, this.plot.width + PRICE_AXIS_WIDTH, this.plot.height + TIME_AXIS_HEIGHT);
+      const priceFrame = this.frameFor(frame, main);
+      this.inPane(ctx, main, () =>
+        drawTradeOverlays(ctx, priceFrame, {
+          price: this.candles[this.candles.length - 1]?.close ?? null,
+          nowMs: Date.now(),
+          cutoffSec: this.cutoffSec,
+          sinceTickMs: Date.now() - this.lastTickAt,
+        }),
+      );
       this.dirty.overlay = false;
     }
+
     if (this.dirty.cursor) {
-      drawCrosshair(this.contexts.cursor, frame);
+      const ctx = this.contexts.cursor;
+      ctx.clearRect(0, 0, this.plot.width + PRICE_AXIS_WIDTH, this.plot.height + TIME_AXIS_HEIGHT);
+      // the crosshair reads the pane the pointer is actually in, so the price
+      // label belongs to that pane's scale rather than the chart's
+      const box = this.paneAt(this.crosshair?.y ?? 0, boxes) ?? main;
+      const paneFrame = this.frameFor(frame, box, box.study ? this.paneRange(box.study) : undefined);
+      this.inPane(ctx, box, () =>
+        drawCrosshair(ctx, {
+          ...paneFrame,
+          crosshair: this.crosshair ? { x: this.crosshair.x, y: this.crosshair.y - box.top } : null,
+        }),
+      );
       this.dirty.cursor = false;
     }
+  }
+
+  /** The main pane's indicator lines: the legacy ones plus the studies'. */
+  private mainLines(): IndicatorLine[] {
+    const fromStudies = this.studies
+      .filter((study) => study.pane === 'main')
+      .flatMap((study) =>
+        study.lines
+          .filter((each) => !each.dots)
+          .map((each) => ({ color: each.color, dashed: each.dashed, points: each.points })),
+      );
+    return [...this.lines, ...fromStudies];
+  }
+
+  /** Runs a draw call in a pane's own coordinates. */
+  private inPane(
+    ctx: CanvasRenderingContext2D,
+    box: { top: number; height: number },
+    draw: () => void,
+  ): void {
+    ctx.save();
+    ctx.translate(0, box.top);
+    // a pane may not paint over its neighbours, whatever it is asked to draw
+    ctx.beginPath();
+    ctx.rect(0, 0, this.plot.width + PRICE_AXIS_WIDTH, box.height + TIME_AXIS_HEIGHT);
+    ctx.clip();
+    draw();
+    ctx.restore();
+  }
+
+  /** A frame sized to one pane, and optionally scaled to its own values. */
+  private frameFor(frame: Frame, box: { height: number }, range?: PriceRange): Frame {
+    return {
+      ...frame,
+      plot: { width: this.plot.width, height: box.height },
+      range: range ?? frame.range,
+    };
+  }
+
+  private paneAt(
+    y: number,
+    boxes: { top: number; height: number; study: BuiltStudy | null }[],
+  ): { top: number; height: number; study: BuiltStudy | null } | null {
+    return boxes.find((box) => y >= box.top && y <= box.top + box.height) ?? null;
   }
 
   private report(): void {

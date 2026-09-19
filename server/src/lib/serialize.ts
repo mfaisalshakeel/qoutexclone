@@ -27,6 +27,7 @@ export function publicUser(user: User) {
     referralEarnings: user.referralEarnings,
     kycStatus: user.kycStatus,
     terminalLayout: user.terminalLayout,
+    chartStudies: user.chartStudies,
     leaderboardOptOut: user.leaderboardOptOut,
     createdAt: user.createdAt,
   };

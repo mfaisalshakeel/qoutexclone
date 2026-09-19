@@ -169,6 +169,55 @@ test.describe('charting', () => {
     expect(errors).toEqual([]);
   });
 
+  test('adds a study, keeps its settings on the account, and takes it off again', async ({ page }) => {
+    const errors = failOnPageErrors(page);
+    await login(page, TRADER);
+    await openMarket(page, 'EURUSD_OTC', 'EUR/USD (OTC)');
+
+    const studies = page.getByRole('button', { name: /^Studies/ });
+    await studies.click();
+    const panel = page.getByRole('dialog', { name: 'Studies' });
+    await expect(panel).toBeVisible();
+
+    // the studies are saved on the account, so this spec starts from none
+    const clear = panel.getByRole('button', { name: /Clear all/ });
+    if (await clear.isVisible().catch(() => false)) await clear.click();
+    await expect(studies).not.toContainText('(');
+
+    // an oscillator takes a pane of its own, which the list says out loud
+    const rsi = panel.getByText('RSI', { exact: true });
+    await expect(rsi.locator('xpath=..')).toContainText('pane');
+    await rsi.click();
+    await expect(studies).toContainText('(1)');
+
+    // its period is the trader's to change; adding a study opens its settings
+    const period = panel.getByLabel('RSI Period');
+    if (!(await period.isVisible().catch(() => false))) {
+      await panel.getByRole('button', { name: 'Settings for RSI' }).click();
+    }
+    await expect(period).toHaveValue('14');
+    await period.fill('7');
+    await panel.getByRole('button', { name: 'Done' }).click();
+
+    // the study lives on the account, so it is still there after a reload
+    await page.reload();
+    await page.waitForSelector('canvas');
+    await expect(studies).toContainText('(1)');
+    await studies.click();
+    await panel.getByRole('button', { name: 'Settings for RSI' }).click();
+    await expect(panel.getByLabel('RSI Period')).toHaveValue('7');
+    await panel.getByRole('button', { name: 'Settings for RSI' }).click();
+
+    // and taking it off sticks just as well
+    await panel.getByText('RSI', { exact: true }).click();
+    await expect(studies).not.toContainText('(');
+    await page.reload();
+    await page.waitForSelector('canvas');
+    await expect(studies).not.toContainText('(');
+
+    expect(errors).toEqual([]);
+  });
+
   test('switches to any of the fourteen timeframes', async ({ page }) => {
     const errors = failOnPageErrors(page);
     await login(page, TRADER);

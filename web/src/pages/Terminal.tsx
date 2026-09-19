@@ -11,7 +11,9 @@ import { DESKTOP_QUERY, useMediaQuery } from '../hooks/useMediaQuery';
 import { AssetPicker } from '../components/AssetPicker';
 import { BottomSheet } from '../components/BottomSheet';
 import { ErrorBoundary } from '../components/ErrorBoundary';
-import { PriceChart, type ChartType, type IndicatorSettings } from '../components/PriceChart';
+import { PriceChart, type ChartType } from '../components/PriceChart';
+import { StudiesPanel } from '../components/StudiesPanel';
+import { normaliseSettings, STUDY_BY_ID, type StudySettings } from '../chart/studies';
 import { SERIES_LABELS, SERIES_TYPES } from '../chart/series';
 import { Positions } from '../components/Positions';
 import { TradeTicket, type TicketHandle, type TicketSummary } from '../components/TradeTicket';
@@ -41,12 +43,6 @@ const SERIES_GLYPHS: Record<(typeof SERIES_TYPES)[number], string> = {
   area: '◣',
 };
 
-const STUDIES = [
-  { key: 'sma' as const, label: 'SMA 20', color: '#f6c445' },
-  { key: 'ema' as const, label: 'EMA 50', color: '#3d7bff' },
-  { key: 'bollinger' as const, label: 'Bollinger bands', color: '#7c8aa5' },
-];
-
 export function Terminal() {
   const { assets, prices, symbol, timeframe, timeframes, setTimeframe, load, loaded } = useMarket();
   const selectSymbol = useMarket((s) => s.selectSymbol);
@@ -68,11 +64,9 @@ export function Terminal() {
   const [summary, setSummary] = useState<TicketSummary | null>(null);
   const [marketsOpen, setMarketsOpen] = useState(false);
   const [chartType, setChartType] = useState<ChartType>('candles');
-  const [indicators, setIndicators] = useState<IndicatorSettings>({
-    sma: false,
-    ema: false,
-    bollinger: false,
-  });
+  // the studies on the chart, which live on the account so they follow the
+  // trader between devices, like the workspace
+  const [studies, setStudies] = useState<StudySettings[]>([]);
   const [studiesOpen, setStudiesOpen] = useState(false);
   const [timeframesOpen, setTimeframesOpen] = useState(false);
   const [seriesOpen, setSeriesOpen] = useState(false);
@@ -103,7 +97,20 @@ export function Terminal() {
     if (adoptedRef.current || !user) return;
     adoptedRef.current = true;
     adoptLayout(user.terminalLayout);
+
+    // the studies come with it, filtered through the registry: one from a newer
+    // version of the terminal is dropped rather than drawn wrong
+    const stored = Array.isArray(user.chartStudies) ? (user.chartStudies as StudySettings[]) : [];
+    setStudies(
+      stored.filter((study) => study && STUDY_BY_ID.has(study.id)).map((study) => normaliseSettings(study)),
+    );
   }, [user, adoptLayout]);
+
+  /** Studies live on the account, so every change is saved to it. */
+  const saveStudies = useCallback((next: StudySettings[]) => {
+    setStudies(next);
+    void api.patch('/me/studies', { studies: next }).catch(() => undefined);
+  }, []);
 
   const loadTrades = useCallback(async () => {
     setTradesLoaded(false);
@@ -226,7 +233,7 @@ export function Terminal() {
   const hotkeys = useHotkeys(hotkeyHandlers, ticketConfig.hotkeys);
 
   const changePct = asset?.changePct ?? 0;
-  const activeStudies = Object.values(indicators).filter(Boolean).length;
+  const activeStudies = studies.length;
 
   // Escape closes the market sheet and the studies menu
   useEffect(() => {
@@ -462,23 +469,7 @@ export function Terminal() {
                 Studies{activeStudies > 0 ? ` (${activeStudies})` : ''}
               </button>
               {studiesOpen && (
-                <div className="absolute right-0 z-30 mt-2 w-56 animate-fade-up rounded-xl border border-ink-500 bg-ink-800 p-1.5 shadow-2xl">
-                  {STUDIES.map((study) => (
-                    <label
-                      key={study.key}
-                      className="flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-xs transition hover:bg-ink-700"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={indicators[study.key]}
-                        onChange={(e) => setIndicators((c) => ({ ...c, [study.key]: e.target.checked }))}
-                        className="h-3.5 w-3.5 accent-[#3d7bff]"
-                      />
-                      <span className="flex-1 text-slate-200">{study.label}</span>
-                      <span className="h-1 w-5 rounded-full" style={{ background: study.color }} />
-                    </label>
-                  ))}
-                </div>
+                <StudiesPanel active={studies} onChange={saveStudies} onClose={() => setStudiesOpen(false)} />
               )}
             </div>
           </div>
@@ -576,7 +567,7 @@ export function Terminal() {
                       precision={paneAsset.precision}
                       trades={openTrades}
                       chartType={chartType}
-                      indicators={indicators}
+                      studies={studies}
                     />
                   </ErrorBoundary>
                 )}

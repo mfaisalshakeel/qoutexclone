@@ -39,12 +39,24 @@ export function formatTime(seconds: number, options: { withDate?: boolean } = {}
   return `${at.toLocaleDateString(undefined, { day: '2-digit', month: 'short' })} ${clock}`;
 }
 
-/** Grid lines and the two axes. */
-export function drawGrid(ctx: CanvasRenderingContext2D, frame: Frame): void {
+/**
+ * Grid lines and the two axes.
+ *
+ * A pane draws its own share: the price levels belong to whichever pane is
+ * being drawn, and the time axis belongs to the bottom one, because the chart
+ * has several panes but only ever one clock.
+ */
+export function drawGrid(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  options: { prices?: boolean; time?: boolean } = {},
+): void {
   const { plot, range, view, candles, precision } = frame;
-  ctx.clearRect(0, 0, plot.width + PRICE_AXIS_WIDTH, plot.height + TIME_AXIS_HEIGHT);
+  const withPrices = options.prices ?? true;
+  const withTime = options.time ?? true;
+
   ctx.fillStyle = THEME.background;
-  ctx.fillRect(0, 0, plot.width + PRICE_AXIS_WIDTH, plot.height + TIME_AXIS_HEIGHT);
+  ctx.fillRect(0, 0, plot.width + PRICE_AXIS_WIDTH, plot.height + (withTime ? TIME_AXIS_HEIGHT : 0));
 
   ctx.font = FONT;
   ctx.strokeStyle = THEME.grid;
@@ -54,7 +66,7 @@ export function drawGrid(ctx: CanvasRenderingContext2D, frame: Frame): void {
 
   // price levels, labelled in the right gutter
   ctx.textAlign = 'left';
-  for (const level of priceTicks(range, Math.max(3, Math.round(plot.height / 70)))) {
+  for (const level of withPrices ? priceTicks(range, Math.max(3, Math.round(plot.height / 70))) : []) {
     const y = Math.round(yOf(level, range, plot)) + 0.5;
     if (y < 0 || y > plot.height) continue;
     ctx.beginPath();
@@ -79,6 +91,7 @@ export function drawGrid(ctx: CanvasRenderingContext2D, frame: Frame): void {
     ctx.lineTo(x, plot.height);
     ctx.stroke();
 
+    if (!withTime) continue;
     const day = new Date(tick.time * 1000).toDateString();
     const label = formatTime(tick.time, { withDate: day !== previousDay });
     previousDay = day;
@@ -93,8 +106,10 @@ export function drawGrid(ctx: CanvasRenderingContext2D, frame: Frame): void {
   ctx.beginPath();
   ctx.moveTo(plot.width + 0.5, 0);
   ctx.lineTo(plot.width + 0.5, plot.height);
-  ctx.moveTo(0, plot.height + 0.5);
-  ctx.lineTo(plot.width + PRICE_AXIS_WIDTH, plot.height + 0.5);
+  if (withTime) {
+    ctx.moveTo(0, plot.height + 0.5);
+    ctx.lineTo(plot.width + PRICE_AXIS_WIDTH, plot.height + 0.5);
+  }
   ctx.stroke();
 }
 
@@ -483,4 +498,146 @@ export function drawTradeOverlays(
     ctx.fill();
     ctx.restore();
   }
+}
+
+/**
+ * A study in a pane of its own.
+ *
+ * The caller has already translated the context to the pane's top and sized the
+ * frame to its height, so everything here is drawn in the pane's own
+ * coordinates — the same code that draws the main chart's lines.
+ */
+export function drawStudyPane(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  study: { label: string; lines: StudyLine[]; histogram?: StudyHistogram; levels?: number[] },
+): void {
+  const { plot, range, view, candles } = frame;
+  const slice = visibleSlice(candles.length, view);
+
+  // the levels a reader measures against: 70/30, zero, 25
+  ctx.save();
+  ctx.strokeStyle = THEME.grid;
+  ctx.setLineDash([3, 3]);
+  ctx.lineWidth = 1;
+  ctx.font = FONT;
+  ctx.fillStyle = THEME.text;
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  for (const level of study.levels ?? []) {
+    const y = Math.round(yOf(level, range, plot)) + 0.5;
+    if (y < 0 || y > plot.height) continue;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(plot.width, y);
+    ctx.stroke();
+    ctx.fillText(String(level), plot.width + 6, y);
+  }
+  ctx.setLineDash([]);
+
+  // the pane says what it is, since several can be open at once
+  ctx.fillStyle = THEME.text;
+  ctx.textAlign = 'left';
+  ctx.fillText(study.label, 8, 10);
+  ctx.restore();
+
+  if (study.histogram) drawHistogram(ctx, frame, study.histogram, slice);
+  drawIndicators(ctx, { ...frame, lines: study.lines });
+}
+
+interface StudyLine {
+  points: (number | null)[];
+  color: string;
+  dashed?: boolean;
+  width?: number;
+  dots?: boolean;
+}
+
+interface StudyHistogram {
+  points: (number | null)[];
+  positive: string;
+  negative: string;
+}
+
+/** Bars from a baseline of zero — MACD, the awesome oscillator. */
+function drawHistogram(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  histogram: StudyHistogram,
+  slice: { from: number; to: number },
+): void {
+  const { view, range, plot } = frame;
+  const width = Math.max(1, barWidth(view, plot) * 0.6);
+  const zero = yOf(0, range, plot);
+  ctx.save();
+  for (let index = slice.from; index <= slice.to; index += 1) {
+    const value = histogram.points[index];
+    if (value == null) continue;
+    const x = xOf(index, view, plot);
+    const y = yOf(value, range, plot);
+    ctx.fillStyle = value >= 0 ? histogram.positive : histogram.negative;
+    ctx.fillRect(
+      Math.round(x - width / 2),
+      Math.min(y, zero),
+      Math.round(width),
+      Math.max(Math.abs(zero - y), 1),
+    );
+  }
+  ctx.restore();
+}
+
+/** A shaded area between two lines: a Bollinger band, an Ichimoku cloud. */
+export function drawCloud(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  cloud: { upper: (number | null)[]; lower: (number | null)[]; color: string },
+): void {
+  const { candles, view, range, plot } = frame;
+  const slice = visibleSlice(candles.length, view);
+  ctx.save();
+  ctx.fillStyle = cloud.color;
+  ctx.beginPath();
+  let started = false;
+  for (let index = slice.from; index <= slice.to; index += 1) {
+    const value = cloud.upper[index];
+    if (value == null) continue;
+    const x = xOf(index, view, plot);
+    const y = yOf(value, range, plot);
+    if (!started) {
+      ctx.moveTo(x, y);
+      started = true;
+    } else ctx.lineTo(x, y);
+  }
+  for (let index = slice.to; index >= slice.from; index -= 1) {
+    const value = cloud.lower[index];
+    if (value == null) continue;
+    ctx.lineTo(xOf(index, view, plot), yOf(value, range, plot));
+  }
+  if (started) {
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** Dots rather than a joined line: a parabolic stop, a fractal. */
+export function drawDots(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  points: (number | null)[],
+  color: string,
+): void {
+  const { candles, view, range, plot } = frame;
+  const slice = visibleSlice(candles.length, view);
+  const radius = Math.max(1, Math.min(barWidth(view, plot) * 0.18, 3));
+  ctx.save();
+  ctx.fillStyle = color;
+  for (let index = slice.from; index <= slice.to; index += 1) {
+    const value = points[index];
+    if (value == null) continue;
+    ctx.beginPath();
+    ctx.arc(xOf(index, view, plot), yOf(value, range, plot), radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }

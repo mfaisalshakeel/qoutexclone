@@ -11,6 +11,7 @@ import { referralSummary } from '../services/referrals.js';
 import { settings } from '../services/settings.js';
 import { leaderboard } from '../services/leaderboard.js';
 import { refillPractice } from '../services/practice.js';
+import { retryOnConflict } from '../lib/retry.js';
 import * as notifications from '../services/notifications.js';
 
 // mounted at /api/me — every route here needs a signed-in user
@@ -68,10 +69,12 @@ router.patch(
   '/leaderboard',
   wrap(async (req, res) => {
     const body = z.object({ optOut: z.boolean() }).parse(req.body);
-    const user = await prisma.user.update({
-      where: { id: req.user!.id },
-      data: { leaderboardOptOut: body.optOut },
-    });
+    const user = await retryOnConflict(() =>
+      prisma.user.update({
+        where: { id: req.user!.id },
+        data: { leaderboardOptOut: body.optOut },
+      }),
+    );
     // the board is cached, so the choice has to take effect now rather than at
     // the next refresh
     await leaderboard.refresh();
@@ -131,6 +134,39 @@ router.delete(
 );
 
 /**
+ * The studies on the trader's chart.
+ *
+ * Stored as given and validated by the reader, like the layout: the shape is
+ * the client's business, and a study from a newer version of the terminal must
+ * not be refused by an older server — it simply will not be drawn.
+ */
+router.patch(
+  '/studies',
+  wrap(async (req, res) => {
+    const body = z
+      .object({
+        studies: z
+          .array(
+            z.object({
+              id: z.string().min(1).max(40),
+              values: z.record(z.number()).optional(),
+              colors: z.record(z.string().max(32)).optional(),
+            }),
+          )
+          .max(20),
+      })
+      .parse(req.body);
+
+    // a preference write can lose a race with a settlement touching the same
+    // account row; asking again is harmless and beats a 500 over a colour
+    const user = await retryOnConflict(() =>
+      prisma.user.update({ where: { id: req.user!.id }, data: { chartStudies: body.studies } }),
+    );
+    res.json({ chartStudies: user.chartStudies });
+  }),
+);
+
+/**
  * The terminal workspace. Stored as given and validated by the client that
  * reads it: a layout is a preference, and a stale shape from an older version
  * must never stop the terminal rendering, so the reader is the one that
@@ -150,10 +186,9 @@ router.patch(
       })
       .parse(req.body);
 
-    const user = await prisma.user.update({
-      where: { id: req.user!.id },
-      data: { terminalLayout: body },
-    });
+    const user = await retryOnConflict(() =>
+      prisma.user.update({ where: { id: req.user!.id }, data: { terminalLayout: body } }),
+    );
     res.json({ terminalLayout: user.terminalLayout });
   }),
 );

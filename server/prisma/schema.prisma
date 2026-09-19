@@ -38,6 +38,8 @@ model User {
   /// Terminal workspace: chart layout and each pane's market and timeframe.
   /// Follows the trader across devices, unlike their per-browser conveniences.
   terminalLayout Json?
+  /// The studies on their chart, with the periods and colours they chose.
+  chartStudies   Json?
 
   /// When true, this trader never appears on the public leaderboard.
   leaderboardOptOut Boolean              @default(false)

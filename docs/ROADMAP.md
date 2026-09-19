@@ -62,7 +62,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **Series types.** Area/line, candles, bars and Heikin-Ashi, switchable without refetch.
 - [x] **Interaction.** Pan (drag, wheel, touch), zoom (wheel, pinch, buttons), autoscale, crosshair with OHLC tooltip, price and time axis labels in the user's timezone, "scroll to live" button, and kinetic scrolling on touch.
 - [x] **Trading overlays.** Strike lines per open trade with stake and live P/L tags, an expiry vertical line with countdown, the purchase cut-off zone for clock-time mode, and a current price line with a pulsing last-tick dot.
-- [ ] **Indicators.** SMA, EMA, WMA, Bollinger Bands, RSI, MACD, Stochastic, ATR, ADX, Parabolic SAR, Ichimoku, Alligator, Awesome Oscillator, CCI, Williams %R, Momentum, Donchian, Keltner, SuperTrend, ZigZag, Fractals. Sub-panes for oscillators. A settings modal per indicator (periods, colours), persisted per user. Pure functions have unit tests.
+- [x] **Indicators.** SMA, EMA, WMA, Bollinger Bands, RSI, MACD, Stochastic, ATR, ADX, Parabolic SAR, Ichimoku, Alligator, Awesome Oscillator, CCI, Williams %R, Momentum, Donchian, Keltner, SuperTrend, ZigZag, Fractals. Sub-panes for oscillators. A settings modal per indicator (periods, colours), persisted per user. Pure functions have unit tests.
 - [ ] **Drawing tools.** Trend line, horizontal line/ray, vertical line, rectangle, Fibonacci retracement, text note. Select, drag, delete, lock, and persisted per user per asset.
 - [ ] **Performance.** 60fps pan/zoom with 5,000 candles on a mid-range phone profile. Measure with a Playwright performance trace and record the numbers in PROGRESS.
 - [ ] **Visual tests.** Playwright screenshot tests for each series type, overlays and indicators.
