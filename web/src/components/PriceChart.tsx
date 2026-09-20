@@ -261,7 +261,7 @@ export function PriceChart({
 
   return (
     <div className="relative h-full w-full">
-      <div ref={containerRef} className="h-full w-full" />
+      <div ref={containerRef} data-testid="chart" className="h-full w-full" />
       {loading && <ChartSkeleton />}
 
       <DrawingTools

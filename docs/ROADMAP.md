@@ -65,7 +65,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **Indicators.** SMA, EMA, WMA, Bollinger Bands, RSI, MACD, Stochastic, ATR, ADX, Parabolic SAR, Ichimoku, Alligator, Awesome Oscillator, CCI, Williams %R, Momentum, Donchian, Keltner, SuperTrend, ZigZag, Fractals. Sub-panes for oscillators. A settings modal per indicator (periods, colours), persisted per user. Pure functions have unit tests.
 - [x] **Drawing tools.** Trend line, horizontal line/ray, vertical line, rectangle, Fibonacci retracement, text note. Select, drag, delete, lock, and persisted per user per asset.
 - [x] **Performance.** 60fps pan/zoom with 5,000 candles on a mid-range phone profile. Measure with a Playwright performance trace and record the numbers in PROGRESS.
-- [ ] **Visual tests.** Playwright screenshot tests for each series type, overlays and indicators.
+- [x] **Visual tests.** Playwright screenshot tests for each series type, overlays and indicators.
 
 ## Phase 4 — Accounts, status and engagement
 

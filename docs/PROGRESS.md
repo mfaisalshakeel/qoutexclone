@@ -4,6 +4,8 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-20**: Phase 3 — **Visual tests**. `e2e/visual.spec.ts` compares the rendered chart against committed baselines: one per series type, one for the trade overlays, one per indicator in the registry (21 of them) and one for stacked sub-panes — 28 snapshots. Pixels only compare when nothing underneath them moves, so the test pins the chart three ways: the clock is fixed to a constant instant (which also fixes the time axis, with the timezone forced to UTC), history is served from a seeded generator instead of the feed, and the socket's `candle`/`candles` pushes are dropped on the way in while quotes keep flowing, so the rest of the terminal behaves normally. Studies are set through `PATCH /me/studies` and read back on reload, which is the real path the settings panel uses. Verified by running the spec twice: the second run compares against the baselines and passes, so the render is reproducible rather than merely recorded. The chart container gained a `data-testid`; nothing else in the app changed.
+
 - **2026-09-20**: Phase 3 — **Performance**. `scripts/chart-perf.mjs` (`npm run perf:chart`) loads five thousand candles into the renderer, throttles the CPU, then pans and zooms while counting frames — and it measures the engine's own paint time separately from the browser's rasterisation, because in a headless browser the latter is done in software and would otherwise drown the number that matters.
 
   **The measurements** (Chromium, 5,000 candles, six long pans and twenty-four zoom steps):
