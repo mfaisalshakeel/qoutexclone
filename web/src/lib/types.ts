@@ -41,6 +41,13 @@ export interface User {
   boost?: { bonusPct: number; expiresAt: string } | null;
   /** Set while the trader has excluded themselves. Withdrawals stay open. */
   excludedUntil?: string | null;
+  /** A colour from the avatar palette. */
+  avatar?: string | null;
+  timezone?: string | null;
+  language?: string | null;
+  /** BCP-47 locale for number formatting. Amounts stay in USD. */
+  numberFormat?: string | null;
+  notifyPrefs?: Record<string, boolean>;
   createdAt: string;
 }
 

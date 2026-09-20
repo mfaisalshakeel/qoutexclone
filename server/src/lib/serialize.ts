@@ -10,6 +10,7 @@ import type {
 import { findNetwork } from './crypto-networks.js';
 import { levelFor, statusConfig } from '../services/status.js';
 import { levelProgress, xpConfig } from '../services/experience.js';
+import { readNotifyPrefs } from './profile.js';
 
 /** The level and the perks that come with it, for the header and the ticket. */
 function statusOf(totalDeposited: number) {
@@ -52,6 +53,11 @@ export function publicUser(user: User) {
     chartStudies: user.chartStudies,
     chartDrawings: user.chartDrawings,
     leaderboardOptOut: user.leaderboardOptOut,
+    avatar: user.avatar,
+    timezone: user.timezone,
+    language: user.language,
+    numberFormat: user.numberFormat,
+    notifyPrefs: readNotifyPrefs(user.notifyPrefs),
     emailVerifiedAt: user.emailVerifiedAt,
     twoFactorEnabled: user.twoFactorEnabledAt !== null,
     // the level itself, so the header and the ticket can show it without a

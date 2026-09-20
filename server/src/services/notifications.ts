@@ -3,6 +3,7 @@ import type { Deposit, Notification, Trade, Withdrawal } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { log } from '../lib/logger.js';
 import { settings } from './settings.js';
+import { wantsNotification } from '../lib/profile.js';
 import { tradeEvents } from './trading.js';
 import { depositEvents } from './deposits.js';
 import { withdrawalEvents } from './withdrawals.js';
@@ -51,6 +52,14 @@ export async function notify(userId: string, draft: NotificationDraft): Promise<
   if (!settings.get('notifications.enabled')) return null;
 
   try {
+    // a trader can turn a kind off. Money is not one of the kinds they can:
+    // a deposit credited or a withdrawal paid is their business either way
+    const reader = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { notifyPrefs: true },
+    });
+    if (!wantsNotification(reader?.notifyPrefs, draft.kind)) return null;
+
     // `skipDuplicates` rather than catching the unique violation: a retry is
     // ordinary traffic, and letting the database raise on it would fill the
     // logs with errors that are not faults

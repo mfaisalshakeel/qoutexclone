@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api, tokens } from '../lib/api';
+import { setDisplayPreferences } from '../lib/format';
 import { realtime } from '../lib/ws';
 import { useNotifications } from './notifications';
 import { useMarket } from './market';
@@ -51,6 +52,7 @@ export const useAuth = create<AuthState>((set, get) => ({
     }
     try {
       const { user } = await api.get<{ user: User }>('/me');
+      setDisplayPreferences(user);
       set({ user });
       realtime.connect();
     } catch {
@@ -112,6 +114,7 @@ export const useAuth = create<AuthState>((set, get) => ({
 
   async refreshUser() {
     const { user } = await api.get<{ user: User }>('/me');
+    setDisplayPreferences(user);
     set({ user });
   },
 
@@ -137,6 +140,7 @@ export const useAuth = create<AuthState>((set, get) => ({
 
   adoptSession(session) {
     tokens.set(session.accessToken, session.refreshToken);
+    setDisplayPreferences(session.user);
     set({ user: session.user });
     realtime.reauthenticate();
   },

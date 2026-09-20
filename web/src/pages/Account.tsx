@@ -7,28 +7,15 @@ import { toast } from '../store/toast';
 import { KycPanel } from '../components/KycPanel';
 import { ReferralPanel } from '../components/ReferralPanel';
 import { PasswordMeter } from '../components/PasswordMeter';
+import { ProfilePanel } from '../components/ProfilePanel';
+import { Avatar } from '../components/Avatar';
 
 export function Account() {
-  const { user, refreshUser, logout } = useAuth();
-  const [profile, setProfile] = useState({ name: user?.name ?? '', country: user?.country ?? '' });
+  const { user, logout } = useAuth();
   const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '' });
-  const [busy, setBusy] = useState<'profile' | 'password' | null>(null);
+  const [busy, setBusy] = useState<'password' | null>(null);
 
   if (!user) return null;
-
-  const saveProfile = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setBusy('profile');
-    try {
-      await api.patch('/me', { name: profile.name, country: profile.country || undefined });
-      await refreshUser();
-      toast.success('Profile updated');
-    } catch (err) {
-      toast.error('Could not save', err instanceof ApiError ? err.message : undefined);
-    } finally {
-      setBusy(null);
-    }
-  };
 
   const changePassword = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -48,9 +35,7 @@ export function Account() {
     <div className="mx-auto max-w-3xl space-y-4">
       <div className="card p-5">
         <div className="flex items-center gap-4">
-          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-ink-600 text-xl font-bold uppercase">
-            {user.name[0]}
-          </span>
+          <Avatar name={user.name} avatar={user.avatar} className="h-14 w-14 text-xl" />
           <div className="min-w-0">
             <p className="truncate text-lg font-bold">{user.name}</p>
             <p className="truncate text-sm text-slate-400">{user.email}</p>
@@ -127,38 +112,7 @@ export function Account() {
 
       <ReferralPanel />
 
-      <form onSubmit={saveProfile} className="card space-y-4 p-5">
-        <h2 className="text-sm font-semibold">Profile</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="label" htmlFor="name">
-              Full name
-            </label>
-            <input
-              id="name"
-              value={profile.name}
-              onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-              className="field"
-              minLength={2}
-              required
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="country">
-              Country
-            </label>
-            <input
-              id="country"
-              value={profile.country ?? ''}
-              onChange={(e) => setProfile({ ...profile, country: e.target.value })}
-              className="field"
-            />
-          </div>
-        </div>
-        <button type="submit" disabled={busy === 'profile'} className="btn-primary">
-          Save changes
-        </button>
-      </form>
+      <ProfilePanel />
 
       <form onSubmit={changePassword} className="card space-y-4 p-5">
         <h2 className="text-sm font-semibold">Password</h2>

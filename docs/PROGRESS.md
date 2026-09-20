@@ -4,6 +4,20 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-20**: Phase 4 — **Profile**. Avatar, country, timezone, language, number format and notification preferences, and Phase 4 is finished.
+
+  **The avatar is a monogram on a colour the trader picks**, not an upload. An upload needs somewhere to put a file and something to check what is in it, and that interface arrives with the KYC document store in Phase 8; a data URL in a database column is not the answer.
+
+  **Timezone is validated rather than listed.** The server asks the runtime to format a date in the zone it was given: a zone that formats is by definition one this platform knows, and the list changes with the runtime rather than with a constant somebody forgot to update.
+
+  **Number format changes the separators and nothing else.** Every balance is US dollars and the panel says so, because a control that looks like it converts your balance and does not is worse than no control. The preference is applied through module state in `lib/format.ts` rather than threaded through a hundred call sites, and the same state carries the timezone into every date the app prints.
+
+  **Notification preferences leave money alone.** A trader can turn off position results, tournaments, account news and support replies. Deposits and withdrawals always arrive: it is their money, and an unread preference is not consent to go quiet about it. Preferences merge on write, so turning one off never resets the others, and the checkboxes move as they are clicked and go back if the server refuses.
+
+  **Also fixed: a flake, properly.** Two integration suites had failed once each in a full run and passed alone. The cause was parallel test files sharing one database *and* the settings table in it — a suite proving a feature goes quiet when switched off was switching it off underneath another suite mid-assertion. `server/vitest.config.ts` now runs files one at a time; the suite takes 28 seconds either way, and two consecutive full runs are green.
+
+  **Verified.** 496 server tests (10 new unit tests), 221 web tests, build, lint. New `e2e/profile.spec.ts` (3 tests): preferences surviving a reload and reaching the money on the page, a rejected timezone, and a notification kind turned off without disturbing the rest.
+
 - **2026-09-20**: Phase 4 — **Responsible trading**. A daily loss limit, a daily deposit limit, a session reminder and a self-exclusion period, all enforced on the server.
 
   **A limit that only exists in the browser is a suggestion**, and the person it is meant to protect is exactly the person who will route around it. So every one of these is checked in the service that does the thing: `assertCanStake` before a position is worked out at all, `assertCanDeposit` before an invoice is written.
@@ -404,6 +418,8 @@ _Record product choices made without the owner here: what, why, where it's confi
 - **Outbox before transport**: every email is written to `EmailMessage` and then delivered, so a deployment with no SMTP configured still has a record an operator can read rather than a silently dropped verification link.
 - **Secrets in the settings registry**: a key marked `secret` can be written from the back office but never read back out of it, and never appears in the public settings. The SMTP password is the first; env still seeds its default, so a deployment can keep it out of the database entirely.
 - **Self-exclusion never blocks a withdrawal, or the sign-in that reaches one**: trading and deposits close, the account does not. Anything else holds someone's money hostage at the worst possible moment.
+- **Number format, not currency conversion**: the profile changes how amounts are written, never what they are worth. Showing a balance converted into another currency means the balance itself has to be denominated in it — a real change to the ledger and a business decision, not a display preference.
+- **Avatars are presets until there is an object store**: Phase 8 brings the upload interface for KYC documents; avatars will use the same one.
 - **Loosening a limit waits, tightening does not**: the moment someone wants their limit raised is the moment it is working. The session reminder is exempt — it is a nudge, not a guard.
 - **Bonus money lives on the one balance**: a bonus is credited normally and a `Bonus` row records the turnover that has to be met before it can leave. Two balances that must reconcile is the alternative, and it always drifts.
 - **Every bonus carries turnover, whatever its source**: promo codes, status bonuses and marketplace coupons all write a bonus row. A withdrawable-by-default bonus would be the exception nobody documented.

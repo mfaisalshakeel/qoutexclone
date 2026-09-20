@@ -76,7 +76,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **Marketplace.** Items bought with points or balance: payout boosters (+X% for N minutes), risk-free trades (stake refunded on loss, capped), deposit bonus coupons, and practice refills. There's an inventory, activation and expiry. Every effect goes through the ledger and is audited.
 - [x] **Bonuses.** A deposit bonus choice at deposit time, and a turnover requirement before a bonus becomes withdrawable (shown as a progress bar). Admin controls rules.
 - [x] **Responsible trading.** Daily loss limit, deposit limit, session reminder and self-exclusion period, enforced server-side.
-- [ ] **Profile.** Avatar, country, timezone, language, currency display, and notification preferences.
+- [x] **Profile.** Avatar, country, timezone, language, currency display, and notification preferences.
 
 ## Phase 5 — Payments
 

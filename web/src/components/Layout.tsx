@@ -8,6 +8,7 @@ import { BalanceSwitcher } from './BalanceSwitcher';
 import { ErrorBoundary } from './ErrorBoundary';
 import { SupportChat } from './SupportChat';
 import { SessionReminder } from './SessionReminder';
+import { Avatar } from './Avatar';
 import { NotificationCentre } from './NotificationCentre';
 import { Toasts } from './Toasts';
 import { ExclusionBanner, VerifyEmailBanner } from './VerifyEmailBanner';
@@ -102,9 +103,11 @@ export function Layout() {
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen((v) => !v)}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-600 text-sm font-semibold uppercase text-slate-200 transition hover:bg-ink-500"
+                aria-label="Account menu"
+                aria-expanded={menuOpen}
+                className="rounded-full transition hover:opacity-90"
               >
-                {user?.name?.[0] ?? '?'}
+                <Avatar name={user?.name} avatar={user?.avatar} />
               </button>
               {menuOpen && (
                 <div className="absolute right-0 z-30 mt-2 w-52 animate-fade-up rounded-xl border border-ink-500 bg-ink-800 p-1.5 shadow-2xl">

@@ -19,6 +19,15 @@ import { progressFor, statusConfig } from '../services/status.js';
 import { progressionFor } from '../services/progression.js';
 import * as marketplace from '../services/marketplace.js';
 import * as responsible from '../services/responsible.js';
+import {
+  AVATARS,
+  isKnownTimezone,
+  LANGUAGES,
+  NOTIFY_KINDS,
+  NUMBER_FORMATS,
+  profileSchema,
+  readNotifyPrefs,
+} from '../lib/profile.js';
 
 // mounted at /api/me — every route here needs a signed-in user
 const router = Router();
@@ -43,13 +52,35 @@ router.get(
 router.patch(
   '/',
   wrap(async (req, res) => {
-    const body = z
-      .object({ name: z.string().min(2).max(60).optional(), country: z.string().max(60).optional() })
-      .parse(req.body);
-    const user = await prisma.user.update({ where: { id: req.user!.id }, data: body });
+    const body = profileSchema.parse(req.body);
+    if (body.timezone && !isKnownTimezone(body.timezone)) {
+      throw badRequest('That timezone is not one this server knows', 'bad_timezone');
+    }
+    // stored merged, so turning one notification off does not reset the others
+    const notifyPrefs = body.notifyPrefs
+      ? {
+          ...readNotifyPrefs((await prisma.user.findUnique({ where: { id: req.user!.id } }))?.notifyPrefs),
+          ...body.notifyPrefs,
+        }
+      : undefined;
+
+    const user = await prisma.user.update({
+      where: { id: req.user!.id },
+      data: { ...body, ...(notifyPrefs ? { notifyPrefs } : {}) },
+    });
     res.json({ user: publicUser(user) });
   }),
 );
+
+/** The choices the profile page offers, so the list lives in one place. */
+router.get('/profile-options', (_req, res) => {
+  res.json({
+    avatars: AVATARS,
+    languages: LANGUAGES,
+    numberFormats: NUMBER_FORMATS,
+    notifyKinds: NOTIFY_KINDS,
+  });
+});
 
 /**
  * Today's top traders, by profit on settled live positions.

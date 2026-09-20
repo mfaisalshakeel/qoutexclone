@@ -34,6 +34,17 @@ model User {
 
   /// Experience earned by trading. Not money, and never spendable as money.
   xp                 Int       @default(0)
+  /// A preset avatar: a colour from the palette the profile page offers.
+  avatar             String?
+  /// IANA zone, for dates and times in the app. Null follows the device.
+  timezone           String?
+  /// UI language, for the i18n work in Phase 7. Null follows the browser.
+  language           String?
+  /// A BCP-47 locale for number formatting. Amounts stay in USD.
+  numberFormat       String?
+  /// Which notifications this trader wants, by kind.
+  notifyPrefs        Json?
+
   /// Loyalty points, which buy marketplace items. Not money either: they are
   /// never withdrawable and never touch a balance.
   points             Int       @default(0)

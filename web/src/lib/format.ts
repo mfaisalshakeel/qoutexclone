@@ -1,8 +1,24 @@
+/**
+ * How this trader writes numbers and reads dates.
+ *
+ * Module state rather than a hook, because formatting is used from a hundred
+ * places including plain functions, and threading a preference through all of
+ * them would be worse than this. Amounts are US dollars whatever is set here:
+ * the locale changes the separators, never the currency.
+ */
+let displayLocale = 'en-US';
+let displayZone: string | undefined;
+
+export function setDisplayPreferences(options: { numberFormat?: string | null; timezone?: string | null }) {
+  displayLocale = options.numberFormat || 'en-US';
+  displayZone = options.timezone || undefined;
+}
+
 /** Cents -> "$1,234.56". */
 export function money(cents: number, options: { sign?: boolean; currency?: boolean } = {}): string {
   const { sign = false, currency = true } = options;
   const value = cents / 100;
-  const text = Math.abs(value).toLocaleString('en-US', {
+  const text = Math.abs(value).toLocaleString(displayLocale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -51,11 +67,12 @@ export function untilShort(target: string | Date): string {
 }
 
 export function dateTime(value: string | Date): string {
-  return new Date(value).toLocaleString('en-GB', {
+  return new Date(value).toLocaleString(displayLocale === 'en-US' ? 'en-GB' : displayLocale, {
     day: '2-digit',
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: displayZone,
   });
 }
 
