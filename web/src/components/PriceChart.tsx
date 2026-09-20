@@ -90,6 +90,12 @@ export function PriceChart({
       onTool: setTool,
     });
     engineRef.current = engine;
+    // a handle for the performance harness in `scripts/`, which needs to load
+    // five thousand candles into the renderer without five thousand requests.
+    // Development only: it is compiled out of the production bundle.
+    if (import.meta.env.DEV) {
+      (window as Window & { __chart?: ChartEngine }).__chart = engine;
+    }
     return () => {
       engine.destroy();
       engineRef.current = null;

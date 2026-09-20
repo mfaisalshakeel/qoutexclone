@@ -455,6 +455,11 @@ export class ChartEngine {
     this.report();
   }
 
+  /** How many bars the renderer is holding; the performance harness reads it. */
+  get candleCount(): number {
+    return this.candles.length;
+  }
+
   get isLive(): boolean {
     return atLive(this.view, this.candles.length);
   }
@@ -576,8 +581,13 @@ export class ChartEngine {
       this.report();
     }
 
-    this.crosshair = local;
-    this.mark('cursor');
+    // a finger covers whatever a crosshair would show, so touch does not draw
+    // one — and skipping it saves a full-screen layer on every frame of a pan,
+    // which is most of a phone's frame budget
+    if (event.pointerType !== 'touch') {
+      this.crosshair = local;
+      this.mark('cursor');
+    }
   };
 
   private readonly onPointerUp = (event: PointerEvent) => {
@@ -752,13 +762,16 @@ export class ChartEngine {
 
   private paint(): void {
     if (this.destroyed || this.plot.width <= 0) return;
+    // the performance harness measures the engine's own work this way, apart
+    // from the rasterisation a headless browser does in software
+    const started = import.meta.env.DEV ? performance.now() : 0;
     const frame = this.frame();
     const boxes = this.panes();
     const main = boxes[0];
 
     if (this.dirty.grid) {
       const ctx = this.contexts.grid;
-      ctx.clearRect(0, 0, this.plot.width + PRICE_AXIS_WIDTH, this.plot.height + TIME_AXIS_HEIGHT);
+      // no clear: the grid paints its own background over every pixel it owns
       // the price keeps the grid and the time axis; a study pane gets a rule
       // above it and its own levels, drawn with the pane itself
       this.inPane(ctx, main, () => drawGrid(ctx, this.frameFor(frame, main), { time: boxes.length === 1 }));
@@ -846,6 +859,11 @@ export class ChartEngine {
         }),
       );
       this.dirty.cursor = false;
+    }
+
+    if (import.meta.env.DEV) {
+      const store = (window as Window & { __paints?: number[] }).__paints;
+      if (store) store.push(performance.now() - started);
     }
   }
 

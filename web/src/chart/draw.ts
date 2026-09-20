@@ -114,7 +114,22 @@ export function drawGrid(
   ctx.stroke();
 }
 
-/** Candles, or a line with a fill under it. */
+/**
+ * Candles, bars or a line.
+ *
+ * Two things keep this cheap when the chart is holding thousands of bars.
+ *
+ * First, when the bars are narrower than a pixel, several of them share a
+ * column: those are aggregated into one — first open, last close, highest high,
+ * lowest low — so the work is bounded by the width of the plot rather than by
+ * the size of the history. That is not an approximation of the picture; it is
+ * the same picture, drawn once per column instead of ten times.
+ *
+ * Second, everything of one colour is drawn in one go: two paths for the wicks
+ * and two batches of bodies, rather than a state change per candle. Setting
+ * `strokeStyle` five thousand times a frame is most of the cost of a naive
+ * renderer.
+ */
 export function drawSeries(ctx: CanvasRenderingContext2D, frame: Frame): void {
   const { candles, view, range, plot, type } = frame;
   ctx.clearRect(0, 0, plot.width + PRICE_AXIS_WIDTH, plot.height + TIME_AXIS_HEIGHT);
@@ -127,47 +142,78 @@ export function drawSeries(ctx: CanvasRenderingContext2D, frame: Frame): void {
   }
 
   const width = barWidth(view, plot);
-  // a body narrower than this is a line, and its border would eat it
   const body = Math.max(1, Math.min(width * 0.7, width - 1));
   const thin = body <= 2;
   const tick = Math.max(1, Math.min(width * 0.35, 6));
+  // several bars to a pixel: they are drawn as the column they occupy
+  const perColumn = Math.max(1, Math.ceil(1 / Math.max(width, 0.0001)));
 
-  for (let index = slice.from; index <= slice.to; index += 1) {
-    const candle = candles[index];
+  const upWicks = new Path2D();
+  const downWicks = new Path2D();
+  const upBodies: number[][] = [];
+  const downBodies: number[][] = [];
+
+  for (let index = slice.from; index <= slice.to; index += perColumn) {
+    let candle = candles[index];
     if (!candle) continue;
-    const x = xOf(index, view, plot);
+
+    if (perColumn > 1) {
+      // the column's own open, close, high and low
+      let high = candle.high;
+      let low = candle.low;
+      const open = candle.open;
+      let close = candle.close;
+      for (let step = 1; step < perColumn && index + step <= slice.to; step += 1) {
+        const next = candles[index + step];
+        if (!next) break;
+        if (next.high > high) high = next.high;
+        if (next.low < low) low = next.low;
+        close = next.close;
+      }
+      candle = { time: candle.time, open, high, low, close };
+    }
+
+    const x = xOf(index + (perColumn - 1) / 2, view, plot);
     const up = candle.close >= candle.open;
-    const colour = up ? THEME.up : THEME.down;
     const high = yOf(candle.high, range, plot);
     const low = yOf(candle.low, range, plot);
     const open = yOf(candle.open, range, plot);
     const close = yOf(candle.close, range, plot);
-
-    ctx.strokeStyle = colour;
-    ctx.fillStyle = colour;
-    ctx.lineWidth = 1;
     const spine = Math.round(x) + 0.5;
-    ctx.beginPath();
-    ctx.moveTo(spine, high);
-    ctx.lineTo(spine, low);
-    ctx.stroke();
 
-    // an OHLC bar wears its open and close as ticks rather than a body
+    const wicks = up ? upWicks : downWicks;
+    wicks.moveTo(spine, high);
+    wicks.lineTo(spine, low);
+
     if (type === 'bars') {
-      ctx.beginPath();
-      ctx.moveTo(spine - tick, Math.round(open) + 0.5);
-      ctx.lineTo(spine, Math.round(open) + 0.5);
-      ctx.moveTo(spine, Math.round(close) + 0.5);
-      ctx.lineTo(spine + tick, Math.round(close) + 0.5);
-      ctx.stroke();
+      wicks.moveTo(spine - tick, Math.round(open) + 0.5);
+      wicks.lineTo(spine, Math.round(open) + 0.5);
+      wicks.moveTo(spine, Math.round(close) + 0.5);
+      wicks.lineTo(spine + tick, Math.round(close) + 0.5);
       continue;
     }
 
     if (thin) continue;
     const top = Math.min(open, close);
     const height = Math.max(Math.abs(close - open), 1);
-    ctx.fillRect(Math.round(x - body / 2), Math.round(top), Math.round(body), Math.round(height));
+    (up ? upBodies : downBodies).push([
+      Math.round(x - body / 2),
+      Math.round(top),
+      Math.round(body),
+      Math.round(height),
+    ]);
   }
+
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = THEME.up;
+  ctx.stroke(upWicks);
+  ctx.strokeStyle = THEME.down;
+  ctx.stroke(downWicks);
+
+  ctx.fillStyle = THEME.up;
+  for (const [x, y, w, h] of upBodies) ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = THEME.down;
+  for (const [x, y, w, h] of downBodies) ctx.fillRect(x, y, w, h);
 }
 
 function drawLine(

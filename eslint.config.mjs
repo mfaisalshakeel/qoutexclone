@@ -51,6 +51,13 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.node } },
   },
 
+  // the performance harness is a node script that also evaluates code inside
+  // the page, so it legitimately mentions both worlds
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+  },
+
   {
     rules: {
       // `_`-prefixed arguments are deliberately unused (Express handlers, etc.)

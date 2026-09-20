@@ -4,6 +4,23 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-20**: Phase 3 — **Performance**. `scripts/chart-perf.mjs` (`npm run perf:chart`) loads five thousand candles into the renderer, throttles the CPU, then pans and zooms while counting frames — and it measures the engine's own paint time separately from the browser's rasterisation, because in a headless browser the latter is done in software and would otherwise drown the number that matters.
+
+  **The measurements** (Chromium, 5,000 candles, six long pans and twenty-four zoom steps):
+
+  | profile | CPU | median paint | 95th paint | median frame | dropped (>25ms) |
+  | --- | --- | --- | --- | --- | --- |
+  | desktop 1280×800 | none | 1.3ms | 1.7ms | 16.7ms (60fps) | 0% |
+  | desktop 1280×800 | 4× | 7.2ms | 9.5ms | 16.7ms | 10% |
+  | phone (Pixel 7, DPR 3) | 4× | 6.2ms | 8.0ms | 16.8ms | 48% |
+  | desktop 1280×800 | 6× | 11.0ms | 14.5ms | 16.7ms | 67% |
+
+  The engine's work stays inside the 16.7ms budget at a 4× throttle — a mid-range phone — with 7ms to spare on a desktop viewport. The dropped frames on the phone profile are rasterisation: **the same run with 300 candles instead of 5,000 drops exactly as many frames (48%) and paints in the same 6.1ms**, which is the proof that neither figure depends on the size of the history. Four full-screen canvas layers being rasterised in software, at a quarter speed, is what those stalls are; a real phone does that on its GPU.
+
+  **Two optimisations came out of the profiling.** Candles are now drawn in batches — two paths for the wicks and two runs of bodies, rather than a `strokeStyle` assignment per bar — and when bars are narrower than a pixel the ones sharing a column are aggregated into one (first open, last close, highest high, lowest low). That is not an approximation of the picture, it is the same picture drawn once per column, and it is why five thousand candles cost the same as three hundred. A touch pan also no longer paints a crosshair: a finger covers whatever it would show, and skipping it saves a full-screen layer on every frame of a drag.
+
+  The harness stubs the history endpoint for the duration, so a pan into the past does not put a round trip inside a frame-time measurement, and the chart exposes itself on `window.__chart` in development only — it is compiled out of the production bundle.
+
 - **2026-09-19**: Phase 3 — **Drawing tools**. Trend lines, horizontal lines and rays, vertical lines, rectangles, Fibonacci retracements and text notes, down the left edge of the chart — selectable, draggable by either end or as a whole, lockable, deletable, and kept with the market they were drawn on.
 
   **Every mark is stored as a time and a price, never as pixels.** That is the difference between a trend line and a scratch on the screen: pan, zoom, switch timeframe or come back tomorrow on another machine and it still runs between the same two bars. The marks live on the account keyed by symbol, so a level drawn on gold is not waiting on EUR/USD, and the set is capped at sixty marks across forty markets so one account cannot fill a column with them.
