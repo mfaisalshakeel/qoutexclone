@@ -40,6 +40,7 @@ export interface RealtimeEvents {
   'support:incoming': { message: SupportMessage; userId: string; subject: string };
   'support:ticket': { ticket: SupportTicket };
   'tournament:updated': { tournament: { id: string; name: string; status: string } };
+  'settings:changed': { key: string; value: unknown };
   status: { connected: boolean };
 }
 

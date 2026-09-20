@@ -15,6 +15,7 @@ import { payouts } from './services/payouts.js';
 import { sentiment } from './services/sentiment.js';
 import { leaderboard } from './services/leaderboard.js';
 import { startNotifications, stopNotifications } from './services/notifications.js';
+import { loadRevocations, pruneRevocations } from './services/revocations.js';
 import type { OtcParams } from './engine/otc.js';
 
 /** How long a shutdown may take before in-flight work is abandoned. */
@@ -25,6 +26,10 @@ async function main() {
   await settings.load();
   await marketHours.load();
   await payouts.load();
+  // a restart must not quietly un-revoke a device someone signed out
+  await loadRevocations();
+  const revocationSweeper = setInterval(pruneRevocations, 15 * 60 * 1000);
+  revocationSweeper.unref();
 
   const assets = await prisma.asset.findMany({ where: { enabled: true }, orderBy: { sortOrder: 'asc' } });
   if (assets.length === 0) {

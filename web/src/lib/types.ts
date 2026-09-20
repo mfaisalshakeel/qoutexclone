@@ -20,6 +20,9 @@ export interface User {
   chartStudies?: unknown;
   /** The marks they have drawn, keyed by market symbol. */
   chartDrawings?: unknown;
+  /** Null until they follow the link we emailed them. */
+  emailVerifiedAt?: string | null;
+  twoFactorEnabled?: boolean;
   createdAt: string;
 }
 

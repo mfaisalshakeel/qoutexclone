@@ -50,4 +50,6 @@ export const log = {
   ws: logger.child({ component: 'ws' }),
   http: logger.child({ component: 'http' }),
   notify: logger.child({ component: 'notify' }),
+  auth: logger.child({ component: 'auth' }),
+  mail: logger.child({ component: 'mail' }),
 };

@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../store/auth';
 import { AuthShell } from './Login';
+import { PasswordMeter } from '../components/PasswordMeter';
 
 export function Register() {
   const { register, loading } = useAuth();
@@ -81,7 +82,11 @@ export function Register() {
             onChange={update('password')}
             className="field"
             placeholder="At least 8 characters"
+            aria-describedby="password-strength"
           />
+          <div id="password-strength">
+            <PasswordMeter password={form.password} email={form.email} name={form.name} />
+          </div>
         </div>
         <div>
           <label className="label" htmlFor="country">
@@ -107,7 +112,11 @@ export function Register() {
             placeholder="A1B2C3D4"
           />
         </div>
-        {error && <p className="rounded-lg bg-down-soft px-3 py-2 text-sm text-down">{error}</p>}
+        {error && (
+          <p role="alert" className="rounded-lg bg-down-soft px-3 py-2 text-sm text-down">
+            {error}
+          </p>
+        )}
         <button type="submit" disabled={loading} className="btn-primary w-full">
           {loading ? 'Creating account…' : 'Create account'}
         </button>

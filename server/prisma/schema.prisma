@@ -32,6 +32,15 @@ model User {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
+  /// Set the first time the address is confirmed from a link we emailed.
+  emailVerifiedAt    DateTime?
+  /// The confirmed TOTP secret. Null means no second factor on the account.
+  twoFactorSecret    String?
+  /// An enrolment nobody has proved yet, so a half-finished setup cannot lock
+  /// anyone out. Promoted to `twoFactorSecret` once a code checks out.
+  twoFactorPending   String?
+  twoFactorEnabledAt DateTime?
+
   trades        Trade[]
   pendingTrades PendingTrade[]
 
@@ -60,6 +69,10 @@ model User {
   commissionsEarned ReferralCommission[] @relation("CommissionReferrer")
   commissionsGiven  ReferralCommission[] @relation("CommissionReferred")
   notifications     Notification[]
+  verificationTokens EmailVerificationToken[]
+  backupCodes        BackupCode[]
+  loginEvents        LoginEvent[]
+  emails             EmailMessage[]
 
   @@index([referredById])
 }
@@ -86,15 +99,88 @@ model Notification {
   @@index([userId, readAt])
 }
 
+/// One row per signed-in device: the trader sees this list and can end any of
+/// them. What it was opened from is kept so the row means something to them.
 model RefreshToken {
+  id          String    @id @default(cuid())
+  userId      String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  ip          String?
+  userAgent   String?   @db.Text
+  device      String?
+  fingerprint String?
+  lastUsedAt  DateTime?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model EmailVerificationToken {
   id        String    @id @default(cuid())
   userId    String
   tokenHash String    @unique
   expiresAt DateTime
-  revokedAt DateTime?
+  usedAt    DateTime?
   createdAt DateTime  @default(now())
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+}
+
+/// Single-use codes for when the authenticator app is gone. Hashed like a
+/// password, because that is exactly what they are.
+model BackupCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+}
+
+/// Login history, successes and failures alike: a run of failures from an
+/// address the account has never used is the thing worth seeing.
+model LoginEvent {
+  id          String   @id @default(cuid())
+  userId      String?
+  email       String
+  outcome     String
+  ip          String?
+  userAgent   String?  @db.Text
+  device      String
+  fingerprint String
+  newDevice   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([userId, fingerprint, outcome])
+  @@index([createdAt])
+}
+
+/// The outbox. Written before delivery is attempted, so what the platform
+/// sent is on the record whether or not a transport is configured.
+model EmailMessage {
+  id        String    @id @default(cuid())
+  userId    String?
+  to        String
+  subject   String
+  template  String
+  html      String    @db.Text
+  text      String    @db.Text
+  transport String
+  status    String    @default("QUEUED") // QUEUED | SENT | FAILED
+  error     String?   @db.Text
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
   @@index([userId])
 }
 

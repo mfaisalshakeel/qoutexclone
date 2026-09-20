@@ -5,12 +5,23 @@ import { useNotifications } from './notifications';
 import { useMarket } from './market';
 import type { AccountType, User } from '../lib/types';
 
+interface Session {
+  user: User;
+  accessToken: string;
+  refreshToken: string;
+}
+
+export type LoginResult = { done: true } | { done: false; challengeToken: string };
+
 interface AuthState {
   user: User | null;
   ready: boolean;
   loading: boolean;
   bootstrap: () => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
+  /** Resolves to a challenge when the account has a second factor enrolled. */
+  login: (email: string, password: string) => Promise<LoginResult>;
+  /** Finishes a sign-in that stopped for a code. */
+  submitSecondFactor: (challengeToken: string, code: string) => Promise<void>;
   register: (input: {
     email: string;
     password: string;
@@ -24,6 +35,8 @@ interface AuthState {
   resetDemo: () => Promise<void>;
   patchBalance: (accountType: AccountType, balance: number) => void;
   setUser: (user: User) => void;
+  /** Stores the tokens a sign-in returned and brings the socket with it. */
+  adoptSession: (session: Session) => void;
 }
 
 export const useAuth = create<AuthState>((set, get) => ({
@@ -50,13 +63,23 @@ export const useAuth = create<AuthState>((set, get) => ({
   async login(email, password) {
     set({ loading: true });
     try {
-      const data = await api.post<{ user: User; accessToken: string; refreshToken: string }>('/auth/login', {
-        email,
-        password,
-      });
-      tokens.set(data.accessToken, data.refreshToken);
-      set({ user: data.user });
-      realtime.reauthenticate();
+      const data = await api.post<Session | { twoFactorRequired: true; challengeToken: string }>(
+        '/auth/login',
+        { email, password },
+      );
+      if ('twoFactorRequired' in data) return { done: false, challengeToken: data.challengeToken };
+      get().adoptSession(data);
+      return { done: true };
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  async submitSecondFactor(challengeToken, code) {
+    set({ loading: true });
+    try {
+      const data = await api.post<Session>('/auth/2fa', { challengeToken, code });
+      get().adoptSession(data);
     } finally {
       set({ loading: false });
     }
@@ -65,13 +88,8 @@ export const useAuth = create<AuthState>((set, get) => ({
   async register(input) {
     set({ loading: true });
     try {
-      const data = await api.post<{ user: User; accessToken: string; refreshToken: string }>(
-        '/auth/register',
-        input,
-      );
-      tokens.set(data.accessToken, data.refreshToken);
-      set({ user: data.user });
-      realtime.reauthenticate();
+      const data = await api.post<Session>('/auth/register', input);
+      get().adoptSession(data);
     } finally {
       set({ loading: false });
     }
@@ -115,6 +133,12 @@ export const useAuth = create<AuthState>((set, get) => ({
 
   setUser(user) {
     set({ user });
+  },
+
+  adoptSession(session) {
+    tokens.set(session.accessToken, session.refreshToken);
+    set({ user: session.user });
+    realtime.reauthenticate();
   },
 }));
 

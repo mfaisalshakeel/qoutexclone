@@ -9,6 +9,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { SupportChat } from './SupportChat';
 import { NotificationCentre } from './NotificationCentre';
 import { Toasts } from './Toasts';
+import { VerifyEmailBanner } from './VerifyEmailBanner';
 import { IconChart, IconCup, IconHistory, IconLogo, IconShield, IconUser, IconWallet } from './Icons';
 
 const NAV = [
@@ -109,6 +110,13 @@ export function Layout() {
                       {item.label}
                     </Link>
                   ))}
+                  <Link
+                    to="/account/security"
+                    onClick={() => setMenuOpen(false)}
+                    className="block rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-ink-700"
+                  >
+                    Security
+                  </Link>
                   {/* the terminal's dock covers the floating launcher on a
                       phone, so support is reachable from here too */}
                   <button
@@ -137,6 +145,10 @@ export function Layout() {
           </div>
         </div>
       </header>
+
+      {/* the terminal is full-bleed and sized to the viewport, so a strip
+          above it would push the chart off the screen: it nags everywhere else */}
+      {!isTerminal && <VerifyEmailBanner />}
 
       <main
         className={`app-main flex-1 ${isTerminal ? '' : 'mx-auto w-full max-w-[1400px] px-3 py-5 sm:px-4'}`}

@@ -69,7 +69,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 
 ## Phase 4 — Accounts, status and engagement
 
-- [ ] **Registration and security.** Email verification, password strength meter, 2FA (TOTP with backup codes), session/device list with "log out other devices", login history with IP/device, and new-device email alerts.
+- [x] **Registration and security.** Email verification, password strength meter, 2FA (TOTP with backup codes), session/device list with "log out other devices", login history with IP/device, and new-device email alerts.
 - [ ] **Email.** A nodemailer SMTP transport configured from admin settings, with templated HTML emails (verify, reset, deposit credited, withdrawal status, KYC result, tournament result) and a preview in admin. Ends `EXPOSE_RESET_TOKEN`.
 - [ ] **Status levels.** Standard, Pro and VIP (names, thresholds and perks configurable). They're reached by lifetime deposits, and perks include a payout bonus (default +2% / +4%), withdrawal priority, and deposit bonus %. Status is shown in the header, and there's a progress page.
 - [ ] **Experience and achievements.** XP from trading volume and activity, levels, and achievement badges with progress. Configurable, and can be turned off.

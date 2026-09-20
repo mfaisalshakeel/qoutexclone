@@ -30,6 +30,8 @@ export function publicUser(user: User) {
     chartStudies: user.chartStudies,
     chartDrawings: user.chartDrawings,
     leaderboardOptOut: user.leaderboardOptOut,
+    emailVerifiedAt: user.emailVerifiedAt,
+    twoFactorEnabled: user.twoFactorEnabledAt !== null,
     createdAt: user.createdAt,
   };
 }

@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ApiError, api } from '../lib/api';
 import { dateTime, money } from '../lib/format';
 import { useAuth } from '../store/auth';
 import { toast } from '../store/toast';
 import { KycPanel } from '../components/KycPanel';
 import { ReferralPanel } from '../components/ReferralPanel';
+import { PasswordMeter } from '../components/PasswordMeter';
 
 export function Account() {
   const { user, refreshUser, logout } = useAuth();
@@ -67,6 +69,22 @@ export function Account() {
           <Stat label="Withdrawn" value={money(user.totalWithdrawn)} />
         </div>
       </div>
+
+      <Link
+        to="/account/security"
+        className="card flex items-center gap-3 p-5 transition hover:border-ink-400"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">Security</p>
+          <p className="truncate text-xs text-slate-400">
+            {user.emailVerifiedAt ? 'Email confirmed' : 'Email not confirmed'} ·{' '}
+            {user.twoFactorEnabled ? 'two-factor on' : 'two-factor off'} · devices and sign-in history
+          </p>
+        </div>
+        <span aria-hidden="true" className="text-slate-500">
+          ›
+        </span>
+      </Link>
 
       <KycPanel />
 
@@ -134,6 +152,7 @@ export function Account() {
               className="field"
               required
             />
+            <PasswordMeter password={passwords.newPassword} email={user.email} name={user.name} />
           </div>
         </div>
         <button type="submit" disabled={busy === 'password'} className="btn-primary">

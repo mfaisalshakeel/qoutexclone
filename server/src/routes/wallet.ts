@@ -5,7 +5,7 @@ import { badRequest, forbidden, notFound, wrap } from '../lib/errors.js';
 import { NETWORKS } from '../lib/crypto-networks.js';
 import { publicDeposit, publicTransaction, publicWithdrawal } from '../lib/serialize.js';
 import { prisma } from '../lib/prisma.js';
-import { requireActiveUser, requireAuth } from '../middleware/auth.js';
+import { requireActiveUser, requireAuth, requireVerifiedEmail } from '../middleware/auth.js';
 import { getBalances, listTransactions } from '../services/wallet.js';
 import { createDeposit, getDepositAddress, listDeposits, markSeen } from '../services/deposits.js';
 import {
@@ -89,6 +89,7 @@ router.get(
 router.post(
   '/deposits',
   requireActiveUser,
+  requireVerifiedEmail,
   wrap(async (req, res) => {
     const body = z
       .object({
@@ -167,6 +168,7 @@ router.get(
 router.post(
   '/withdrawals',
   requireActiveUser,
+  requireVerifiedEmail,
   wrap(async (req, res) => {
     const body = z
       .object({

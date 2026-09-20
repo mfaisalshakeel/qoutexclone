@@ -26,17 +26,22 @@ import { Landing } from './pages/Landing';
 import { ForgotPassword, ResetPassword } from './pages/ForgotPassword';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+import { Security } from './pages/Security';
+import { VerifyEmail } from './pages/VerifyEmail';
 import { Terminal } from './pages/Terminal';
 import { Tournaments } from './pages/Tournaments';
 import { Wallet } from './pages/Wallet';
 import { useAuth } from './store/auth';
+import { useSettings } from './store/settings';
 
 export default function App() {
   const { bootstrap, user, ready } = useAuth();
+  const loadSettings = useSettings((state) => state.load);
 
   useEffect(() => {
     void bootstrap();
-  }, [bootstrap]);
+    void loadSettings();
+  }, [bootstrap, loadSettings]);
 
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -47,6 +52,8 @@ export default function App() {
           <Route path="/register" element={ready && user ? <Navigate to="/trade" replace /> : <Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          {/* the token is the proof, so this one works signed in or out */}
+          <Route path="/verify-email" element={<VerifyEmail />} />
 
           <Route
             element={
@@ -61,6 +68,7 @@ export default function App() {
             <Route path="/history" element={<History />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/account" element={<Account />} />
+            <Route path="/account/security" element={<Security />} />
           </Route>
 
           {/* back office has its own shell: sidebar navigation, no trading chrome */}

@@ -5,11 +5,29 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { badRequest, unauthorized, wrap } from '../lib/errors.js';
-import { createRefreshToken, hashRefreshToken, signAccessToken } from '../lib/jwt.js';
+import {
+  createRefreshToken,
+  hashRefreshToken,
+  signAccessToken,
+  signChallengeToken,
+  verifyChallengeToken,
+} from '../lib/jwt.js';
 import { publicUser } from '../lib/serialize.js';
 import { requireAuth } from '../middleware/auth.js';
 import { settings } from '../services/settings.js';
 import { completeReset, requestReset } from '../services/password-reset.js';
+import {
+  alertNewDevice,
+  assertPasswordAllowed,
+  confirmEmail,
+  contextOf,
+  issueEmailVerification,
+  recordLogin,
+  revokeOtherSessions,
+  verifySecondFactor,
+  type RequestContext,
+} from '../services/security.js';
+import { describeDevice, fingerprint } from '../lib/device.js';
 
 const router = Router();
 
@@ -39,13 +57,34 @@ function makeReferralCode(): string {
   return crypto.randomBytes(4).toString('hex').toUpperCase();
 }
 
-async function issueSession(userId: string, role: string, email: string) {
+/**
+ * Opens a session, remembering the device it belongs to.
+ *
+ * What is stored is a label and a coarse network, not a tracking identifier:
+ * enough for the trader to recognise a row in their device list and for the
+ * platform to tell a familiar sign-in from a new one.
+ */
+async function issueSession(
+  userId: string,
+  role: string,
+  email: string,
+  context?: RequestContext,
+) {
   const refresh = createRefreshToken();
-  await prisma.refreshToken.create({
-    data: { userId, tokenHash: refresh.hash, expiresAt: refresh.expiresAt },
+  const row = await prisma.refreshToken.create({
+    data: {
+      userId,
+      tokenHash: refresh.hash,
+      expiresAt: refresh.expiresAt,
+      ip: context?.ip,
+      userAgent: context?.userAgent,
+      device: describeDevice(context?.userAgent),
+      fingerprint: context ? fingerprint({ userAgent: context.userAgent, ip: context.ip }) : null,
+      lastUsedAt: new Date(),
+    },
   });
   return {
-    accessToken: signAccessToken({ sub: userId, role, email }),
+    accessToken: signAccessToken({ sub: userId, role, email, sid: row.id }),
     refreshToken: refresh.token,
   };
 }
@@ -56,6 +95,7 @@ router.post(
   wrap(async (req, res) => {
     const body = registerSchema.parse(req.body);
     const email = body.email.toLowerCase().trim();
+    assertPasswordAllowed(body.password, { email, name: body.name });
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) throw badRequest('An account with this email already exists', 'email_taken');
@@ -75,8 +115,19 @@ router.post(
       },
     });
 
-    const session = await issueSession(user.id, user.role, user.email);
-    res.status(201).json({ user: publicUser(user), ...session });
+    const context = contextOf(req);
+    await recordLogin({ email, outcome: 'SUCCESS', context, userId: user.id });
+    // the link goes out even when verification is optional: an unconfirmed
+    // address is the one thing an account cannot be recovered through
+    const verification =
+      settings.get('security.emailVerification') === 'off' ? null : await issueEmailVerification(user);
+
+    const session = await issueSession(user.id, user.role, user.email, context);
+    res.status(201).json({
+      user: publicUser(user),
+      ...session,
+      ...(verification?.token ? { verificationToken: verification.token } : {}),
+    });
   }),
 );
 
@@ -85,16 +136,86 @@ router.post(
   authLimiter,
   wrap(async (req, res) => {
     const body = loginSchema.parse(req.body);
-    const user = await prisma.user.findUnique({ where: { email: body.email.toLowerCase().trim() } });
-    // Same error for unknown email and wrong password — no account enumeration.
-    if (!user) throw unauthorized('Invalid email or password');
-    const ok = await bcrypt.compare(body.password, user.passwordHash);
-    if (!ok) throw unauthorized('Invalid email or password');
-    if (user.status !== 'ACTIVE') throw unauthorized('This account is suspended');
+    const email = body.email.toLowerCase().trim();
+    const context = contextOf(req);
+    const user = await prisma.user.findUnique({ where: { email } });
 
-    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
-    const session = await issueSession(user.id, user.role, user.email);
-    res.json({ user: publicUser(user), ...session });
+    // Same error for unknown email and wrong password — no account enumeration.
+    if (!user) {
+      await recordLogin({ email, outcome: 'UNKNOWN_EMAIL', context });
+      throw unauthorized('Invalid email or password');
+    }
+    if (!(await bcrypt.compare(body.password, user.passwordHash))) {
+      await recordLogin({ email, outcome: 'BAD_PASSWORD', context, userId: user.id });
+      throw unauthorized('Invalid email or password');
+    }
+    if (user.status !== 'ACTIVE') {
+      await recordLogin({ email, outcome: 'SUSPENDED', context, userId: user.id });
+      throw unauthorized('This account is suspended');
+    }
+
+    // the password alone is not a session when a second factor is enrolled
+    if (user.twoFactorEnabledAt) {
+      await recordLogin({ email, outcome: 'TWO_FACTOR_REQUIRED', context, userId: user.id });
+      res.json({ twoFactorRequired: true, challengeToken: signChallengeToken(user.id) });
+      return;
+    }
+
+    res.json(await completeLogin(user, context));
+  }),
+);
+
+/**
+ * Everything that happens once both factors are satisfied: the history line,
+ * the alert if this device is new, and the session itself.
+ */
+async function completeLogin(user: Awaited<ReturnType<typeof prisma.user.findUnique>>, context: RequestContext) {
+  if (!user) throw unauthorized('Invalid email or password');
+  const { newDevice } = await recordLogin({
+    email: user.email,
+    outcome: 'SUCCESS',
+    context,
+    userId: user.id,
+  });
+  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+  // a failed alert must never cost someone their sign-in
+  if (newDevice) await alertNewDevice(user, context).catch(() => undefined);
+
+  const session = await issueSession(user.id, user.role, user.email, context);
+  return { user: publicUser(user), ...session, newDevice };
+}
+
+router.post(
+  '/2fa',
+  authLimiter,
+  wrap(async (req, res) => {
+    const body = z
+      .object({ challengeToken: z.string().min(10), code: z.string().min(6).max(20) })
+      .parse(req.body);
+
+    const userId = verifyChallengeToken(body.challengeToken);
+    if (!userId) throw unauthorized('That sign-in has expired. Enter your password again.');
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.status !== 'ACTIVE') throw unauthorized('This account is suspended');
+
+    const context = contextOf(req);
+    if (!(await verifySecondFactor(user, body.code))) {
+      await recordLogin({ email: user.email, outcome: 'TWO_FACTOR_FAILED', context, userId: user.id });
+      throw unauthorized('That code is not right');
+    }
+
+    res.json(await completeLogin(user, context));
+  }),
+);
+
+router.post(
+  '/verify-email',
+  authLimiter,
+  wrap(async (req, res) => {
+    const body = z.object({ token: z.string().min(10) }).parse(req.body);
+    const user = await confirmEmail(body.token);
+    res.json({ ok: true, user: publicUser(user) });
   }),
 );
 
@@ -109,9 +230,11 @@ router.post(
     if (!stored || stored.revokedAt || stored.expiresAt < new Date()) throw unauthorized('Session expired');
     if (stored.user.status !== 'ACTIVE') throw unauthorized('This account is suspended');
 
-    // Rotate: the presented token is burned as the new one is issued.
+    // Rotate: the presented token is burned as the new one is issued. The new
+    // row inherits the device, so rotating does not fill the list with strangers.
+    const context = contextOf(req);
     await prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
-    const session = await issueSession(stored.user.id, stored.user.role, stored.user.email);
+    const session = await issueSession(stored.user.id, stored.user.role, stored.user.email, context);
     res.json({ user: publicUser(stored.user), ...session });
   }),
 );
@@ -161,11 +284,9 @@ router.post(
   '/logout-all',
   requireAuth,
   wrap(async (req, res) => {
-    await prisma.refreshToken.updateMany({
-      where: { userId: req.user!.id, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-    res.json({ ok: true });
+    // null keeps nothing back: this one signs out everywhere, here included
+    const count = await revokeOtherSessions(req.user!.id, null);
+    res.json({ ok: true, count });
   }),
 );
 

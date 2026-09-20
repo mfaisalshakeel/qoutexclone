@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { env } from '../env.js';
 import { badRequest } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
+import { revokeSessions } from './revocations.js';
 
 export interface ResetRequest {
   /** present only while EXPOSE_RESET_TOKEN is on (no mailer configured) */
@@ -49,6 +50,12 @@ export async function completeReset(token: string, newPassword: string): Promise
   }
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
+  // the access tokens already issued have to stop working too, not just the
+  // refresh tokens they would have been rotated from
+  const open = await prisma.refreshToken.findMany({
+    where: { userId: stored.userId, revokedAt: null },
+    select: { id: true },
+  });
   await prisma.$transaction([
     prisma.passwordResetToken.update({ where: { id: stored.id }, data: { usedAt: new Date() } }),
     prisma.user.update({ where: { id: stored.userId }, data: { passwordHash } }),
@@ -57,4 +64,5 @@ export async function completeReset(token: string, newPassword: string): Promise
       data: { revokedAt: new Date() },
     }),
   ]);
+  revokeSessions(open.map((row) => row.id));
 }

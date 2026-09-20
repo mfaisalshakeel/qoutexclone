@@ -14,6 +14,7 @@ import { leaderboard } from '../services/leaderboard.js';
 import { refillPractice } from '../services/practice.js';
 import { retryOnConflict } from '../lib/retry.js';
 import * as notifications from '../services/notifications.js';
+import * as security from '../services/security.js';
 
 // mounted at /api/me — every route here needs a signed-in user
 const router = Router();
@@ -262,15 +263,14 @@ router.post(
     if (!(await bcrypt.compare(body.currentPassword, user.passwordHash))) {
       throw badRequest('Current password is incorrect', 'bad_password');
     }
+    security.assertPasswordAllowed(body.newPassword, { email: user.email, name: user.name });
     await prisma.user.update({
       where: { id: user.id },
       data: { passwordHash: await bcrypt.hash(body.newPassword, 10) },
     });
-    // Password changed: every other session is invalidated.
-    await prisma.refreshToken.updateMany({
-      where: { userId: user.id, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
+    // Password changed: every other session is invalidated, including the
+    // access tokens already in someone else's hands.
+    await security.revokeOtherSessions(user.id, req.user!.sessionId ?? null);
     res.json({ ok: true });
   }),
 );
@@ -364,6 +364,126 @@ router.get(
   '/referrals',
   wrap(async (req, res) => {
     res.json(await referralSummary(req.user!.id));
+  }),
+);
+
+/* -------------------------------------------------------------------------- */
+/* Account security                                                           */
+/* -------------------------------------------------------------------------- */
+
+/** Sends the confirmation link again, for an address that is still unproven. */
+router.post(
+  '/verify-email/resend',
+  wrap(async (req, res) => {
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+    if (!user) throw notFound('Account not found');
+    const issued = await security.issueEmailVerification(user);
+    res.json({ ok: true, expiresAt: issued.expiresAt, ...(issued.token ? { token: issued.token } : {}) });
+  }),
+);
+
+/** Every device currently signed in, newest first, with this one marked. */
+router.get(
+  '/sessions',
+  wrap(async (req, res) => {
+    res.json({ sessions: await security.listSessions(req.user!.id, req.user!.sessionId ?? null) });
+  }),
+);
+
+router.delete(
+  '/sessions/:id',
+  wrap(async (req, res) => {
+    const id = z.string().min(1).max(40).parse(req.params.id);
+    if (id === req.user!.sessionId) {
+      throw badRequest('That is the device you are using. Sign out instead.', 'current_session');
+    }
+    // ownership is enforced inside the service, so no id can reach another account
+    await security.revokeSession(req.user!.id, id);
+    res.json({ ok: true });
+  }),
+);
+
+router.post(
+  '/sessions/revoke-others',
+  wrap(async (req, res) => {
+    const count = await security.revokeOtherSessions(req.user!.id, req.user!.sessionId ?? null);
+    res.json({ ok: true, count });
+  }),
+);
+
+router.get(
+  '/login-history',
+  wrap(async (req, res) => {
+    const limit = z.coerce.number().int().min(1).max(100).default(25).parse(req.query.limit ?? 25);
+    res.json({ events: await security.listLoginHistory(req.user!.id, limit) });
+  }),
+);
+
+/** Starts enrolment: a secret to scan and a code to prove it arrived. */
+router.post(
+  '/2fa/setup',
+  wrap(async (req, res) => {
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+    if (!user) throw notFound('Account not found');
+    res.json(await security.startTwoFactor(user));
+  }),
+);
+
+router.post(
+  '/2fa/enable',
+  wrap(async (req, res) => {
+    const body = z.object({ code: z.string().min(6).max(10) }).parse(req.body);
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+    if (!user) throw notFound('Account not found');
+    // shown once and never again: the response is the only copy the trader gets
+    res.json({ backupCodes: await security.enableTwoFactor(user, body.code) });
+  }),
+);
+
+router.post(
+  '/2fa/disable',
+  wrap(async (req, res) => {
+    const body = z
+      .object({ password: z.string().min(1), code: z.string().min(6).max(20) })
+      .parse(req.body);
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+    if (!user) throw notFound('Account not found');
+    await security.disableTwoFactor(user, body.password, body.code);
+    res.json({ ok: true });
+  }),
+);
+
+router.post(
+  '/2fa/backup-codes',
+  wrap(async (req, res) => {
+    const body = z.object({ code: z.string().min(6).max(20) }).parse(req.body);
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+    if (!user) throw notFound('Account not found');
+    res.json({ backupCodes: await security.regenerateBackupCodes(user, body.code) });
+  }),
+);
+
+/** What the security page needs in one request. */
+router.get(
+  '/security',
+  wrap(async (req, res) => {
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+    if (!user) throw notFound('Account not found');
+    const [sessions, events, backupCodesLeft] = await Promise.all([
+      security.listSessions(user.id, req.user!.sessionId ?? null),
+      security.listLoginHistory(user.id, 25),
+      user.twoFactorEnabledAt ? security.backupCodesLeft(user.id) : Promise.resolve(0),
+    ]);
+    res.json({
+      emailVerifiedAt: user.emailVerifiedAt,
+      emailVerification: settings.get('security.emailVerification'),
+      twoFactorEnabled: user.twoFactorEnabledAt !== null,
+      twoFactorEnabledAt: user.twoFactorEnabledAt,
+      backupCodesLeft,
+      sessions,
+      events,
+      passwordPolicy: security.passwordPolicy(),
+    });
   }),
 );
 
