@@ -1,6 +1,7 @@
+import nodemailer, { type Transporter } from 'nodemailer';
 import { prisma } from '../lib/prisma.js';
 import { log } from '../lib/logger.js';
-import { settings } from './settings.js';
+import { settings, settingsEvents } from './settings.js';
 
 /**
  * Outgoing mail.
@@ -33,7 +34,10 @@ export interface MailTransport {
 const logTransport: MailTransport = {
   name: 'log',
   async send(email) {
-    log.mail.info({ to: email.to, subject: email.subject, template: email.template }, 'email not delivered: no transport configured');
+    log.mail.info(
+      { to: email.to, subject: email.subject, template: email.template },
+      'email not delivered: no transport configured',
+    );
   },
 };
 
@@ -45,6 +49,108 @@ export function setMailTransport(next: MailTransport | null): void {
 
 export function mailTransportName(): string {
   return transport.name;
+}
+
+/* -------------------------------------------------------------------------- */
+/* SMTP                                                                       */
+/* -------------------------------------------------------------------------- */
+
+export interface SmtpConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  password: string;
+  fromName: string;
+  fromAddress: string;
+  replyTo: string;
+}
+
+export function smtpConfig(): SmtpConfig {
+  return {
+    enabled: settings.get('email.enabled'),
+    host: settings.get('email.host'),
+    port: settings.get('email.port'),
+    secure: settings.get('email.secure'),
+    user: settings.get('email.user'),
+    password: settings.get('email.password'),
+    fromName: settings.get('email.fromName'),
+    fromAddress: settings.get('email.fromAddress'),
+    replyTo: settings.get('email.replyTo'),
+  };
+}
+
+/** Whether the settings describe a server worth trying to connect to. */
+export function smtpReady(config = smtpConfig()): boolean {
+  return config.enabled && config.host.length > 0 && config.fromAddress.length > 0;
+}
+
+function buildSmtpTransport(config: SmtpConfig): MailTransport {
+  let transporter: Transporter | null = null;
+  const from = config.fromName ? `"${config.fromName}" <${config.fromAddress}>` : config.fromAddress;
+
+  return {
+    name: 'smtp',
+    async send(email) {
+      // built lazily and kept: nodemailer pools the connection itself
+      transporter ??= nodemailer.createTransport({
+        host: config.host,
+        port: config.port,
+        secure: config.secure,
+        ...(config.user ? { auth: { user: config.user, pass: config.password } } : {}),
+      });
+      await transporter.sendMail({
+        from,
+        to: email.to,
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
+        ...(config.replyTo ? { replyTo: config.replyTo } : {}),
+      });
+    },
+  };
+}
+
+/**
+ * Installs the transport the current settings describe.
+ *
+ * Called at boot and again whenever an email setting changes, so an operator
+ * who fixes a password in the back office does not have to restart anything.
+ */
+export function configureMailer(): void {
+  const config = smtpConfig();
+  if (!smtpReady(config)) {
+    setMailTransport(null);
+    log.mail.info('no SMTP server configured: messages are recorded but not delivered');
+    return;
+  }
+  setMailTransport(buildSmtpTransport(config));
+  log.mail.info({ host: config.host, port: config.port }, 'SMTP transport ready');
+}
+
+/** Rebuilds the transport when any email setting is edited. */
+export function watchMailSettings(): void {
+  settingsEvents.on('changed', ({ key }: { key: string }) => {
+    if (key.startsWith('email.')) configureMailer();
+  });
+}
+
+/**
+ * Sends a message through whatever is configured and reports what happened.
+ *
+ * Used by the back office's "send test email" button, which is the only way
+ * an operator can tell a working SMTP configuration from a plausible one.
+ */
+export async function sendTestEmail(to: string): Promise<SentEmail> {
+  const site = settings.get('general.siteName');
+  return sendMail({
+    to,
+    subject: `${site} test email`,
+    template: 'test',
+    text: `This is a test message from ${site}. If it reached you, the SMTP settings are right.`,
+    html: `<p>This is a test message from <strong>${site}</strong>. If it reached you, the SMTP settings are right.</p>`,
+  });
 }
 
 export interface SentEmail {

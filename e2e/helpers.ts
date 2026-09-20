@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, request as apiRequest, type Page } from '@playwright/test';
 
 export const ADMIN = { email: 'admin@quotexclone.dev', password: 'Admin123!' };
 export const TRADER = { email: 'trader@quotexclone.dev', password: 'Trader123!' };
@@ -143,4 +143,51 @@ export async function expectNoHorizontalScroll(page: Page): Promise<void> {
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow, 'page scrolls horizontally').toBeLessThanOrEqual(1);
+}
+
+/**
+ * Reads a message out of the platform's outbox.
+ *
+ * Since the Email task, nothing hands a confirmation or reset link back
+ * through the API — the link only exists inside the email. The back office
+ * keeps every message it composed, so that is where a test looks for one,
+ * the same place an operator would.
+ */
+export async function latestEmail(
+  base: string,
+  options: { to: string; template?: string },
+): Promise<{ subject: string; html: string; text: string }> {
+  const context = await apiRequest.newContext({ baseURL: base });
+  try {
+    const signIn = await context.post('/api/auth/login', { data: ADMIN });
+    const { accessToken } = (await signIn.json()) as { accessToken: string };
+    const headers = { authorization: `Bearer ${accessToken}` };
+
+    const params = new URLSearchParams({ search: options.to, pageSize: '5' });
+    if (options.template) params.set('template', options.template);
+
+    // the send is fire-and-forget on some paths, so give it a moment to land
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const list = await context.get(`/api/admin/emails?${params}`, { headers });
+      const { emails } = (await list.json()) as { emails: { id: string }[] };
+      if (emails.length > 0) {
+        const one = await context.get(`/api/admin/emails/${emails[0].id}`, { headers });
+        const { email } = (await one.json()) as {
+          email: { subject: string; html: string; text: string };
+        };
+        return email;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    throw new Error(`no ${options.template ?? 'email'} in the outbox for ${options.to}`);
+  } finally {
+    await context.dispose();
+  }
+}
+
+/** The first link in a message body, which is what every template's button is. */
+export function linkIn(email: { text: string }, path: string): string {
+  const match = new RegExp(`https?://[^\\s]*${path}[^\\s]*`).exec(email.text);
+  if (!match) throw new Error(`no ${path} link in the email`);
+  return match[0];
 }

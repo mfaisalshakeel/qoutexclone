@@ -45,7 +45,14 @@ test.describe('responsive shell', () => {
     }
 
     await login(page, ADMIN);
-    for (const path of ['/admin', '/admin/users', '/admin/support', '/admin/tournaments', '/admin/payouts']) {
+    for (const path of [
+      '/admin',
+      '/admin/users',
+      '/admin/support',
+      '/admin/tournaments',
+      '/admin/email',
+      '/admin/payouts',
+    ]) {
       await page.goto(path);
       await page.waitForLoadState('networkidle');
       await expectNoHorizontalScroll(page);

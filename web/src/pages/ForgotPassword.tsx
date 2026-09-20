@@ -2,13 +2,11 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, api } from '../lib/api';
 import { AuthShell } from './Login';
-import { CopyButton } from '../components/Copy';
+import { PasswordMeter } from '../components/PasswordMeter';
 
 interface ForgotResponse {
   ok: boolean;
   message: string;
-  /** dev-only: returned while no mailer is configured on the server */
-  token?: string;
 }
 
 export function ForgotPassword() {
@@ -31,25 +29,12 @@ export function ForgotPassword() {
   };
 
   if (sent) {
-    const link = sent.token ? `${location.origin}/reset-password?token=${sent.token}` : null;
     return (
       <AuthShell title="Check your email" subtitle={sent.message}>
-        {link && (
-          <div className="space-y-3">
-            <p className="rounded-lg bg-accent-soft px-3 py-2 text-xs text-accent">
-              Email delivery is not configured on this deployment, so the reset link is shown here.
-            </p>
-            <div className="flex items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded-lg bg-ink-700 px-3 py-2.5 font-mono text-[11px]">
-                {link}
-              </code>
-              <CopyButton value={link} />
-            </div>
-            <Link to={`/reset-password?token=${sent.token}`} className="btn-primary w-full">
-              Continue to reset
-            </Link>
-          </div>
-        )}
+        <p className="text-sm text-slate-400">
+          The link works once and expires shortly. If it has not arrived in a few minutes, look in your spam
+          folder before asking for another.
+        </p>
         <p className="mt-5 text-center text-sm text-slate-400">
           <Link to="/login" className="font-semibold text-accent hover:underline">
             Back to sign in
@@ -149,6 +134,7 @@ export function ResetPassword() {
             className="field"
             placeholder="At least 8 characters"
           />
+          <PasswordMeter password={password} />
         </div>
         <div>
           <label className="label" htmlFor="confirm">

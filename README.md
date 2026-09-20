@@ -169,7 +169,7 @@ All server settings live in `server/.env` (see `server/.env.example`).
 | `KYC_WITHDRAWAL_THRESHOLD_USD` | `0` | Verify only above this amount (`0` = always) |
 | `REFERRAL_COMMISSION_PCT` | `5` | Share of a referred trader's deposits paid to the referrer |
 | `MAX_OPEN_TRADES` | `25` | Open positions allowed per trader |
-| `EXPOSE_RESET_TOKEN` | `true` | Returns reset tokens in the API response until a mailer is wired up |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` | empty / `587` | Seed the email settings an operator edits in **Admin → Email**. Empty means nothing is delivered, but every message is still recorded in the outbox |
 
 ### Market data
 
@@ -193,9 +193,11 @@ Three things stand between this and real funds, and each is deliberately isolate
    addresses and fake transaction hashes. Implement the `CustodyProvider` interface
    against your custody service (node, exchange sub-account, Fireblocks/BitGo/Tatum…)
    and export it as `custody`. Nothing else in the codebase talks to a wallet.
-3. **`EXPOSE_RESET_TOKEN=true`** hands password reset tokens back through the API
-   because no mailer is configured. Set it to `false` and send the link from
-   `requestReset()` in `server/src/services/password-reset.ts`.
+3. **Email is off until SMTP is configured.** Confirmation and reset links are
+   composed and recorded in the outbox (**Admin → Email**) but nothing is
+   delivered, so read them there while developing. Point `SMTP_*` at a server —
+   or fill the email settings in the back office — and the same messages go out
+   for real; the "send test email" button proves it.
 
 Identity documents are never stored in this database: a KYC submission keeps the
 declared details plus a `documentRef` pointing at whatever document store you use.

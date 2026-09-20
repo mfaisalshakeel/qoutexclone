@@ -133,7 +133,9 @@ async function chartOf(page: Page): Promise<Locator> {
   const chart = page.getByTestId('chart');
   await expect(chart).toBeVisible();
   await expect
-    .poll(() => page.evaluate(() => (window as unknown as { __chart?: { candleCount: number } }).__chart?.candleCount))
+    .poll(() =>
+      page.evaluate(() => (window as unknown as { __chart?: { candleCount: number } }).__chart?.candleCount),
+    )
     .toBe(BARS);
   return chart;
 }

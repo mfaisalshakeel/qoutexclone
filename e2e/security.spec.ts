@@ -1,30 +1,14 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { totp } from '../server/src/lib/totp.js';
-import { failOnPageErrors, login, newCredentials, register } from './helpers';
+import { failOnPageErrors, latestEmail, linkIn, login, newCredentials, register } from './helpers';
 
 /**
  * Registration and account security, through the browser.
  *
- * The confirmation link is read out of the register response, which carries it
- * only while `EXPOSE_RESET_TOKEN` is on — the same development affordance the
- * password reset flow uses, and the one the mailer task removes.
+ * The confirmation link never comes back through the API — it only exists
+ * inside the email — so the tests read it out of the outbox, which is where an
+ * operator would look for it too.
  */
-
-/** Registers and hands back both the credentials and the confirmation token. */
-async function registerWithToken(page: Page) {
-  const credentials = newCredentials('sec');
-  const response = page.waitForResponse(
-    (res) => res.url().includes('/api/auth/register') && res.request().method() === 'POST',
-  );
-  await page.goto('/register');
-  await page.fill('#name', credentials.name);
-  await page.fill('#email', credentials.email);
-  await page.fill('#password', credentials.password);
-  await page.click('button[type=submit]');
-  const body = (await (await response).json()) as { verificationToken?: string };
-  await page.waitForURL('**/trade');
-  return { credentials, token: body.verificationToken };
-}
 
 test.describe('registration', () => {
   test('rates the password while it is typed and refuses a weak one', async ({ page }) => {
@@ -58,23 +42,53 @@ test.describe('registration', () => {
     expect(errors).toEqual([]);
   });
 
-  test('confirms the address from the emailed link', async ({ page }) => {
-    const { token } = await registerWithToken(page);
-    expect(token, 'the register response carries the link in development').toBeTruthy();
+  test('confirms the address from the emailed link', async ({ page, baseURL }) => {
+    const credentials = newCredentials('sec');
+    await register(page, credentials);
 
     // the banner nags until the address is proven
     await page.goto('/account');
     await expect(page.getByText('Confirm your email address so your account can be recovered')).toBeVisible();
 
-    await page.goto(`/verify-email?token=${encodeURIComponent(token!)}`);
+    const email = await latestEmail(baseURL!, { to: credentials.email, template: 'verify-email' });
+    expect(email.subject).toContain('Confirm your');
+    const link = linkIn(email, '/verify-email');
+
+    await page.goto(link);
     await expect(page.getByRole('heading', { name: 'Address confirmed' })).toBeVisible();
 
     await page.goto('/account/security');
     await expect(page.getByText('confirmed', { exact: true })).toBeVisible();
 
     // and the same link cannot be used twice
-    await page.goto(`/verify-email?token=${encodeURIComponent(token!)}`);
+    await page.goto(link);
     await expect(page.getByRole('heading', { name: 'That link did not work' })).toBeVisible();
+  });
+
+  test('emails a password reset link that works once', async ({ page, baseURL }) => {
+    const credentials = newCredentials('reset');
+    await register(page, credentials);
+    await page.goto('/account');
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await page.waitForURL('**/login');
+
+    await page.goto('/forgot-password');
+    await page.fill('#email', credentials.email);
+    await page.click('button[type=submit]');
+    await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
+    // the token is not in the response, and must not be
+    await expect(page.locator('body')).not.toContainText('reset-password?token=');
+
+    const email = await latestEmail(baseURL!, { to: credentials.email, template: 'reset-password' });
+    await page.goto(linkIn(email, '/reset-password'));
+
+    await page.fill('#password', 'Lantern9Harbour');
+    await page.fill('#confirm', 'Lantern9Harbour');
+    await page.click('button[type=submit]');
+    await page.waitForURL('**/login');
+
+    await login(page, { email: credentials.email, password: 'Lantern9Harbour' });
+    await expect(page).toHaveURL(/\/trade/);
   });
 });
 

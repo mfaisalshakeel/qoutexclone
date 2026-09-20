@@ -378,7 +378,7 @@ router.post(
     const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
     if (!user) throw notFound('Account not found');
     const issued = await security.issueEmailVerification(user);
-    res.json({ ok: true, expiresAt: issued.expiresAt, ...(issued.token ? { token: issued.token } : {}) });
+    res.json({ ok: true, expiresAt: issued.expiresAt });
   }),
 );
 
@@ -414,7 +414,13 @@ router.post(
 router.get(
   '/login-history',
   wrap(async (req, res) => {
-    const limit = z.coerce.number().int().min(1).max(100).default(25).parse(req.query.limit ?? 25);
+    const limit = z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .default(25)
+      .parse(req.query.limit ?? 25);
     res.json({ events: await security.listLoginHistory(req.user!.id, limit) });
   }),
 );
@@ -443,9 +449,7 @@ router.post(
 router.post(
   '/2fa/disable',
   wrap(async (req, res) => {
-    const body = z
-      .object({ password: z.string().min(1), code: z.string().min(6).max(20) })
-      .parse(req.body);
+    const body = z.object({ password: z.string().min(1), code: z.string().min(6).max(20) }).parse(req.body);
     const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
     if (!user) throw notFound('Account not found');
     await security.disableTwoFactor(user, body.password, body.code);

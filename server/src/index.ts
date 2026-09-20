@@ -16,6 +16,8 @@ import { sentiment } from './services/sentiment.js';
 import { leaderboard } from './services/leaderboard.js';
 import { startNotifications, stopNotifications } from './services/notifications.js';
 import { loadRevocations, pruneRevocations } from './services/revocations.js';
+import { configureMailer, watchMailSettings } from './services/mailer.js';
+import { attachEmailNotifications } from './services/email-notifications.js';
 import type { OtcParams } from './engine/otc.js';
 
 /** How long a shutdown may take before in-flight work is abandoned. */
@@ -28,6 +30,9 @@ async function main() {
   await payouts.load();
   // a restart must not quietly un-revoke a device someone signed out
   await loadRevocations();
+  // email last of the configuration: it reads the settings that just loaded
+  configureMailer();
+  watchMailSettings();
   const revocationSweeper = setInterval(pruneRevocations, 15 * 60 * 1000);
   revocationSweeper.unref();
 
@@ -81,6 +86,7 @@ async function main() {
   sentiment.start();
   leaderboard.start();
   startNotifications();
+  attachEmailNotifications();
   // a closed exchange stops printing prices; OTC and crypto never close
   const sessionByAsset = new Map(assets.map((asset) => [asset.symbol, asset.scheduleId]));
   marketFeed.setSessionResolver((symbol) => marketHours.stateFor(sessionByAsset.get(symbol) ?? null).isOpen);

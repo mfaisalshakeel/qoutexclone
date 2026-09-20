@@ -69,7 +69,9 @@ suite('account security', () => {
     const confirmed = await security.confirmEmail(decodeURIComponent(raw!));
     expect(confirmed.emailVerifiedAt).not.toBeNull();
     await expect(security.confirmEmail(decodeURIComponent(raw!))).rejects.toThrow();
-    expect((await prisma.emailVerificationToken.findUniqueOrThrow({ where: { id: token.id } })).usedAt).not.toBeNull();
+    expect(
+      (await prisma.emailVerificationToken.findUniqueOrThrow({ where: { id: token.id } })).usedAt,
+    ).not.toBeNull();
   });
 
   it('burns an outstanding link when a new one is asked for', async () => {
@@ -159,7 +161,12 @@ suite('account security', () => {
     const user = await makeUser();
     const context = { ip: '81.2.69.142', userAgent: 'Mozilla/5.0 (Windows NT 10.0) Chrome/131.0.0.0' };
 
-    const first = await security.recordLogin({ email: user.email, outcome: 'SUCCESS', context, userId: user.id });
+    const first = await security.recordLogin({
+      email: user.email,
+      outcome: 'SUCCESS',
+      context,
+      userId: user.id,
+    });
     expect(first.newDevice).toBe(true);
 
     // same browser, different address inside the same network
@@ -190,7 +197,7 @@ suite('account security', () => {
     expect(events[0].newDevice).toBe(false);
   });
 
-  it('lists only this account\'s sessions, and revokes another account\'s never', async () => {
+  it("lists only this account's sessions, and revokes another account's never", async () => {
     const mine = await makeUser();
     const theirs = await makeUser();
     const session = async (userId: string) =>
@@ -218,6 +225,6 @@ suite('account security', () => {
 
     const count = await security.revokeOtherSessions(mine.id, a.id);
     expect(count).toBe(1);
-    expect((await security.listSessions(mine.id, a.id))).toHaveLength(1);
+    expect(await security.listSessions(mine.id, a.id)).toHaveLength(1);
   });
 });

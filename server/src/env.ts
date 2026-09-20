@@ -72,7 +72,13 @@ const schema = z.object({
   REFERRAL_COMMISSION_PCT: decimal(5, 0, 100),
 
   RESET_TOKEN_MINUTES: int(30, 1, 1440),
-  EXPOSE_RESET_TOKEN: bool(true),
+
+  // SMTP bootstrap: these seed the defaults of the email settings, which an
+  // operator edits in the back office afterwards
+  SMTP_HOST: z.string().optional().default(''),
+  SMTP_PORT: int(587, 1, 65535),
+  SMTP_USER: z.string().optional().default(''),
+  SMTP_PASSWORD: z.string().optional().default(''),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   LOG_PRETTY: bool(process.env.NODE_ENV !== 'production'),
@@ -106,9 +112,6 @@ function load() {
     }
     if (raw.JWT_SECRET === raw.JWT_REFRESH_SECRET) {
       fatal.push('JWT_SECRET and JWT_REFRESH_SECRET must differ');
-    }
-    if (raw.EXPOSE_RESET_TOKEN) {
-      fatal.push('EXPOSE_RESET_TOKEN must be false in production — send reset links by email instead');
     }
   }
 
@@ -161,7 +164,13 @@ function load() {
     referralCommissionPct: raw.REFERRAL_COMMISSION_PCT,
 
     resetTokenMinutes: raw.RESET_TOKEN_MINUTES,
-    exposeResetToken: raw.EXPOSE_RESET_TOKEN,
+
+    smtp: {
+      host: raw.SMTP_HOST,
+      port: raw.SMTP_PORT,
+      user: raw.SMTP_USER,
+      password: raw.SMTP_PASSWORD,
+    },
 
     logLevel: raw.LOG_LEVEL,
     logPretty: raw.LOG_PRETTY,

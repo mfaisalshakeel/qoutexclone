@@ -1,7 +1,11 @@
+import { EventEmitter } from 'node:events';
 import type { KycSubmission } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { conflict, notFound } from '../lib/errors.js';
 import { settings } from './settings.js';
+
+/** Reviewed submissions, so the notification and email sides can listen. */
+export const kycEvents = new EventEmitter();
 
 export const DOCUMENT_TYPES = ['PASSPORT', 'ID_CARD', 'DRIVING_LICENCE'] as const;
 
@@ -67,6 +71,7 @@ export async function reviewKyc(
       data: { kycStatus: decision, kycReviewedAt: new Date() },
     }),
   ]);
+  kycEvents.emit('reviewed', updated);
   return updated;
 }
 

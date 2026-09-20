@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  base32Decode,
-  base32Encode,
-  generateSecret,
-  hotp,
-  otpauthUri,
-  totp,
-  verifyTotp,
-} from './totp.js';
+import { base32Decode, base32Encode, generateSecret, hotp, otpauthUri, totp, verifyTotp } from './totp.js';
 
 /** RFC 4226 and RFC 6238 both use this ASCII secret for their vectors. */
 const RFC_SECRET = base32Encode(Buffer.from('12345678901234567890', 'ascii'));

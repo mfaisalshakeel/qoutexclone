@@ -5,10 +5,10 @@ import { env } from '../env.js';
 import { badRequest } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import { revokeSessions } from './revocations.js';
+import { sendMail, siteUrl } from './mailer.js';
+import { resetPassword } from './email-templates.js';
 
 export interface ResetRequest {
-  /** present only while EXPOSE_RESET_TOKEN is on (no mailer configured) */
-  token?: string;
   expiresAt: Date;
 }
 
@@ -34,12 +34,19 @@ export async function requestReset(email: string): Promise<ResetRequest | null> 
   const expiresAt = new Date(Date.now() + env.resetTokenMinutes * 60 * 1000);
   await prisma.passwordResetToken.create({ data: { userId: user.id, tokenHash: hash(token), expiresAt } });
 
-  if (!env.exposeResetToken) {
-    // hand off to your mailer here; the token never leaves the server otherwise
-    logger.info({ component: 'auth', userId: user.id }, 'password reset token issued (no mailer configured)');
-    return { expiresAt };
-  }
-  return { token, expiresAt };
+  // the token leaves the server exactly once, inside the email
+  await sendMail({
+    ...resetPassword({
+      name: user.name,
+      url: siteUrl(`/reset-password?token=${encodeURIComponent(token)}`),
+      minutes: env.resetTokenMinutes,
+    }),
+    to: user.email,
+    template: 'reset-password',
+    userId: user.id,
+  });
+  logger.info({ component: 'auth', userId: user.id }, 'password reset link sent');
+  return { expiresAt };
 }
 
 /** Consumes the token, sets the new password and signs every session out. */

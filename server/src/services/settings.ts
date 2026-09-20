@@ -15,6 +15,11 @@ interface Definition<T extends z.ZodTypeAny> {
   help?: string;
   /** Safe to expose to unauthenticated clients and broadcast over ws. */
   public?: boolean;
+  /**
+   * A credential. It can be written from the back office but is never read
+   * back out of it — the admin screen shows whether one is set, not what it is.
+   */
+  secret?: boolean;
 }
 
 const define = <T extends z.ZodTypeAny>(definition: Definition<T>) => definition;
@@ -358,6 +363,67 @@ export const SETTINGS = {
     label: 'Sign-in and sign-up attempts per 15 minutes',
     help: 'Per IP address. Keep this low in production.',
   }),
+  'email.enabled': define({
+    schema: z.boolean(),
+    default: false,
+    group: 'general',
+    label: 'Send email',
+    help: 'Off keeps every message in the outbox without delivering it.',
+  }),
+  'email.host': define({
+    schema: z.string().max(200),
+    default: env.smtp.host,
+    group: 'general',
+    label: 'SMTP host',
+  }),
+  'email.port': define({
+    schema: z.number().int().min(1).max(65535),
+    default: env.smtp.port,
+    group: 'general',
+    label: 'SMTP port',
+    help: '465 for implicit TLS, 587 for STARTTLS.',
+  }),
+  'email.secure': define({
+    schema: z.boolean(),
+    default: env.smtp.port === 465,
+    group: 'general',
+    label: 'Implicit TLS',
+    help: 'On for port 465. Off lets the connection upgrade with STARTTLS.',
+  }),
+  'email.user': define({
+    schema: z.string().max(200),
+    default: env.smtp.user,
+    group: 'general',
+    label: 'SMTP username',
+  }),
+  'email.password': define({
+    schema: z.string().max(400),
+    default: env.smtp.password,
+    group: 'general',
+    label: 'SMTP password',
+    help: 'Stored on the server and never shown again once saved.',
+    secret: true,
+  }),
+  'email.fromName': define({
+    schema: z.string().max(80),
+    default: 'Quantex',
+    group: 'general',
+    label: 'From name',
+  }),
+  'email.fromAddress': define({
+    schema: z.string().max(200),
+    default: 'no-reply@quantex.example',
+    group: 'general',
+    label: 'From address',
+  }),
+  'email.replyTo': define({
+    schema: z.string().max(200),
+    default: '',
+    group: 'general',
+    label: 'Reply-to address',
+    help: 'Left empty, replies go to the from address.',
+  }),
+
   'security.emailVerification': define({
     schema: z.enum(['off', 'optional', 'required']),
     default: 'optional',
@@ -496,8 +562,11 @@ class SettingsService {
       label: definition.label,
       help: definition.help,
       public: Boolean(definition.public),
-      value: this.get(key as SettingKey),
-      default: definition.default,
+      secret: Boolean(definition.secret),
+      // a credential is never handed back, not even to an administrator
+      value: definition.secret ? '' : this.get(key as SettingKey),
+      hasValue: definition.secret ? Boolean(this.get(key as SettingKey)) : undefined,
+      default: definition.secret ? '' : definition.default,
       overridden: this.cache.has(key as SettingKey),
       type: describeType(definition.default),
     }));
@@ -507,7 +576,7 @@ class SettingsService {
   publicValues(): Record<string, unknown> {
     const out: Record<string, unknown> = {};
     for (const [key, definition] of Object.entries(SETTINGS)) {
-      if (definition.public) out[key] = this.get(key as SettingKey);
+      if (definition.public && !definition.secret) out[key] = this.get(key as SettingKey);
     }
     return out;
   }

@@ -6,7 +6,6 @@ import { badRequest, unauthorized } from '../lib/errors.js';
 import { describeDevice, fingerprint } from '../lib/device.js';
 import { generateSecret, otpauthUri, verifyTotp } from '../lib/totp.js';
 import { checkPassword, type PasswordPolicy } from '../lib/password-policy.js';
-import { env } from '../env.js';
 import { log } from '../lib/logger.js';
 import { sendMail, siteUrl } from './mailer.js';
 import { newDeviceAlert, twoFactorChanged, verifyEmail } from './email-templates.js';
@@ -70,8 +69,6 @@ function hashToken(token: string): string {
 
 export interface VerificationIssued {
   expiresAt: Date;
-  /** Only while no mailer is configured, so development can follow the link. */
-  token?: string;
 }
 
 /**
@@ -99,7 +96,7 @@ export async function issueEmailVerification(user: User): Promise<VerificationIs
   const message = verifyEmail({ name: user.name, url, hours });
   await sendMail({ ...message, to: user.email, template: 'verify-email', userId: user.id });
 
-  return { expiresAt, ...(env.exposeResetToken ? { token } : {}) };
+  return { expiresAt };
 }
 
 /** Consumes a verification link. Idempotent for a token already spent. */
@@ -120,12 +117,7 @@ export async function confirmEmail(token: string): Promise<User> {
 /* -------------------------------------------------------------------------- */
 
 export type LoginOutcome =
-  | 'SUCCESS'
-  | 'BAD_PASSWORD'
-  | 'UNKNOWN_EMAIL'
-  | 'SUSPENDED'
-  | 'TWO_FACTOR_REQUIRED'
-  | 'TWO_FACTOR_FAILED';
+  'SUCCESS' | 'BAD_PASSWORD' | 'UNKNOWN_EMAIL' | 'SUSPENDED' | 'TWO_FACTOR_REQUIRED' | 'TWO_FACTOR_FAILED';
 
 /** Whether this account has ever successfully signed in from this device. */
 export async function isKnownDevice(userId: string, print: string): Promise<boolean> {

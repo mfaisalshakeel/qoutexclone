@@ -16,13 +16,16 @@ export interface RenderedEmail {
 }
 
 function escape(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/**
+ * The shell every message sits in.
+ *
+ * `title` is escaped here because it is the one field that carries a name a
+ * person typed; `body` is HTML the caller composed, so the caller escapes
+ * whatever it interpolates. Escaping in both places would print the entities.
+ */
 function layout(options: { title: string; body: string; action?: { label: string; url: string } }): string {
   const site = escape(settings.get('general.siteName'));
   const support = escape(settings.get('general.supportEmail'));
@@ -48,7 +51,7 @@ export function verifyEmail(options: { name: string; url: string; hours: number 
   return {
     subject: `Confirm your ${site} email address`,
     html: layout({
-      title: `Hello ${escape(options.name)},`,
+      title: `Hello ${options.name},`,
       body: `<p>Confirm this address to finish setting up your ${escape(site)} account. The link works for the next ${options.hours} hours.</p>`,
       action: { label: 'Confirm my email', url: options.url },
     }),
@@ -68,7 +71,7 @@ export function newDeviceAlert(options: {
   return {
     subject: `New sign-in to your ${site} account`,
     html: layout({
-      title: `Hello ${escape(options.name)},`,
+      title: `Hello ${options.name},`,
       body:
         `<p>Your account was signed in to from a device we have not seen before.</p>` +
         `<p style="color:#94a3b8"><strong style="color:#e2e8f0">${escape(options.device)}</strong><br>IP ${escape(options.ip)}<br>${escape(when)}</p>` +
@@ -86,7 +89,7 @@ export function twoFactorChanged(options: { name: string; enabled: boolean; url:
       ? `Two-factor authentication is on for your ${site} account`
       : `Two-factor authentication was turned off`,
     html: layout({
-      title: `Hello ${escape(options.name)},`,
+      title: `Hello ${options.name},`,
       body: options.enabled
         ? `<p>Two-factor authentication is now switched on. You will need a code from your authenticator app each time you sign in.</p>`
         : `<p>Two-factor authentication was switched off on your account. If that was not you, turn it back on and change your password now.</p>`,
@@ -96,4 +99,135 @@ export function twoFactorChanged(options: { name: string; enabled: boolean; url:
       ? `Hello ${options.name},\n\nTwo-factor authentication is now switched on for your ${site} account.\n\n${options.url}`
       : `Hello ${options.name},\n\nTwo-factor authentication was switched off on your ${site} account. If that was not you, turn it back on and change your password: ${options.url}`,
   };
+}
+
+/** Money is cents everywhere inside the platform; email shows dollars. */
+function dollars(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+export function resetPassword(options: { name: string; url: string; minutes: number }): RenderedEmail {
+  const site = settings.get('general.siteName');
+  return {
+    subject: `Reset your ${site} password`,
+    html: layout({
+      title: `Hello ${options.name},`,
+      body:
+        `<p>Someone asked to reset the password on your ${escape(site)} account. The link below works for the next ${options.minutes} minutes and can be used once.</p>` +
+        `<p>If it was not you, ignore this email — nothing has changed.</p>`,
+      action: { label: 'Choose a new password', url: options.url },
+    }),
+    text: `Hello ${options.name},\n\nSomeone asked to reset the password on your ${site} account:\n${options.url}\n\nThe link works for the next ${options.minutes} minutes and can be used once. If it was not you, ignore this email.`,
+  };
+}
+
+export function depositCredited(options: {
+  name: string;
+  amount: number;
+  bonus: number;
+  currency: string;
+  network: string;
+  url: string;
+}): RenderedEmail {
+  const site = settings.get('general.siteName');
+  const bonusLine = options.bonus > 0 ? ` A bonus of ${dollars(options.bonus)} was added on top.` : '';
+  return {
+    subject: `${dollars(options.amount)} credited to your ${site} account`,
+    html: layout({
+      title: `Hello ${options.name},`,
+      body: `<p>Your ${escape(options.currency)} deposit on ${escape(options.network)} has confirmed and <strong>${dollars(options.amount)}</strong> is on your live balance.${escape(bonusLine)}</p>`,
+      action: { label: 'Open my wallet', url: options.url },
+    }),
+    text: `Hello ${options.name},\n\nYour ${options.currency} deposit on ${options.network} has confirmed and ${dollars(options.amount)} is on your live balance.${bonusLine}\n\n${options.url}`,
+  };
+}
+
+export function withdrawalUpdate(options: {
+  name: string;
+  status: string;
+  amount: number;
+  note: string | null;
+  url: string;
+}): RenderedEmail {
+  const site = settings.get('general.siteName');
+  const headline: Record<string, string> = {
+    APPROVED: 'approved and queued for payment',
+    PROCESSING: 'on its way to your wallet',
+    COMPLETED: 'paid out',
+    REJECTED: 'declined',
+    CANCELLED: 'cancelled',
+  };
+  const what = headline[options.status] ?? `now ${options.status.toLowerCase()}`;
+  const note = options.note ? `<p style="color:#94a3b8">${escape(options.note)}</p>` : '';
+  return {
+    subject: `Your ${dollars(options.amount)} withdrawal is ${what}`,
+    html: layout({
+      title: `Hello ${options.name},`,
+      body: `<p>Your withdrawal of <strong>${dollars(options.amount)}</strong> from ${escape(site)} is ${escape(what)}.</p>${note}`,
+      action: { label: 'See the details', url: options.url },
+    }),
+    text: `Hello ${options.name},\n\nYour withdrawal of ${dollars(options.amount)} from ${site} is ${what}.${options.note ? `\n\n${options.note}` : ''}\n\n${options.url}`,
+  };
+}
+
+export function kycResult(options: {
+  name: string;
+  approved: boolean;
+  reason: string | null;
+  url: string;
+}): RenderedEmail {
+  const site = settings.get('general.siteName');
+  return {
+    subject: options.approved ? 'Your identity check passed' : 'Your identity check needs another look',
+    html: layout({
+      title: `Hello ${options.name},`,
+      body: options.approved
+        ? `<p>Your documents have been checked and your ${escape(site)} account is now verified. Withdrawals are open.</p>`
+        : `<p>We could not verify your account from the documents you sent.</p>` +
+          (options.reason ? `<p style="color:#94a3b8">${escape(options.reason)}</p>` : '') +
+          `<p>Send them again and we will look straight away.</p>`,
+      action: { label: options.approved ? 'Open my account' : 'Send new documents', url: options.url },
+    }),
+    text: options.approved
+      ? `Hello ${options.name},\n\nYour documents have been checked and your ${site} account is now verified. Withdrawals are open.\n\n${options.url}`
+      : `Hello ${options.name},\n\nWe could not verify your account from the documents you sent.${options.reason ? `\n\n${options.reason}` : ''}\n\nSend them again: ${options.url}`,
+  };
+}
+
+export function tournamentResult(options: {
+  name: string;
+  tournament: string;
+  place: number | null;
+  prize: number;
+  url: string;
+}): RenderedEmail {
+  const site = settings.get('general.siteName');
+  const placed = options.place !== null;
+  const ordinal = placed ? ordinalOf(options.place!) : null;
+  return {
+    subject:
+      options.prize > 0
+        ? `You finished ${ordinal} in ${options.tournament}`
+        : `${options.tournament} has finished`,
+    html: layout({
+      title: `Hello ${options.name},`,
+      body:
+        options.prize > 0
+          ? `<p>You finished <strong>${escape(ordinal!)}</strong> in ${escape(options.tournament)} and <strong>${dollars(options.prize)}</strong> has been paid to your live balance.</p>`
+          : `<p>${escape(options.tournament)} has finished${placed ? ` and you came ${escape(ordinal!)}` : ''}. There is another one starting soon.</p>`,
+      action: { label: 'See the final table', url: options.url },
+    }),
+    text:
+      options.prize > 0
+        ? `Hello ${options.name},\n\nYou finished ${ordinal} in ${options.tournament} and ${dollars(options.prize)} has been paid to your live balance.\n\n${options.url}`
+        : `Hello ${options.name},\n\n${options.tournament} has finished${placed ? ` and you came ${ordinal}` : ''}. There is another one starting soon on ${site}.\n\n${options.url}`,
+  };
+}
+
+/** 1st, 2nd, 3rd, 4th — including the teens, which break the pattern. */
+export function ordinalOf(place: number): string {
+  const tens = place % 100;
+  if (tens >= 11 && tens <= 13) return `${place}th`;
+  const suffix = ['th', 'st', 'nd', 'rd'][place % 10] ?? 'th';
+  return `${place}${suffix}`;
 }

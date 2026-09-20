@@ -64,12 +64,7 @@ function makeReferralCode(): string {
  * enough for the trader to recognise a row in their device list and for the
  * platform to tell a familiar sign-in from a new one.
  */
-async function issueSession(
-  userId: string,
-  role: string,
-  email: string,
-  context?: RequestContext,
-) {
+async function issueSession(userId: string, role: string, email: string, context?: RequestContext) {
   const refresh = createRefreshToken();
   const row = await prisma.refreshToken.create({
     data: {
@@ -119,15 +114,10 @@ router.post(
     await recordLogin({ email, outcome: 'SUCCESS', context, userId: user.id });
     // the link goes out even when verification is optional: an unconfirmed
     // address is the one thing an account cannot be recovered through
-    const verification =
-      settings.get('security.emailVerification') === 'off' ? null : await issueEmailVerification(user);
+    if (settings.get('security.emailVerification') !== 'off') await issueEmailVerification(user);
 
     const session = await issueSession(user.id, user.role, user.email, context);
-    res.status(201).json({
-      user: publicUser(user),
-      ...session,
-      ...(verification?.token ? { verificationToken: verification.token } : {}),
-    });
+    res.status(201).json({ user: publicUser(user), ...session });
   }),
 );
 
@@ -169,7 +159,10 @@ router.post(
  * Everything that happens once both factors are satisfied: the history line,
  * the alert if this device is new, and the session itself.
  */
-async function completeLogin(user: Awaited<ReturnType<typeof prisma.user.findUnique>>, context: RequestContext) {
+async function completeLogin(
+  user: Awaited<ReturnType<typeof prisma.user.findUnique>>,
+  context: RequestContext,
+) {
   if (!user) throw unauthorized('Invalid email or password');
   const { newDevice } = await recordLogin({
     email: user.email,
@@ -258,13 +251,9 @@ router.post(
   authLimiter,
   wrap(async (req, res) => {
     const body = z.object({ email: z.string().email() }).parse(req.body);
-    const result = await requestReset(body.email);
+    await requestReset(body.email);
     // identical answer whether or not the address is registered
-    res.json({
-      ok: true,
-      message: 'If that email is registered, a reset link is on its way.',
-      ...(result?.token ? { token: result.token, expiresAt: result.expiresAt } : {}),
-    });
+    res.json({ ok: true, message: 'If that email is registered, a reset link is on its way.' });
   }),
 );
 

@@ -14,6 +14,8 @@ import { PROMO_KINDS, describe } from '../services/promos.js';
 import { finishTournament, leaderboard, startTournament } from '../services/tournaments.js';
 import { listAllTickets, postMessage, readTicket, setTicketStatus } from '../services/support.js';
 import { SETTINGS, settings } from '../services/settings.js';
+import { mailTransportName, sendTestEmail, smtpReady } from '../services/mailer.js';
+import { previewAll } from '../services/email-preview.js';
 import { marketHours } from '../services/market-hours.js';
 import { describeWindows } from '../lib/sessions.js';
 import { DEFAULT_OTC_PARAMS, initialState, nextTick, resolveParams } from '../engine/otc.js';
@@ -729,6 +731,99 @@ router.get(
       include: { actor: { select: { email: true } } },
     });
     res.json({ logs });
+  }),
+);
+
+/* --------------------------------- email ---------------------------------- */
+
+/**
+ * The outbox.
+ *
+ * Every message the platform composed, whether or not it was delivered — which
+ * is the only way an operator can tell "we never sent it" from "their provider
+ * dropped it", and the only record when no transport is configured at all.
+ */
+router.get(
+  '/emails',
+  wrap(async (req, res) => {
+    const query = z
+      .object({
+        status: z.enum(['QUEUED', 'SENT', 'FAILED']).optional(),
+        template: z.string().max(60).optional(),
+        search: z.string().max(160).optional(),
+        page: z.coerce.number().int().min(1).default(1),
+        pageSize: z.coerce.number().int().min(5).max(100).default(25),
+      })
+      .parse(req.query);
+
+    const where = {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.template ? { template: query.template } : {}),
+      ...(query.search ? { to: { contains: query.search } } : {}),
+    };
+
+    const [rows, total] = await Promise.all([
+      prisma.emailMessage.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        // the bodies are large and the list does not show them
+        select: {
+          id: true,
+          to: true,
+          subject: true,
+          template: true,
+          transport: true,
+          status: true,
+          error: true,
+          sentAt: true,
+          createdAt: true,
+        },
+      }),
+      prisma.emailMessage.count({ where }),
+    ]);
+
+    res.json({ emails: rows, total, page: query.page, pageSize: query.pageSize });
+  }),
+);
+
+/** One message, with the HTML as it was composed, for the preview pane. */
+router.get(
+  '/emails/:id',
+  wrap(async (req, res) => {
+    const id = z.string().min(1).max(40).parse(req.params.id);
+    const email = await prisma.emailMessage.findUnique({ where: { id } });
+    if (!email) throw notFound('That message is not in the outbox');
+    res.json({ email });
+  }),
+);
+
+/** Every template, rendered with sample data — the preview in the back office. */
+router.get(
+  '/email-templates',
+  wrap(async (_req, res) => {
+    res.json({ templates: previewAll() });
+  }),
+);
+
+/**
+ * Proves the SMTP settings.
+ *
+ * A configuration that looks right and a configuration that delivers are not
+ * the same thing, and the difference only shows up when someone tries it.
+ */
+router.post(
+  '/emails/test',
+  wrap(async (req, res) => {
+    const body = z.object({ to: z.string().email() }).parse(req.body);
+    const result = await sendTestEmail(body.to);
+    await audit(req.user!.id, 'email.test', 'EmailMessage', result.id, body.to);
+    res.json({
+      ...result,
+      transport: mailTransportName(),
+      configured: smtpReady(),
+    });
   }),
 );
 

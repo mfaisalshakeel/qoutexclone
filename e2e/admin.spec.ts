@@ -56,6 +56,7 @@ test.describe('admin', () => {
       ['/admin/tournaments', 'Tournaments'],
       ['/admin/promos', 'Promo codes'],
       ['/admin/assets', 'Markets'],
+      ['/admin/email', 'Email'],
       ['/admin/audit', 'Audit log'],
     ] as const) {
       await page.goto(path);

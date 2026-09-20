@@ -252,7 +252,9 @@ function TwoFactorSection({
     <section className="card space-y-4 p-5">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-sm font-semibold">Two-factor authentication</h2>
-        <span className={`chip ${state.twoFactorEnabled ? 'bg-up-soft text-up' : 'bg-ink-600 text-slate-300'}`}>
+        <span
+          className={`chip ${state.twoFactorEnabled ? 'bg-up-soft text-up' : 'bg-ink-600 text-slate-300'}`}
+        >
           {state.twoFactorEnabled ? 'on' : 'off'}
         </span>
       </div>
@@ -262,8 +264,8 @@ function TwoFactorSection({
       {!state.twoFactorEnabled && !setup && !codes && (
         <>
           <p className="text-sm text-slate-400">
-            A code from an authenticator app, on top of your password. It is the single most useful thing
-            you can turn on here.
+            A code from an authenticator app, on top of your password. It is the single most useful thing you
+            can turn on here.
           </p>
           <button onClick={() => void begin()} disabled={busy === '2fa-setup'} className="btn-primary">
             {busy === '2fa-setup' ? 'Preparing…' : 'Turn it on'}
@@ -325,10 +327,9 @@ function TwoFactorSection({
             <button
               onClick={() =>
                 void act('2fa-codes', async () => {
-                  const { backupCodes } = await api.post<{ backupCodes: string[] }>(
-                    '/me/2fa/backup-codes',
-                    { code },
-                  );
+                  const { backupCodes } = await api.post<{ backupCodes: string[] }>('/me/2fa/backup-codes', {
+                    code,
+                  });
                   setCodes(backupCodes);
                   setCode('');
                 })

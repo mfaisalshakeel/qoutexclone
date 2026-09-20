@@ -46,6 +46,7 @@ const SECTIONS: { label: string; items: { to: string; label: string; badge?: key
       { to: '/admin/price-engine', label: 'Price engine' },
       { to: '/admin/payouts', label: 'Payouts' },
       { to: '/admin/risk', label: 'Risk' },
+      { to: '/admin/email', label: 'Email' },
       { to: '/admin/settings', label: 'Settings' },
       { to: '/admin/audit', label: 'Audit log' },
     ],
