@@ -4,6 +4,22 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-20**: Phase 4 — **Marketplace**. Payout boosters, risk-free cover, deposit coupons and practice top-ups, bought with loyalty points or with the live balance, held in an inventory until started.
+
+  **Every effect that moves money goes through `applyLedger`.** A purchase with money is a negative `MARKETPLACE` entry that cannot overdraw; a risk-free refund is a `RISK_FREE_REFUND` written inside the same transaction that settled the losing position and spent the use that paid for it; a practice top-up is a `PRACTICE_TOPUP` on the demo account. Points are not money — they never reach a balance, are never withdrawable, and are spent with a conditional update that two simultaneous purchases cannot both win.
+
+  **An item's configuration is copied onto the purchase.** An operator editing the catalogue changes what is on sale, never what someone has already paid for, and there is a test that edits an item out from under a purchase to prove it.
+
+  **Everything that can only happen once is conditional.** Activating an item, spending a risk-free use, consuming a coupon: each is an `updateMany` guarded on the state it expects, so a burst of settlements or a double-clicked button cannot spend the same thing twice. One payout booster runs at a time. A window that closes is swept to `EXPIRED` every minute, and the effects check the clock themselves rather than trusting the sweeper.
+
+  **Earning.** Loyalty points accrue from staked volume on the same path as XP, with their own switch: with experience off and the shop open, a position still earns points.
+
+  **Where a trader sees it.** `/marketplace` lists the shop with what each item does in plain words, the inventory waiting to be started, and what has been spent. The ticket quotes the booster while it runs and says which bonus it is adding.
+
+  **Admin.** The catalogue's CRUD and the orders list are built and audited; the screen for them lands with the rest of the Growth settings in Phase 6. Items are disabled rather than deleted, because an inventory row points at one for ever.
+
+  **Verified.** 462 server tests (10 new integration tests for the money and single-use paths), 221 web tests, build, lint, and the full Playwright suite. New `e2e/marketplace.spec.ts` (3 tests). The notification spec no longer pins an exact unread count — a funded, trading account now earns badges too, which is correct and was making the old assertion wrong.
+
 - **2026-09-20**: Phase 4 — **Experience and achievements**. XP from trading, a level ladder, and sixteen badges with live progress, all configurable and switchable off.
 
   **XP is not money.** It never reaches a balance, nothing in settlement depends on it, and it is not spendable here. It accrues from volume staked, a bonus per win, and a once-a-day activity bonus keyed on the UTC day. Practice earns nothing by default — a practice balance refills, so XP from it would be free — but an operator can switch that on. The level curve is `base * (level - 1) ^ curve`, pure and tested against itself in both directions for forty levels, because a ladder that is wrong is wrong for everyone at once.
@@ -359,6 +375,8 @@ _Record product choices made without the owner here: what, why, where it's confi
 - **OTC pricing premium**: OTC twins get +3% payout (capped at 95%) and 1.15× volatility, mirroring how brokers price their own books. Both numbers live in `data/markets.ts` and become per-asset admin settings in the OTC engine task.
 - **Outbox before transport**: every email is written to `EmailMessage` and then delivered, so a deployment with no SMTP configured still has a record an operator can read rather than a silently dropped verification link.
 - **Secrets in the settings registry**: a key marked `secret` can be written from the back office but never read back out of it, and never appears in the public settings. The SMTP password is the first; env still seeds its default, so a deployment can keep it out of the database entirely.
+- **Points are a separate currency from XP**: spending experience would demote a trader, so the marketplace has its own balance earned on the same activity. Neither is money.
+- **Marketplace items are disabled, never deleted**: an inventory row references the item it came from for ever, and a support question about a purchase from last year has to be answerable.
 - **XP never becomes money**: experience and badges are a record of activity. They do not go through `applyLedger`, they cannot be spent, and nothing in the settlement path reads them. When the marketplace arrives it will decide for itself what, if anything, converts.
 - **Practice earns no XP by default**: the practice balance refills on demand, so experience earned from it would be unlimited and the ladder meaningless. `growth.xpFromPractice` exists for operators who disagree.
 - **Achievements evaluate on a debounce, not on every settle**: measuring a trader's whole history costs several aggregates and a binary-options trader settles constantly. Thirty seconds per trader, plus a catch-up whenever the page is read.

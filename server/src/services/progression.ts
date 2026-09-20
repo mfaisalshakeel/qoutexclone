@@ -4,7 +4,16 @@ import { log } from '../lib/logger.js';
 import { tradeEvents } from './trading.js';
 import { notify } from './notifications.js';
 import { evaluate, unlockedKeys, type AchievementProgress, type AchievementStats } from './achievements.js';
-import { dayKey, levelProgress, xpConfig, xpForTrade, type LevelProgress } from './experience.js';
+import {
+  dayKey,
+  levelProgress,
+  xpConfig,
+  xpForTrade,
+  type LevelProgress,
+  type SettledForXp,
+  type XpConfig,
+} from './experience.js';
+import { settings } from './settings.js';
 
 /**
  * Where XP is earned and badges are handed out.
@@ -28,8 +37,6 @@ let listening = false;
 /** Adds what a settled position earned, and pays the daily bonus once. */
 export async function awardTradeXp(trade: Trade): Promise<number> {
   const config = xpConfig();
-  if (!config.enabled) return 0;
-
   const user = await prisma.user.findUnique({
     where: { id: trade.userId },
     select: { xpLastDay: true },
@@ -39,13 +46,28 @@ export async function awardTradeXp(trade: Trade): Promise<number> {
   const today = dayKey(trade.settledAt ?? new Date());
   const firstToday = user.xpLastDay !== today;
   const earned = xpForTrade(trade, config, { firstToday });
-  if (earned <= 0) return 0;
+  // points are the marketplace's currency and have their own switch: with
+  // experience off and the shop open, a position still earns points
+  const points = pointsForTrade(trade, config);
+  if (earned <= 0 && points <= 0) return 0;
 
   await prisma.user.update({
     where: { id: trade.userId },
-    data: { xp: { increment: earned }, ...(firstToday ? { xpLastDay: today } : {}) },
+    data: {
+      ...(earned > 0 ? { xp: { increment: earned } } : {}),
+      ...(points > 0 ? { points: { increment: points } } : {}),
+      ...(firstToday && earned > 0 ? { xpLastDay: today } : {}),
+    },
   });
   return earned;
+}
+
+/** Points a settled position earned. Practice follows the same rule as XP. */
+export function pointsForTrade(trade: SettledForXp, config: XpConfig): number {
+  if (!settings.get('growth.marketplaceEnabled')) return 0;
+  if (trade.accountType === 'DEMO' && !config.fromPractice) return 0;
+  if (trade.status !== 'WON' && trade.status !== 'LOST' && trade.status !== 'REFUNDED') return 0;
+  return Math.floor((trade.stake / 100) * settings.get('growth.pointsPerDollarStaked'));
 }
 
 /** Everything the achievements are measured against, for one trader. */

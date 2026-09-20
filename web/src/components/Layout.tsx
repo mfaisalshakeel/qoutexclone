@@ -131,6 +131,13 @@ export function Layout() {
                     </Link>
                   ))}
                   <Link
+                    to="/marketplace"
+                    onClick={() => setMenuOpen(false)}
+                    className="block rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-ink-700"
+                  >
+                    Marketplace
+                  </Link>
+                  <Link
                     to="/account/progress"
                     onClick={() => setMenuOpen(false)}
                     className="block rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-ink-700"

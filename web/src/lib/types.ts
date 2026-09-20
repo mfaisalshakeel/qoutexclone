@@ -35,6 +35,10 @@ export interface User {
   };
   /** The trader's experience level, for the header. */
   experience?: { enabled: boolean; xp: number; level: number; percent: number };
+  /** Loyalty points. Never money: they buy marketplace items and nothing else. */
+  points?: number;
+  /** A payout booster the trader has running, if any. */
+  boost?: { bonusPct: number; expiresAt: string } | null;
   createdAt: string;
 }
 

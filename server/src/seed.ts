@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from './lib/prisma.js';
 import { MARKETS, MARKET_COUNTS } from './data/markets.js';
 import { SCHEDULES, scheduleKeyFor } from './data/schedules.js';
+import { DEFAULT_MARKETPLACE_ITEMS } from './data/marketplace.js';
 
 async function main() {
   // schedules first: markets reference them
@@ -92,11 +93,22 @@ async function main() {
     },
   });
 
+  // the marketplace opens with a catalogue rather than an empty shelf; an
+  // operator edits or disables these, and `upsert` keeps their edits
+  for (const item of DEFAULT_MARKETPLACE_ITEMS) {
+    await prisma.marketplaceItem.upsert({
+      where: { key: item.key },
+      update: {},
+      create: item,
+    });
+  }
+
   const byClass = Object.entries(MARKET_COUNTS.byClass)
     .map(([assetClass, count]) => `${assetClass.toLowerCase()} ${count}`)
     .join(', ');
   console.log(`Seeded ${MARKET_COUNTS.total} markets (${byClass}; ${MARKET_COUNTS.otc} OTC).`);
   console.log(`Seeded ${SCHEDULES.length} trading schedules.`);
+  console.log(`Seeded ${DEFAULT_MARKETPLACE_ITEMS.length} marketplace items.`);
   console.log(`Admin:  ${adminEmail} / ${adminPassword}`);
   console.log(`Trader: ${demoEmail} / Trader123!`);
 }

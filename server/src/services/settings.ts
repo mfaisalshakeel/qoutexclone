@@ -419,6 +419,22 @@ export const SETTINGS = {
     public: true,
   }),
 
+  'growth.marketplaceEnabled': define({
+    schema: z.boolean(),
+    default: true,
+    group: 'growth',
+    label: 'Marketplace',
+    help: 'Off closes the shop and stops every item taking effect.',
+    public: true,
+  }),
+  'growth.pointsPerDollarStaked': define({
+    schema: z.number().min(0).max(1000),
+    default: 1,
+    group: 'growth',
+    label: 'Loyalty points per dollar staked',
+    help: 'Points buy marketplace items. They are never money and never withdrawable.',
+  }),
+
   'growth.xpEnabled': define({
     schema: z.boolean(),
     default: true,

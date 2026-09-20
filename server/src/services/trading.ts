@@ -8,6 +8,7 @@ import { applyLedger, type AccountType } from './wallet.js';
 import { activeEntry, adjustEntryBalance } from './tournaments.js';
 import { settings } from './settings.js';
 import { levelFor, payoutWithStatus, statusConfig } from './status.js';
+import { activeBoosterBonus, coverLoss } from './marketplace.js';
 import { marketHours, otcAlternative } from './market-hours.js';
 import { payouts } from './payouts.js';
 import { assessStake } from './risk.js';
@@ -163,9 +164,16 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
   // move a price or pick an outcome. Tournament chips are left out: everyone
   // inside a contest trades on the same terms.
   const config = statusConfig();
-  const level = levelFor(input.accountType === 'TOURNAMENT' ? 0 : trader.totalDeposited, config);
-  const quotedPct =
-    input.accountType === 'TOURNAMENT' ? payout.pct : payoutWithStatus(payout.pct, level, config);
+  const chips = input.accountType === 'TOURNAMENT';
+  const level = levelFor(chips ? 0 : trader.totalDeposited, config);
+  // a booster bought in the marketplace stacks on the status bonus under the
+  // same ceiling. Like status, it reads nothing but what this trader holds —
+  // never a position, an exposure or a result.
+  const booster = chips ? 0 : await activeBoosterBonus(input.userId);
+  const withStatus = chips ? payout.pct : payoutWithStatus(payout.pct, level, config);
+  // the ceiling only applies where a bonus was added: a market quoted above it
+  // is the operator's decision, not something a perk should quietly lower
+  const quotedPct = booster > 0 ? Math.min(withStatus + booster, config.maxPayoutPct) : withStatus;
 
   const trade = await prisma.$transaction(async (tx) => {
     // Risk is checked here, inside the transaction, so the aggregate it reads
@@ -367,6 +375,18 @@ export async function settleTrade(tradeId: string): Promise<SettlementResult | n
         note: `${trade.symbol} ${trade.direction} ${status.toLowerCase()} @ ${exitPrice}`,
       });
     } else {
+      // a loss pays nothing back — unless the trader is holding risk-free
+      // cover, which refunds the stake here, inside the same transaction that
+      // settled the position and spent the use that paid for it
+      if (status === 'LOST' && !trade.entryId) {
+        await coverLoss(tx, {
+          userId: trade.userId,
+          tradeId: trade.id,
+          stake: trade.stake,
+          accountType: trade.accountType,
+        });
+      }
+      // read after the refund, so the balance announced is the one that stands
       const user = await tx.user.findUnique({
         where: { id: trade.userId },
         select: { demoBalance: true, realBalance: true },

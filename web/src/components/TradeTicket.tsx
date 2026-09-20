@@ -150,11 +150,14 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
     if (!offered.includes(durationSec)) setDurationSec(offered[1] ?? offered[0]);
   }, [offered, durationSec]);
 
+  // the clock mode counts down to a boundary, and a running booster counts down
+  // to its own expiry; either needs a heartbeat, neither needs one otherwise
+  const boostUntil = user?.boost?.expiresAt ?? null;
   useEffect(() => {
-    if (expiryMode !== 'CLOCK') return;
+    if (expiryMode !== 'CLOCK' && !boostUntil) return;
     const beat = setInterval(() => setTick(Date.now()), 1000);
     return () => clearInterval(beat);
-  }, [expiryMode]);
+  }, [expiryMode, boostUntil]);
 
   // refresh the boundaries when the soonest one is about to stop accepting, and
   // on a slow heartbeat so a ticket left open does not go stale
@@ -243,7 +246,11 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
   // the number that is written into the position; this mirrors it so the
   // ticket quotes what the trade will actually pay.
   const statusBonus = tournamentId ? 0 : (user.statusLevel?.payoutBonus ?? 0);
-  const payoutPct = Math.min(asset.payoutPct + statusBonus, statusCeiling);
+  // a booster bought in the marketplace, while its clock is still running
+  const boostActive = !tournamentId && user.boost != null && new Date(user.boost.expiresAt).getTime() > tick;
+  const boostBonus = boostActive ? user.boost!.bonusPct : 0;
+  const bonus = statusBonus + boostBonus;
+  const payoutPct = bonus > 0 ? Math.min(asset.payoutPct + bonus, statusCeiling) : asset.payoutPct;
   const profit = Math.floor((stake * payoutPct) / 100);
 
   // the base payout and what moved it, for the line under the figure
@@ -408,9 +415,14 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
         <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-wide text-slate-400">Payout</p>
           <p className="text-lg font-bold text-up">{payoutPct}%</p>
-          {statusBonus > 0 && payoutPct > asset.payoutPct && (
+          {bonus > 0 && payoutPct > asset.payoutPct && (
             <p className="truncate text-[10px] text-accent">
-              +{payoutPct - asset.payoutPct}% {user.statusLevel?.name} bonus
+              +{payoutPct - asset.payoutPct}%{' '}
+              {boostBonus > 0 && statusBonus > 0
+                ? 'booster and status bonus'
+                : boostBonus > 0
+                  ? 'booster'
+                  : `${user.statusLevel?.name} bonus`}
             </p>
           )}
           {/* when a rule has moved the payout, say so rather than leave the

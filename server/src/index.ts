@@ -19,6 +19,7 @@ import { loadRevocations, pruneRevocations } from './services/revocations.js';
 import { configureMailer, watchMailSettings } from './services/mailer.js';
 import { attachEmailNotifications } from './services/email-notifications.js';
 import { attachProgression } from './services/progression.js';
+import { expireStale } from './services/marketplace.js';
 import type { OtcParams } from './engine/otc.js';
 
 /** How long a shutdown may take before in-flight work is abandoned. */
@@ -89,6 +90,10 @@ async function main() {
   startNotifications();
   attachEmailNotifications();
   attachProgression();
+  // an item whose window has closed must not go on working; the sweeper keeps
+  // the inventory honest even for a trader who never opens the page
+  const marketplaceSweeper = setInterval(() => void expireStale(), 60_000);
+  marketplaceSweeper.unref();
   // a closed exchange stops printing prices; OTC and crypto never close
   const sessionByAsset = new Map(assets.map((asset) => [asset.symbol, asset.scheduleId]));
   marketFeed.setSessionResolver((symbol) => marketHours.stateFor(sessionByAsset.get(symbol) ?? null).isOpen);

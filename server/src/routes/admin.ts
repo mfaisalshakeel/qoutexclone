@@ -17,6 +17,8 @@ import { SETTINGS, settings } from '../services/settings.js';
 import { mailTransportName, sendTestEmail, smtpReady } from '../services/mailer.js';
 import { previewAll } from '../services/email-preview.js';
 import { levelFor, statusConfig } from '../services/status.js';
+import * as marketplace from '../services/marketplace.js';
+import { ITEM_KINDS } from '../services/marketplace.js';
 import { marketHours } from '../services/market-hours.js';
 import { describeWindows } from '../lib/sessions.js';
 import { DEFAULT_OTC_PARAMS, initialState, nextTick, resolveParams } from '../engine/otc.js';
@@ -842,6 +844,123 @@ router.post(
       transport: mailTransportName(),
       configured: smtpReady(),
     });
+  }),
+);
+
+/* ------------------------------ marketplace ------------------------------- */
+
+const marketplaceItemSchema = z.object({
+  key: z
+    .string()
+    .trim()
+    .min(2)
+    .max(40)
+    .regex(/^[a-z0-9-]+$/, 'Use lower-case letters, numbers and hyphens'),
+  name: z.string().trim().min(2).max(80),
+  description: z.string().trim().min(2).max(400),
+  kind: z.enum(ITEM_KINDS),
+  priceCents: z.number().int().min(0).max(10_000_000),
+  pricePoints: z.number().int().min(0).max(10_000_000),
+  config: z.unknown(),
+  enabled: z.boolean().default(true),
+  sortOrder: z.number().int().min(0).max(10_000).default(0),
+});
+
+/** An item nobody can buy is a mistake, not a configuration. */
+function assertBuyable(input: { priceCents: number; pricePoints: number }): void {
+  if (input.priceCents <= 0 && input.pricePoints <= 0) {
+    throw badRequest('Set a price in money, in points, or both', 'no_price');
+  }
+}
+
+router.get(
+  '/marketplace/items',
+  wrap(async (_req, res) => {
+    res.json({ items: await marketplace.listItems({ includeDisabled: true }), kinds: ITEM_KINDS });
+  }),
+);
+
+router.post(
+  '/marketplace/items',
+  wrap(async (req, res) => {
+    const body = marketplaceItemSchema.parse(req.body);
+    assertBuyable(body);
+    const config = marketplace.parseItemConfig(body.kind, body.config);
+
+    const existing = await prisma.marketplaceItem.findUnique({ where: { key: body.key } });
+    if (existing) throw badRequest('An item with that key already exists', 'duplicate_key');
+
+    const item = await prisma.marketplaceItem.create({ data: { ...body, config } });
+    await audit(req.user!.id, 'marketplace.create', 'MarketplaceItem', item.id, item.key);
+    res.status(201).json({ item });
+  }),
+);
+
+router.patch(
+  '/marketplace/items/:id',
+  wrap(async (req, res) => {
+    const id = z.string().min(1).max(40).parse(req.params.id);
+    const body = marketplaceItemSchema.partial().parse(req.body);
+
+    const existing = await prisma.marketplaceItem.findUnique({ where: { id } });
+    if (!existing) throw notFound('That item does not exist');
+
+    const kind = (body.kind ?? existing.kind) as (typeof ITEM_KINDS)[number];
+    const config =
+      body.config === undefined
+        ? marketplace.parseItemConfig(kind, existing.config)
+        : marketplace.parseItemConfig(kind, body.config);
+    assertBuyable({
+      priceCents: body.priceCents ?? existing.priceCents,
+      pricePoints: body.pricePoints ?? existing.pricePoints,
+    });
+
+    // an edit changes what is on sale; what people already bought carries its
+    // own copy of the configuration and is untouched
+    const item = await prisma.marketplaceItem.update({ where: { id }, data: { ...body, config } });
+    await audit(req.user!.id, 'marketplace.update', 'MarketplaceItem', item.id, item.key);
+    res.json({ item });
+  }),
+);
+
+/** Items are disabled, never deleted: an inventory row points at one for ever. */
+router.delete(
+  '/marketplace/items/:id',
+  wrap(async (req, res) => {
+    const id = z.string().min(1).max(40).parse(req.params.id);
+    const item = await prisma.marketplaceItem.update({ where: { id }, data: { enabled: false } });
+    await audit(req.user!.id, 'marketplace.disable', 'MarketplaceItem', item.id, item.key);
+    res.json({ item });
+  }),
+);
+
+/** What has been bought, for support and for seeing whether the shop works. */
+router.get(
+  '/marketplace/orders',
+  wrap(async (req, res) => {
+    const query = z
+      .object({
+        status: z.enum(['OWNED', 'ACTIVE', 'USED', 'EXPIRED']).optional(),
+        page: z.coerce.number().int().min(1).default(1),
+        pageSize: z.coerce.number().int().min(5).max(100).default(25),
+      })
+      .parse(req.query);
+    const where = query.status ? { status: query.status } : {};
+
+    const [orders, total] = await Promise.all([
+      prisma.inventoryItem.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        include: {
+          item: { select: { key: true, name: true, kind: true } },
+          user: { select: { email: true, name: true } },
+        },
+      }),
+      prisma.inventoryItem.count({ where }),
+    ]);
+    res.json({ orders, total, page: query.page, pageSize: query.pageSize });
   }),
 );
 

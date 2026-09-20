@@ -59,6 +59,8 @@ export function publicUser(user: User) {
     statusLevel: statusOf(user.totalDeposited),
     // the level is in the header; the ladder and the badges are a page away
     experience: experienceOf(user.xp),
+    /** Loyalty points. Never money: they buy marketplace items and nothing else. */
+    points: user.points,
     createdAt: user.createdAt,
   };
 }

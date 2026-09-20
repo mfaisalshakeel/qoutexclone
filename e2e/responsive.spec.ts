@@ -28,6 +28,7 @@ test.describe('responsive shell', () => {
       '/account/security',
       '/account/status',
       '/account/progress',
+      '/marketplace',
     ]) {
       await page.goto(path);
       await page.waitForLoadState('networkidle');

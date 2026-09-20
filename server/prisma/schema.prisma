@@ -34,6 +34,9 @@ model User {
 
   /// Experience earned by trading. Not money, and never spendable as money.
   xp                 Int       @default(0)
+  /// Loyalty points, which buy marketplace items. Not money either: they are
+  /// never withdrawable and never touch a balance.
+  points             Int       @default(0)
   /// The day (YYYY-MM-DD, UTC) the daily activity bonus was last paid.
   xpLastDay          String?
 
@@ -78,6 +81,7 @@ model User {
   backupCodes        BackupCode[]
   loginEvents        LoginEvent[]
   achievements       Achievement[]
+  inventory          InventoryItem[]
   emails             EmailMessage[]
 
   @@index([referredById])
@@ -182,6 +186,60 @@ model Achievement {
 
   @@unique([userId, key])
   @@index([userId])
+}
+
+/// The marketplace catalogue, edited in the back office.
+model MarketplaceItem {
+  id          String  @id @default(cuid())
+  /// Stable identifier used in code and tests; the name is free to change.
+  key         String  @unique
+  name        String
+  description String  @db.Text
+  /// PAYOUT_BOOSTER | RISK_FREE | DEPOSIT_BONUS | PRACTICE_REFILL
+  kind        String
+  /// Price in cents off the live balance. 0 means it cannot be bought with money.
+  priceCents  Int     @default(0)
+  /// Price in loyalty points. 0 means it cannot be bought with points.
+  pricePoints Int     @default(0)
+  /// Per-kind parameters: the bonus and minutes, the cap, the refill amount.
+  config      Json
+  enabled     Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  owned     InventoryItem[]
+
+  @@index([enabled, sortOrder])
+}
+
+/// One bought item. It is owned until activated, active until it expires or
+/// its uses run out, and then spent — never deleted, so the history stands.
+model InventoryItem {
+  id     String @id @default(cuid())
+  userId String
+  itemId String
+  /// OWNED | ACTIVE | USED | EXPIRED
+  status String @default("OWNED")
+  /// A snapshot of the item's config at purchase: an operator editing the
+  /// catalogue must never change what someone already paid for.
+  config Json
+  /// What it cost, for the record.
+  paidCents  Int @default(0)
+  paidPoints Int @default(0)
+  /// Uses left, for the kinds that are consumed rather than timed.
+  usesLeft Int @default(0)
+
+  activatedAt DateTime?
+  expiresAt   DateTime?
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  user User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item MarketplaceItem @relation(fields: [itemId], references: [id])
+
+  @@index([userId, status])
+  @@index([userId, status, expiresAt])
 }
 
 model EmailMessage {

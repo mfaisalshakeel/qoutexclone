@@ -9,6 +9,7 @@ import { usdRate } from './rates.js';
 import { applyLedger } from './wallet.js';
 import { previewPromo, redeemPromo } from './promos.js';
 import { depositBonusFor, levelFor, statusConfig } from './status.js';
+import { couponFor, spendCoupon } from './marketplace.js';
 import { payReferralCommission } from './referrals.js';
 import { settings } from './settings.js';
 
@@ -174,6 +175,23 @@ export async function completeDeposit(
       });
     }
 
+    // a coupon bought in the marketplace, if one is held and worth more than
+    // nothing on this deposit. Spent conditionally, so one deposit uses it once.
+    const coupon = await couponFor(tx, { userId: deposit.userId, depositCents: credited });
+    let couponBonus = 0;
+    if (coupon && (await spendCoupon(tx, coupon.id))) {
+      couponBonus = coupon.bonus;
+      await applyLedger(tx, {
+        userId: deposit.userId,
+        accountType: 'REAL',
+        type: 'BONUS',
+        amount: couponBonus,
+        refType: 'deposit',
+        refId: deposit.id,
+        note: 'Deposit bonus coupon',
+      });
+    }
+
     const bonus = deposit.promoCode
       ? await redeemPromo(tx, {
           code: deposit.promoCode,
@@ -182,7 +200,7 @@ export async function completeDeposit(
           depositCents: credited,
         })
       : 0;
-    const bonusTotal = bonus + statusBonus;
+    const bonusTotal = bonus + statusBonus + couponBonus;
     if (bonusTotal > 0) {
       await tx.deposit.update({ where: { id: depositId }, data: { bonusAmount: bonusTotal } });
     }

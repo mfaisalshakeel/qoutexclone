@@ -17,6 +17,7 @@ import * as notifications from '../services/notifications.js';
 import * as security from '../services/security.js';
 import { progressFor, statusConfig } from '../services/status.js';
 import { progressionFor } from '../services/progression.js';
+import * as marketplace from '../services/marketplace.js';
 
 // mounted at /api/me — every route here needs a signed-in user
 const router = Router();
@@ -27,7 +28,10 @@ router.get(
   wrap(async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
     if (!user) throw notFound('Account not found');
-    res.json({ user: publicUser(user) });
+    // a running booster rides along here rather than in `publicUser`, which is
+    // synchronous and used on every hot path: this is the one place the
+    // terminal reads its own account from, and it re-reads it when things change
+    res.json({ user: { ...publicUser(user), boost: await marketplace.runningBoost(user.id) } });
   }),
 );
 
@@ -390,6 +394,50 @@ router.get(
       levels: config.levels,
       progress: progressFor(user.totalDeposited, config),
     });
+  }),
+);
+
+/* -------------------------------------------------------------------------- */
+/* Marketplace                                                                */
+/* -------------------------------------------------------------------------- */
+
+/** The shop and what the trader can spend in it. */
+router.get(
+  '/marketplace',
+  wrap(async (req, res) => {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { points: true, realBalance: true },
+    });
+    if (!user) throw notFound('Account not found');
+    res.json({
+      enabled: settings.get('growth.marketplaceEnabled'),
+      points: user.points,
+      balance: user.realBalance,
+      items: await marketplace.listItems(),
+      inventory: await marketplace.inventoryFor(req.user!.id),
+    });
+  }),
+);
+
+router.post(
+  '/marketplace/buy',
+  wrap(async (req, res) => {
+    const body = z
+      .object({ itemId: z.string().min(1).max(40), payWith: z.enum(['cents', 'points']) })
+      .parse(req.body);
+    const bought = await marketplace.buyItem({ userId: req.user!.id, ...body });
+    res.status(201).json({ item: bought });
+  }),
+);
+
+router.post(
+  '/marketplace/activate',
+  wrap(async (req, res) => {
+    const body = z.object({ inventoryId: z.string().min(1).max(40) }).parse(req.body);
+    // ownership is checked inside the service, so no id can reach another account
+    const activated = await marketplace.activateItem(req.user!.id, body.inventoryId);
+    res.json({ item: activated });
   }),
 );
 

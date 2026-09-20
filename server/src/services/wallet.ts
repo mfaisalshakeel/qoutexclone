@@ -18,6 +18,11 @@ export const TX_TYPES = [
   'TOURNAMENT_PRIZE',
   'ADJUSTMENT',
   'DEMO_RESET',
+  // marketplace: what an item cost, what a risk-free item refunded, and the
+  // practice balance a refill item added
+  'MARKETPLACE',
+  'RISK_FREE_REFUND',
+  'PRACTICE_TOPUP',
 ] as const;
 
 export interface LedgerEntry {
