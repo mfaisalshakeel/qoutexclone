@@ -110,9 +110,14 @@ export function Layout() {
                   <div className="px-3 py-2">
                     <p className="truncate text-sm font-semibold">{user?.name}</p>
                     <p className="truncate text-xs text-slate-400">{user?.email}</p>
-                    {user?.statusLevel?.enabled && (
-                      <span className="chip mt-1.5 bg-accent/15 text-accent">{user.statusLevel.name}</span>
-                    )}
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {user?.statusLevel?.enabled && (
+                        <span className="chip bg-accent/15 text-accent">{user.statusLevel.name}</span>
+                      )}
+                      {user?.experience?.enabled && (
+                        <span className="chip bg-ink-600 text-slate-300">Level {user.experience.level}</span>
+                      )}
+                    </div>
                   </div>
                   <div className="my-1 h-px bg-ink-600" />
                   {nav.map((item) => (
@@ -125,6 +130,13 @@ export function Layout() {
                       {item.label}
                     </Link>
                   ))}
+                  <Link
+                    to="/account/progress"
+                    onClick={() => setMenuOpen(false)}
+                    className="block rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-ink-700"
+                  >
+                    Progress
+                  </Link>
                   <Link
                     to="/account/status"
                     onClick={() => setMenuOpen(false)}

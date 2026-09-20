@@ -32,6 +32,11 @@ model User {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
+  /// Experience earned by trading. Not money, and never spendable as money.
+  xp                 Int       @default(0)
+  /// The day (YYYY-MM-DD, UTC) the daily activity bonus was last paid.
+  xpLastDay          String?
+
   /// Set the first time the address is confirmed from a link we emailed.
   emailVerifiedAt    DateTime?
   /// The confirmed TOTP secret. Null means no second factor on the account.
@@ -72,6 +77,7 @@ model User {
   verificationTokens EmailVerificationToken[]
   backupCodes        BackupCode[]
   loginEvents        LoginEvent[]
+  achievements       Achievement[]
   emails             EmailMessage[]
 
   @@index([referredById])
@@ -165,6 +171,19 @@ model LoginEvent {
 
 /// The outbox. Written before delivery is attempted, so what the platform
 /// sent is on the record whether or not a transport is configured.
+/// A badge a trader has earned. One row per achievement per account, written
+/// the first time the progress reaches its target.
+model Achievement {
+  id         String   @id @default(cuid())
+  userId     String
+  key        String
+  unlockedAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId])
+}
+
 model EmailMessage {
   id        String    @id @default(cuid())
   userId    String?

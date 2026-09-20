@@ -419,6 +419,53 @@ export const SETTINGS = {
     public: true,
   }),
 
+  'growth.xpEnabled': define({
+    schema: z.boolean(),
+    default: true,
+    group: 'growth',
+    label: 'Experience and achievements',
+    help: 'Off hides levels and badges everywhere and stops XP accruing.',
+    public: true,
+  }),
+  'growth.xpPerDollarStaked': define({
+    schema: z.number().min(0).max(1000),
+    default: 1,
+    group: 'growth',
+    label: 'XP per dollar staked',
+  }),
+  'growth.xpPerWin': define({
+    schema: z.number().int().min(0).max(10_000),
+    default: 5,
+    group: 'growth',
+    label: 'XP for a winning position',
+  }),
+  'growth.xpDailyBonus': define({
+    schema: z.number().int().min(0).max(10_000),
+    default: 25,
+    group: 'growth',
+    label: 'XP for the first position settled each day',
+  }),
+  'growth.xpFromPractice': define({
+    schema: z.boolean(),
+    default: false,
+    group: 'growth',
+    label: 'Practice trading earns XP',
+    help: 'Off by default: a practice balance refills, so XP from it is unlimited.',
+  }),
+  'growth.xpLevelBase': define({
+    schema: z.number().int().min(10).max(1_000_000),
+    default: 100,
+    group: 'growth',
+    label: 'XP needed for level 2',
+  }),
+  'growth.xpLevelCurve': define({
+    schema: z.number().min(1).max(4),
+    default: 1.6,
+    group: 'growth',
+    label: 'Level curve',
+    help: 'Higher makes each level cost more than the last. 1 is a flat ladder.',
+  }),
+
   'compliance.requireKycForWithdrawal': define({
     schema: z.boolean(),
     default: env.requireKycForWithdrawal,

@@ -4,6 +4,18 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-20**: Phase 4 — **Experience and achievements**. XP from trading, a level ladder, and sixteen badges with live progress, all configurable and switchable off.
+
+  **XP is not money.** It never reaches a balance, nothing in settlement depends on it, and it is not spendable here. It accrues from volume staked, a bonus per win, and a once-a-day activity bonus keyed on the UTC day. Practice earns nothing by default — a practice balance refills, so XP from it would be free — but an operator can switch that on. The level curve is `base * (level - 1) ^ curve`, pure and tested against itself in both directions for forty levels, because a ladder that is wrong is wrong for everyone at once.
+
+  **Badges are targets against numbers the platform already keeps.** A new one is a row in the registry and nothing else: no new counters, no backfill, and progress that is right the moment it is added rather than from the day it shipped. Sixteen of them across positions, wins, volume, results, tournaments and the account itself.
+
+  **The hot path stays cheap.** A settle does one increment. Working out which badges are earned takes several aggregates, so it runs after a settle but at most once every thirty seconds per trader. Reading the progress page also catches up — confirming an address is not a trade and would otherwise sit unrewarded until the next one.
+
+  **A badge is awarded exactly once.** Each key is inserted on its own against the unique index and only the insert that created a row counts as new. Reading first and inserting the difference passes the database test but tells the trader twice when two callers race, which the integration test now catches.
+
+  **Verified.** 452 server tests (27 new unit tests, 6 new integration tests), 221 web tests, build, lint. New `e2e/progress.spec.ts` (3 tests): a new account at level 1 with every badge listed and its distance shown, a settled practice position earning the first badge but no XP, and the route from the account page. Looked at the page at 1440px and on a Pixel 7.
+
 - **2026-09-20**: Phase 4 — **Status levels**. Standard, Pro and VIP, reached by lifetime deposits, with the names, thresholds and all three perks configurable from the back office.
 
   **The rules are pure.** `services/status.ts` takes its numbers as arguments, so `levelFor`, `progressFor`, `payoutWithStatus` and `depositBonusFor` are testable without a database — 16 unit tests, including thresholds an operator has set out of order and the feature being switched off entirely.
@@ -347,6 +359,9 @@ _Record product choices made without the owner here: what, why, where it's confi
 - **OTC pricing premium**: OTC twins get +3% payout (capped at 95%) and 1.15× volatility, mirroring how brokers price their own books. Both numbers live in `data/markets.ts` and become per-asset admin settings in the OTC engine task.
 - **Outbox before transport**: every email is written to `EmailMessage` and then delivered, so a deployment with no SMTP configured still has a record an operator can read rather than a silently dropped verification link.
 - **Secrets in the settings registry**: a key marked `secret` can be written from the back office but never read back out of it, and never appears in the public settings. The SMTP password is the first; env still seeds its default, so a deployment can keep it out of the database entirely.
+- **XP never becomes money**: experience and badges are a record of activity. They do not go through `applyLedger`, they cannot be spent, and nothing in the settlement path reads them. When the marketplace arrives it will decide for itself what, if anything, converts.
+- **Practice earns no XP by default**: the practice balance refills on demand, so experience earned from it would be unlimited and the ladder meaningless. `growth.xpFromPractice` exists for operators who disagree.
+- **Achievements evaluate on a debounce, not on every settle**: measuring a trader's whole history costs several aggregates and a binary-options trader settles constantly. Thirty seconds per trader, plus a catch-up whenever the page is read.
 - **Status perks never touch the quote**: the payout bonus is applied to the trader's own position from their lifetime deposits alone. The market's payout is unchanged, and nothing on that path reads a position, an exposure or a result. Tournament trades are exempt so a contest stays a contest, and practice trades are not, so the practice account rehearses what live money would actually pay.
 - **A deposit is paid at the level held before it**: the bonus for the deposit that promotes someone is calculated from their total *before* the credit. The alternative reads as a retroactive promotion and makes the threshold ambiguous.
 - **Two listeners, not one**: the notification centre and the mailer subscribe to the same events separately. Sharing the wording would make both worse — a notification is read in the app, an email is read away from it.

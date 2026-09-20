@@ -70,6 +70,23 @@ export function Account() {
         </div>
       </div>
 
+      {user.experience?.enabled && (
+        <Link
+          to="/account/progress"
+          className="card flex items-center gap-3 p-5 transition hover:border-ink-400"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">Progress</p>
+            <p className="truncate text-xs text-slate-400">
+              Level {user.experience.level} · {user.experience.xp.toLocaleString()} XP · badges
+            </p>
+          </div>
+          <span aria-hidden="true" className="text-slate-500">
+            ›
+          </span>
+        </Link>
+      )}
+
       {user.statusLevel?.enabled && (
         <Link
           to="/account/status"

@@ -16,6 +16,7 @@ import { retryOnConflict } from '../lib/retry.js';
 import * as notifications from '../services/notifications.js';
 import * as security from '../services/security.js';
 import { progressFor, statusConfig } from '../services/status.js';
+import { progressionFor } from '../services/progression.js';
 
 // mounted at /api/me — every route here needs a signed-in user
 const router = Router();
@@ -389,6 +390,20 @@ router.get(
       levels: config.levels,
       progress: progressFor(user.totalDeposited, config),
     });
+  }),
+);
+
+/**
+ * Level, experience and every badge with its progress.
+ *
+ * Reading the page also catches up on anything earned since the last position
+ * settled — confirming an address or turning on two-factor is not a trade, and
+ * would otherwise sit unrewarded until the next one.
+ */
+router.get(
+  '/progress',
+  wrap(async (req, res) => {
+    res.json(await progressionFor(req.user!.id));
   }),
 );
 

@@ -18,6 +18,7 @@ import { startNotifications, stopNotifications } from './services/notifications.
 import { loadRevocations, pruneRevocations } from './services/revocations.js';
 import { configureMailer, watchMailSettings } from './services/mailer.js';
 import { attachEmailNotifications } from './services/email-notifications.js';
+import { attachProgression } from './services/progression.js';
 import type { OtcParams } from './engine/otc.js';
 
 /** How long a shutdown may take before in-flight work is abandoned. */
@@ -87,6 +88,7 @@ async function main() {
   leaderboard.start();
   startNotifications();
   attachEmailNotifications();
+  attachProgression();
   // a closed exchange stops printing prices; OTC and crypto never close
   const sessionByAsset = new Map(assets.map((asset) => [asset.symbol, asset.scheduleId]));
   marketFeed.setSessionResolver((symbol) => marketHours.stateFor(sessionByAsset.get(symbol) ?? null).isOpen);

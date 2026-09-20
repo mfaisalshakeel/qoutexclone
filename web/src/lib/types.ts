@@ -33,6 +33,8 @@ export interface User {
     /** Percentage added to their deposits. */
     depositBonus: number;
   };
+  /** The trader's experience level, for the header. */
+  experience?: { enabled: boolean; xp: number; level: number; percent: number };
   createdAt: string;
 }
 

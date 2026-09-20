@@ -9,6 +9,7 @@ import type {
 } from '@prisma/client';
 import { findNetwork } from './crypto-networks.js';
 import { levelFor, statusConfig } from '../services/status.js';
+import { levelProgress, xpConfig } from '../services/experience.js';
 
 /** The level and the perks that come with it, for the header and the ticket. */
 function statusOf(totalDeposited: number) {
@@ -21,6 +22,13 @@ function statusOf(totalDeposited: number) {
     payoutBonus: config.enabled ? level.payoutBonus : 0,
     depositBonus: config.enabled ? level.depositBonus : 0,
   };
+}
+
+/** The trader's level, for the header. */
+function experienceOf(xp: number) {
+  const config = xpConfig();
+  const progress = levelProgress(xp, config);
+  return { enabled: config.enabled, xp, level: progress.level, percent: progress.percent };
 }
 
 export function publicUser(user: User) {
@@ -49,6 +57,8 @@ export function publicUser(user: User) {
     // the level itself, so the header and the ticket can show it without a
     // second request; the full progress lives at /me/status
     statusLevel: statusOf(user.totalDeposited),
+    // the level is in the header; the ladder and the badges are a page away
+    experience: experienceOf(user.xp),
     createdAt: user.createdAt,
   };
 }
