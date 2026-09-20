@@ -18,6 +18,7 @@ import * as security from '../services/security.js';
 import { progressFor, statusConfig } from '../services/status.js';
 import { progressionFor } from '../services/progression.js';
 import * as marketplace from '../services/marketplace.js';
+import * as responsible from '../services/responsible.js';
 
 // mounted at /api/me — every route here needs a signed-in user
 const router = Router();
@@ -31,7 +32,11 @@ router.get(
     // a running booster rides along here rather than in `publicUser`, which is
     // synchronous and used on every hot path: this is the one place the
     // terminal reads its own account from, and it re-reads it when things change
-    res.json({ user: { ...publicUser(user), boost: await marketplace.runningBoost(user.id) } });
+    const [boost, shut] = await Promise.all([
+      marketplace.runningBoost(user.id),
+      responsible.excludedUntil(user.id),
+    ]);
+    res.json({ user: { ...publicUser(user), boost, excludedUntil: shut } });
   }),
 );
 
@@ -394,6 +399,55 @@ router.get(
       levels: config.levels,
       progress: progressFor(user.totalDeposited, config),
     });
+  }),
+);
+
+/* -------------------------------------------------------------------------- */
+/* Responsible trading                                                        */
+/* -------------------------------------------------------------------------- */
+
+/** The limits the trader has set, what they have used today, and any pending change. */
+router.get(
+  '/limits',
+  wrap(async (req, res) => {
+    const [limits, usage] = await Promise.all([
+      responsible.limitsFor(req.user!.id),
+      responsible.usageToday(req.user!.id),
+    ]);
+    res.json({ limits, usage, exclusionDays: responsible.EXCLUSION_DAYS });
+  }),
+);
+
+router.patch(
+  '/limits',
+  wrap(async (req, res) => {
+    const body = responsible.limitsSchema.parse(req.body);
+    res.json({ limits: await responsible.setLimits(req.user!.id, body) });
+  }),
+);
+
+/** Cancels a loosening that is still waiting. Always allowed, always at once. */
+router.delete(
+  '/limits/pending',
+  wrap(async (req, res) => {
+    res.json({ limits: await responsible.cancelPending(req.user!.id) });
+  }),
+);
+
+/**
+ * Shuts the account for a period.
+ *
+ * It cannot be undone, so the client asks twice; the server only checks that
+ * the period is one of the ones offered.
+ */
+router.post(
+  '/self-exclude',
+  wrap(async (req, res) => {
+    const body = z.object({ days: z.number().int() }).parse(req.body);
+    const limits = await responsible.selfExclude(req.user!.id, body.days);
+    // every other device is signed out: the account is closed from now
+    await security.revokeOtherSessions(req.user!.id, req.user!.sessionId ?? null);
+    res.json({ limits });
   }),
 );
 

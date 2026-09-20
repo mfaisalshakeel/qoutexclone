@@ -29,6 +29,7 @@ test.describe('responsive shell', () => {
       '/account/status',
       '/account/progress',
       '/marketplace',
+      '/account/limits',
     ]) {
       await page.goto(path);
       await page.waitForLoadState('networkidle');

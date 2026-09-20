@@ -7,9 +7,10 @@ import { useRealtime } from '../hooks/useRealtime';
 import { BalanceSwitcher } from './BalanceSwitcher';
 import { ErrorBoundary } from './ErrorBoundary';
 import { SupportChat } from './SupportChat';
+import { SessionReminder } from './SessionReminder';
 import { NotificationCentre } from './NotificationCentre';
 import { Toasts } from './Toasts';
-import { VerifyEmailBanner } from './VerifyEmailBanner';
+import { ExclusionBanner, VerifyEmailBanner } from './VerifyEmailBanner';
 import { IconChart, IconCup, IconHistory, IconLogo, IconShield, IconUser, IconWallet } from './Icons';
 
 const NAV = [
@@ -131,6 +132,13 @@ export function Layout() {
                     </Link>
                   ))}
                   <Link
+                    to="/account/limits"
+                    onClick={() => setMenuOpen(false)}
+                    className="block rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-ink-700"
+                  >
+                    Responsible trading
+                  </Link>
+                  <Link
                     to="/marketplace"
                     onClick={() => setMenuOpen(false)}
                     className="block rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-ink-700"
@@ -189,6 +197,7 @@ export function Layout() {
 
       {/* the terminal is full-bleed and sized to the viewport, so a strip
           above it would push the chart off the screen: it nags everywhere else */}
+      {!isTerminal && <ExclusionBanner />}
       {!isTerminal && <VerifyEmailBanner />}
 
       <main
@@ -220,6 +229,7 @@ export function Layout() {
       </nav>
 
       <SupportChat />
+      <SessionReminder />
       <Toasts />
     </div>
   );

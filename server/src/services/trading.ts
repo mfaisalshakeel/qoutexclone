@@ -9,6 +9,7 @@ import { activeEntry, adjustEntryBalance } from './tournaments.js';
 import { settings } from './settings.js';
 import { levelFor, payoutWithStatus, statusConfig } from './status.js';
 import { activeBoosterBonus, coverLoss } from './marketplace.js';
+import { assertCanStake } from './responsible.js';
 import { marketHours, otcAlternative } from './market-hours.js';
 import { payouts } from './payouts.js';
 import { assessStake } from './risk.js';
@@ -97,6 +98,10 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
       { nextOpen: session.nextOpen, holiday: session.holiday, otcAlternative: alternative },
     );
   }
+
+  // a trader's own limits are checked before anything else is worked out: the
+  // answer is the same whatever the market is doing
+  await assertCanStake(input.userId, input.accountType);
 
   const openCount = await prisma.trade.count({ where: { userId: input.userId, status: 'OPEN' } });
   if (openCount >= settings.get('trading.maxOpenTrades')) {

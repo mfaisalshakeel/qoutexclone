@@ -39,6 +39,8 @@ export interface User {
   points?: number;
   /** A payout booster the trader has running, if any. */
   boost?: { bonusPct: number; expiresAt: string } | null;
+  /** Set while the trader has excluded themselves. Withdrawals stay open. */
+  excludedUntil?: string | null;
   createdAt: string;
 }
 

@@ -499,6 +499,15 @@ export const SETTINGS = {
     help: 'Higher makes each level cost more than the last. 1 is a flat ladder.',
   }),
 
+  'compliance.limitCoolingOffHours': define({
+    schema: z.number().int().min(0).max(168),
+    default: 24,
+    group: 'compliance',
+    label: 'Cooling-off before a limit is loosened (hours)',
+    help: 'Tightening a limit always applies at once. 0 removes the wait entirely.',
+    public: true,
+  }),
+
   'compliance.requireKycForWithdrawal': define({
     schema: z.boolean(),
     default: env.requireKycForWithdrawal,

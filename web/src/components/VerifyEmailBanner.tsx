@@ -12,6 +12,32 @@ import { toast } from '../store/toast';
  * recovered, and when an operator has made verification mandatory it is also
  * what stands between the trader and their money.
  */
+/**
+ * A self-excluded account, said on every page.
+ *
+ * The server refuses the trade either way; this is so nobody has to discover
+ * that by trying. Withdrawals are named explicitly, because the one thing
+ * someone in this position must not have to wonder about is their money.
+ */
+export function ExclusionBanner() {
+  const user = useAuth((state) => state.user);
+  if (!user?.excludedUntil || new Date(user.excludedUntil) <= new Date()) return null;
+
+  return (
+    <div role="status" className="border-b border-down/30 bg-down-soft px-3 py-2.5 sm:px-4">
+      <div className="mx-auto flex w-full max-w-[1400px] flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+        <p className="text-down">
+          You asked us to close your account until {new Date(user.excludedUntil).toLocaleString()}. Trading
+          and deposits are off. Withdrawals are open.
+        </p>
+        <Link to="/wallet?tab=withdraw" className="font-semibold text-slate-200 underline">
+          Withdraw
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export function VerifyEmailBanner() {
   const user = useAuth((state) => state.user);
   const mode = useSettings((state) => state.values['security.emailVerification']) ?? 'optional';

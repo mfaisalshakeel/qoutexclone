@@ -11,6 +11,7 @@ import { previewPromo, redeemPromo } from './promos.js';
 import { depositBonusFor, levelFor, statusConfig } from './status.js';
 import { couponFor, spendCoupon } from './marketplace.js';
 import { previewOffer, quoteOffer, recordBonus } from './bonuses.js';
+import { assertCanDeposit } from './responsible.js';
 import { payReferralCommission } from './referrals.js';
 import { settings } from './settings.js';
 
@@ -61,6 +62,9 @@ export async function createDeposit(input: CreateDepositInput): Promise<Deposit>
   const { address, memo } = await getDepositAddress(input.userId, input.currency, input.network);
   const rate = usdRate(input.currency);
   const cents = usdToCents(input.usdAmount);
+
+  // the trader's own daily limit, before anything is written down
+  await assertCanDeposit(input.userId, cents);
 
   // validated now so a bad code fails at checkout, not silently at credit time
   const promoCode = input.promoCode?.trim().toUpperCase() || undefined;

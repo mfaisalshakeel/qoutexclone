@@ -4,6 +4,20 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-20**: Phase 4 — **Responsible trading**. A daily loss limit, a daily deposit limit, a session reminder and a self-exclusion period, all enforced on the server.
+
+  **A limit that only exists in the browser is a suggestion**, and the person it is meant to protect is exactly the person who will route around it. So every one of these is checked in the service that does the thing: `assertCanStake` before a position is worked out at all, `assertCanDeposit` before an invoice is written.
+
+  **Tightening applies at once; loosening waits out a cooling-off period** (24 hours by default, configurable, 0 to remove it). Each field is compared on its own, so tightening the loss limit while raising the deposit limit does both — one now, one later — and a waiting change can always be cancelled, immediately. The session reminder is a nudge rather than a guard, so it applies at once either way.
+
+  **Self-exclusion only ever extends.** A shorter period cannot shorten a longer one, and nothing cancels it. Withdrawals stay open the whole time: locking someone out of their own money is not responsible gambling. Sign-in is still allowed and recorded as `EXCLUDED` for the same reason — the door to the money stays open and the terminal is what closes.
+
+  **A day is a UTC day**, and only live money counts: there is nothing to lose on practice, and a limit that counted it would be theatre.
+
+  **Found while testing**: Prisma reads `undefined` as "leave this column alone", so clearing a JSON column needs `Prisma.DbNull`. The cancel-a-pending-change path silently kept the old value until a test caught it.
+
+  **Verified.** 486 server tests (3 unit, 8 integration covering the cooling-off, the refusals, the extend-only exclusion and a withdrawal that must still go through), 221 web tests, build, lint. New `e2e/limits.spec.ts` (2 tests). The page and the interruption were looked at at 1440px and on a Pixel 7.
+
 - **2026-09-20**: Phase 4 — **Bonuses**. A bonus choice at deposit time, a turnover requirement before a bonus can be withdrawn, and a progress bar that says where the trader stands.
 
   **Bonus money is real money on the real balance.** It is credited through `applyLedger` like everything else and can be traded the moment it lands. What a `Bonus` row holds back is the *right to withdraw* it: the amount stays locked until the trader has staked it a number of times over. The alternative — a second, shadow balance for bonus money — means two numbers that have to agree for ever, and they never do.
@@ -389,6 +403,8 @@ _Record product choices made without the owner here: what, why, where it's confi
 - **OTC pricing premium**: OTC twins get +3% payout (capped at 95%) and 1.15× volatility, mirroring how brokers price their own books. Both numbers live in `data/markets.ts` and become per-asset admin settings in the OTC engine task.
 - **Outbox before transport**: every email is written to `EmailMessage` and then delivered, so a deployment with no SMTP configured still has a record an operator can read rather than a silently dropped verification link.
 - **Secrets in the settings registry**: a key marked `secret` can be written from the back office but never read back out of it, and never appears in the public settings. The SMTP password is the first; env still seeds its default, so a deployment can keep it out of the database entirely.
+- **Self-exclusion never blocks a withdrawal, or the sign-in that reaches one**: trading and deposits close, the account does not. Anything else holds someone's money hostage at the worst possible moment.
+- **Loosening a limit waits, tightening does not**: the moment someone wants their limit raised is the moment it is working. The session reminder is exempt — it is a nudge, not a guard.
 - **Bonus money lives on the one balance**: a bonus is credited normally and a `Bonus` row records the turnover that has to be met before it can leave. Two balances that must reconcile is the alternative, and it always drifts.
 - **Every bonus carries turnover, whatever its source**: promo codes, status bonuses and marketplace coupons all write a bonus row. A withdrawable-by-default bonus would be the exception nobody documented.
 - **Turnover is not multiplied across bonuses**: one stake pays down one bonus, oldest first.

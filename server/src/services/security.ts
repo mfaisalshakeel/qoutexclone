@@ -117,7 +117,14 @@ export async function confirmEmail(token: string): Promise<User> {
 /* -------------------------------------------------------------------------- */
 
 export type LoginOutcome =
-  'SUCCESS' | 'BAD_PASSWORD' | 'UNKNOWN_EMAIL' | 'SUSPENDED' | 'TWO_FACTOR_REQUIRED' | 'TWO_FACTOR_FAILED';
+  | 'SUCCESS'
+  | 'BAD_PASSWORD'
+  | 'UNKNOWN_EMAIL'
+  | 'SUSPENDED'
+  | 'TWO_FACTOR_REQUIRED'
+  | 'TWO_FACTOR_FAILED'
+  /** Signed in while self-excluded: allowed, so they can still withdraw. */
+  | 'EXCLUDED';
 
 /** Whether this account has ever successfully signed in from this device. */
 export async function isKnownDevice(userId: string, print: string): Promise<boolean> {

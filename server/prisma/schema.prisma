@@ -83,6 +83,7 @@ model User {
   achievements       Achievement[]
   inventory          InventoryItem[]
   bonuses            Bonus[]
+  limits             ResponsibleLimits?
   emails             EmailMessage[]
 
   @@index([referredById])
@@ -187,6 +188,33 @@ model Achievement {
 
   @@unique([userId, key])
   @@index([userId])
+}
+
+/// The limits a trader has set on themselves.
+///
+/// Tightening one takes effect at once; loosening one waits out a cooling-off
+/// period, which is the whole point of setting it while thinking clearly.
+model ResponsibleLimits {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  /// Cents of net loss in a day, after which no new position is accepted. 0 = off.
+  dailyLossCents    Int @default(0)
+  /// Cents that may be deposited in a day. 0 = off.
+  dailyDepositCents Int @default(0)
+  /// Minutes of continuous use before the terminal interrupts. 0 = off.
+  sessionReminderMin Int @default(0)
+
+  /// A loosening waiting out its cooling-off period, and when it applies.
+  pending   Json?
+  pendingAt DateTime?
+
+  /// Set while the trader has excluded themselves. Withdrawals stay open.
+  excludedUntil DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 /// A bonus offer a trader can pick at deposit time. Edited in the back office.

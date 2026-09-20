@@ -28,6 +28,7 @@ import {
   type RequestContext,
 } from '../services/security.js';
 import { describeDevice, fingerprint } from '../lib/device.js';
+import { excludedUntil } from '../services/responsible.js';
 
 const router = Router();
 
@@ -142,6 +143,13 @@ router.post(
     if (user.status !== 'ACTIVE') {
       await recordLogin({ email, outcome: 'SUSPENDED', context, userId: user.id });
       throw unauthorized('This account is suspended');
+    }
+
+    // a self-excluded trader can still get at their money, so the door stays
+    // open — the terminal is what closes, and it closes below
+    const shut = await excludedUntil(user.id);
+    if (shut) {
+      await recordLogin({ email, outcome: 'EXCLUDED', context, userId: user.id });
     }
 
     // the password alone is not a session when a second factor is enrolled
