@@ -74,7 +74,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **Status levels.** Standard, Pro and VIP (names, thresholds and perks configurable). They're reached by lifetime deposits, and perks include a payout bonus (default +2% / +4%), withdrawal priority, and deposit bonus %. Status is shown in the header, and there's a progress page.
 - [x] **Experience and achievements.** XP from trading volume and activity, levels, and achievement badges with progress. Configurable, and can be turned off.
 - [x] **Marketplace.** Items bought with points or balance: payout boosters (+X% for N minutes), risk-free trades (stake refunded on loss, capped), deposit bonus coupons, and practice refills. There's an inventory, activation and expiry. Every effect goes through the ledger and is audited.
-- [ ] **Bonuses.** A deposit bonus choice at deposit time, and a turnover requirement before a bonus becomes withdrawable (shown as a progress bar). Admin controls rules.
+- [x] **Bonuses.** A deposit bonus choice at deposit time, and a turnover requirement before a bonus becomes withdrawable (shown as a progress bar). Admin controls rules.
 - [ ] **Responsible trading.** Daily loss limit, deposit limit, session reminder and self-exclusion period, enforced server-side.
 - [ ] **Profile.** Avatar, country, timezone, language, currency display, and notification preferences.
 

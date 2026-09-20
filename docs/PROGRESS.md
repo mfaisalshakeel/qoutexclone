@@ -4,6 +4,20 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-20**: Phase 4 — **Bonuses**. A bonus choice at deposit time, a turnover requirement before a bonus can be withdrawn, and a progress bar that says where the trader stands.
+
+  **Bonus money is real money on the real balance.** It is credited through `applyLedger` like everything else and can be traded the moment it lands. What a `Bonus` row holds back is the *right to withdraw* it: the amount stays locked until the trader has staked it a number of times over. The alternative — a second, shadow balance for bonus money — means two numbers that have to agree for ever, and they never do.
+
+  **Every bonus carries a requirement, not just the chosen one.** The offer picked at checkout, a promo code, the status deposit bonus and a marketplace coupon each write their own row with their own multiplier, so nothing slips through as instantly withdrawable by accident.
+
+  **Turnover is paid down oldest first, one bonus at a time.** Staking $10 with two bonuses outstanding is $10 of turnover, not $20 — the arithmetic anyone would check first, and the one a lazy implementation gets wrong. A withdrawal that would dip into locked money is refused with the exact amount still to stake.
+
+  **The price is on the option.** Each offer at checkout shows what it adds *and* what it costs in turnover, because a bonus whose condition lives in terms somewhere else reads as a trick. A choice that stops applying when the amount changes is dropped rather than left selected and silently ignored at credit time.
+
+  **Admin.** Offers have CRUD and an audited granted-bonus list; an operator can release a trader's hold without clawing money back, because taking credited money away silently leaves a balance nobody can explain. The screens land with the rest of Growth in Phase 6.
+
+  **Verified.** 475 server tests (6 unit, 7 integration), 221 web tests, build, lint. New `e2e/bonuses.spec.ts` (3 tests): the choice and its turnover at checkout, the lock refusing a withdrawal, and a settled live position moving the bar. Found a latent flake in the process — a fresh account reads "Open (0)" before a position lands, so that assertion has to wait for "Open (1)" first.
+
 - **2026-09-20**: Phase 4 — **Marketplace**. Payout boosters, risk-free cover, deposit coupons and practice top-ups, bought with loyalty points or with the live balance, held in an inventory until started.
 
   **Every effect that moves money goes through `applyLedger`.** A purchase with money is a negative `MARKETPLACE` entry that cannot overdraw; a risk-free refund is a `RISK_FREE_REFUND` written inside the same transaction that settled the losing position and spent the use that paid for it; a practice top-up is a `PRACTICE_TOPUP` on the demo account. Points are not money — they never reach a balance, are never withdrawable, and are spent with a conditional update that two simultaneous purchases cannot both win.
@@ -375,6 +389,10 @@ _Record product choices made without the owner here: what, why, where it's confi
 - **OTC pricing premium**: OTC twins get +3% payout (capped at 95%) and 1.15× volatility, mirroring how brokers price their own books. Both numbers live in `data/markets.ts` and become per-asset admin settings in the OTC engine task.
 - **Outbox before transport**: every email is written to `EmailMessage` and then delivered, so a deployment with no SMTP configured still has a record an operator can read rather than a silently dropped verification link.
 - **Secrets in the settings registry**: a key marked `secret` can be written from the back office but never read back out of it, and never appears in the public settings. The SMTP password is the first; env still seeds its default, so a deployment can keep it out of the database entirely.
+- **Bonus money lives on the one balance**: a bonus is credited normally and a `Bonus` row records the turnover that has to be met before it can leave. Two balances that must reconcile is the alternative, and it always drifts.
+- **Every bonus carries turnover, whatever its source**: promo codes, status bonuses and marketplace coupons all write a bonus row. A withdrawable-by-default bonus would be the exception nobody documented.
+- **Turnover is not multiplied across bonuses**: one stake pays down one bonus, oldest first.
+- **Forfeiting releases the hold and never claws back the money**: an operator settling a complaint wants the trader able to withdraw, not a balance that silently shrank.
 - **Points are a separate currency from XP**: spending experience would demote a trader, so the marketplace has its own balance earned on the same activity. Neither is money.
 - **Marketplace items are disabled, never deleted**: an inventory row references the item it came from for ever, and a support question about a purchase from last year has to be answerable.
 - **XP never becomes money**: experience and badges are a record of activity. They do not go through `applyLedger`, they cannot be spent, and nothing in the settlement path reads them. When the marketplace arrives it will decide for itself what, if anything, converts.

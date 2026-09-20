@@ -14,6 +14,7 @@ import {
   type XpConfig,
 } from './experience.js';
 import { settings } from './settings.js';
+import { creditTurnover } from './bonuses.js';
 
 /**
  * Where XP is earned and badges are handed out.
@@ -210,6 +211,12 @@ export function attachProgression(): void {
     void (async () => {
       try {
         await awardTradeXp(trade);
+        // a live stake pays down whatever bonus turnover is outstanding
+        await creditTurnover({
+          userId: trade.userId,
+          stake: trade.stake,
+          accountType: trade.accountType,
+        });
 
         const last = lastEvaluated.get(trade.userId) ?? 0;
         if (Date.now() - last < EVALUATE_EVERY_MS) return;

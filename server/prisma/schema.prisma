@@ -82,6 +82,7 @@ model User {
   loginEvents        LoginEvent[]
   achievements       Achievement[]
   inventory          InventoryItem[]
+  bonuses            Bonus[]
   emails             EmailMessage[]
 
   @@index([referredById])
@@ -186,6 +187,56 @@ model Achievement {
 
   @@unique([userId, key])
   @@index([userId])
+}
+
+/// A bonus offer a trader can pick at deposit time. Edited in the back office.
+model BonusOffer {
+  id                 String  @id @default(cuid())
+  key                String  @unique
+  name               String
+  description        String  @db.Text
+  /// Percentage added to the deposit.
+  percent            Float
+  maxBonusCents      Int
+  minDepositCents    Int     @default(0)
+  /// How many times the bonus must be staked before it can be withdrawn.
+  turnoverMultiplier Int     @default(20)
+  enabled            Boolean @default(true)
+  sortOrder          Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  bonuses   Bonus[]
+
+  @@index([enabled, sortOrder])
+}
+
+/// One credited bonus and the turnover it carries. The money is already on the
+/// balance; what this row holds back is the right to withdraw it.
+model Bonus {
+  id       String  @id @default(cuid())
+  userId   String
+  offerId  String?
+  /// deposit | promo | status | coupon — where the bonus came from.
+  source   String
+  /// What was credited, in cents.
+  amount   Int
+  /// Cents of stake still to be traded before it is released.
+  required Int
+  staked   Int     @default(0)
+  /// ACTIVE | RELEASED | FORFEITED
+  status   String  @default("ACTIVE")
+  note     String?
+
+  depositId  String?
+  releasedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  offer BonusOffer? @relation(fields: [offerId], references: [id])
+
+  @@index([userId, status])
+  @@index([createdAt])
 }
 
 /// The marketplace catalogue, edited in the back office.
@@ -396,6 +447,8 @@ model Deposit {
   txHash         String?
   promoCode      String?
   bonusAmount    Int       @default(0)
+  /// The bonus offer the trader chose at checkout, if any.
+  bonusOfferId   String?
   confirmations  Int       @default(0)
   requiredConf   Int       @default(2)
   status         String    @default("AWAITING_PAYMENT") // AWAITING_PAYMENT | CONFIRMING | COMPLETED | REJECTED | EXPIRED

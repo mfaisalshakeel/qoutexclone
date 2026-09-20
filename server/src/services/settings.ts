@@ -419,6 +419,23 @@ export const SETTINGS = {
     public: true,
   }),
 
+  'wallet.bonusesEnabled': define({
+    schema: z.boolean(),
+    default: true,
+    group: 'wallet',
+    label: 'Deposit bonuses',
+    help: 'Off hides every offer and stops new bonuses carrying a turnover requirement.',
+    public: true,
+  }),
+  'wallet.bonusTurnoverMultiplier': define({
+    schema: z.number().int().min(0).max(100),
+    default: 20,
+    group: 'wallet',
+    label: 'Default turnover multiplier',
+    help: 'How many times a bonus must be staked before it can be withdrawn. 0 releases it at once.',
+    public: true,
+  }),
+
   'growth.marketplaceEnabled': define({
     schema: z.boolean(),
     default: true,

@@ -23,6 +23,63 @@ const STEPS: Record<Deposit['status'], number> = {
   EXPIRED: -1,
 };
 
+interface BonusOffer {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  percent: number;
+  maxBonusCents: number;
+  minDepositCents: number;
+  turnoverMultiplier: number;
+  bonus: number;
+  eligible: boolean;
+  reason?: string;
+}
+
+/**
+ * One bonus option.
+ *
+ * A radio rather than a dropdown: the turnover a bonus carries is the thing a
+ * trader most needs to see before choosing, and a dropdown hides it.
+ */
+function BonusChoice({
+  selected,
+  onSelect,
+  title,
+  detail,
+  disabled,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  title: string;
+  detail: string;
+  disabled?: boolean;
+}) {
+  const id = `bonus-${title.replace(/\W+/g, '-').toLowerCase()}`;
+  return (
+    <div
+      className={`flex items-start gap-3 rounded-xl border p-3 transition ${
+        selected ? 'border-accent bg-accent/10' : 'border-ink-600 hover:border-ink-500'
+      } ${disabled ? 'opacity-50' : ''}`}
+    >
+      <input
+        id={id}
+        type="radio"
+        name="bonus-offer"
+        checked={selected}
+        disabled={disabled}
+        onChange={onSelect}
+        className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
+      />
+      <label htmlFor={id} className={`min-w-0 ${disabled ? '' : 'cursor-pointer'}`}>
+        <span className="block text-sm font-semibold">{title}</span>
+        <span className="block text-xs text-slate-400">{detail}</span>
+      </label>
+    </div>
+  );
+}
+
 export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props) {
   const refreshUser = useAuth((s) => s.refreshUser);
   const [index, setIndex] = useState(0);
@@ -32,6 +89,8 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
   const [promoCode, setPromoCode] = useState('');
   const [promo, setPromo] = useState<{ bonus: number; description: string } | null>(null);
   const [promoError, setPromoError] = useState('');
+  const [offers, setOffers] = useState<BonusOffer[] | null>(null);
+  const [offerId, setOfferId] = useState<string | null>(null);
   const [, tick] = useState(0);
 
   const method = methods[index];
@@ -44,6 +103,34 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
     const id = window.setInterval(() => tick((n) => n + 1), 1000);
     return () => window.clearInterval(id);
   }, []);
+
+  // the offers are quoted against the amount, so they are re-read as it changes
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      api
+        .get<{ enabled: boolean; offers: BonusOffer[] }>(`/wallet/bonus-offers?amount=${amount}`)
+        .then((data) => {
+          if (cancelled) return;
+          setOffers(data.enabled ? data.offers : []);
+        })
+        .catch(() => {
+          if (!cancelled) setOffers([]);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [amount]);
+
+  // a choice that stops applying when the amount changes is dropped rather
+  // than left selected and silently ignored at credit time
+  useEffect(() => {
+    if (!offerId) return;
+    const chosen = offers?.find((offer) => offer.id === offerId);
+    if (offers && (!chosen || !chosen.eligible)) setOfferId(null);
+  }, [offers, offerId]);
 
   if (!method) return <PaymentPanelSkeleton />;
 
@@ -79,6 +166,7 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
         network: method.network,
         amount,
         ...(promo && promoCode.trim() ? { promoCode: promoCode.trim() } : {}),
+        ...(offerId ? { bonusOfferId: offerId } : {}),
       });
       onChanged();
       toast.info('Deposit address ready', `Send exactly the amount shown to complete the deposit`);
@@ -261,6 +349,34 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
           · credited as {money(Math.round(amount * 100))}
         </p>
       </div>
+
+      {offers && offers.length > 0 && (
+        <fieldset>
+          <legend className="label">Deposit bonus</legend>
+          <div className="space-y-2">
+            <BonusChoice
+              selected={offerId === null}
+              onSelect={() => setOfferId(null)}
+              title="No bonus"
+              detail="Everything you deposit is yours to withdraw whenever you like."
+            />
+            {offers.map((offer) => (
+              <BonusChoice
+                key={offer.id}
+                selected={offerId === offer.id}
+                onSelect={() => setOfferId(offer.id)}
+                disabled={!offer.eligible}
+                title={offer.name}
+                detail={
+                  offer.eligible
+                    ? `${money(offer.bonus)} extra · stake ${money(offer.bonus * offer.turnoverMultiplier)} to release it`
+                    : (offer.reason ?? 'Not available on this amount')
+                }
+              />
+            ))}
+          </div>
+        </fieldset>
+      )}
 
       <div>
         <label className="label" htmlFor="promo-code">

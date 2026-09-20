@@ -6,6 +6,7 @@ import { NETWORKS } from '../lib/crypto-networks.js';
 import { publicDeposit, publicTransaction, publicWithdrawal } from '../lib/serialize.js';
 import { prisma } from '../lib/prisma.js';
 import { requireActiveUser, requireAuth, requireVerifiedEmail } from '../middleware/auth.js';
+import { bonusesEnabled, holdFor, listOffers, quoteOffer } from '../services/bonuses.js';
 import { getBalances, listTransactions } from '../services/wallet.js';
 import { createDeposit, getDepositAddress, listDeposits, markSeen } from '../services/deposits.js';
 import {
@@ -40,6 +41,46 @@ router.get('/methods', (_req, res) => {
     mockChain: env.mockChainWatcher,
   });
 });
+
+/**
+ * The bonus offers a trader can pick from, and what each is worth on the
+ * amount they are about to deposit.
+ */
+router.get(
+  '/bonus-offers',
+  wrap(async (req, res) => {
+    const amount = z.coerce
+      .number()
+      .min(0)
+      .max(1_000_000)
+      .default(0)
+      .parse(req.query.amount ?? 0);
+    const cents = Math.round(amount * 100);
+    const offers = await listOffers();
+    res.json({
+      enabled: bonusesEnabled(),
+      offers: offers.map((offer) => ({
+        id: offer.id,
+        key: offer.key,
+        name: offer.name,
+        description: offer.description,
+        percent: offer.percent,
+        maxBonusCents: offer.maxBonusCents,
+        minDepositCents: offer.minDepositCents,
+        turnoverMultiplier: offer.turnoverMultiplier,
+        ...quoteOffer(offer, cents),
+      })),
+    });
+  }),
+);
+
+/** What is still locked behind a turnover requirement, and how far off it is. */
+router.get(
+  '/bonuses',
+  wrap(async (req, res) => {
+    res.json(await holdFor(req.user!.id));
+  }),
+);
 
 router.get(
   '/balances',
@@ -97,6 +138,7 @@ router.post(
         network: z.string().min(3).max(12),
         amount: z.number().positive().max(1000000),
         promoCode: z.string().max(32).optional(),
+        bonusOfferId: z.string().max(40).optional(),
       })
       .parse(req.body);
     const deposit = await createDeposit({
@@ -105,6 +147,7 @@ router.post(
       network: body.network.toUpperCase(),
       usdAmount: body.amount,
       promoCode: body.promoCode,
+      bonusOfferId: body.bonusOfferId,
     });
     res.status(201).json({ deposit: publicDeposit(deposit) });
   }),

@@ -5,6 +5,7 @@ import { prisma } from './lib/prisma.js';
 import { MARKETS, MARKET_COUNTS } from './data/markets.js';
 import { SCHEDULES, scheduleKeyFor } from './data/schedules.js';
 import { DEFAULT_MARKETPLACE_ITEMS } from './data/marketplace.js';
+import { DEFAULT_BONUS_OFFERS } from './data/bonus-offers.js';
 
 async function main() {
   // schedules first: markets reference them
@@ -103,12 +104,17 @@ async function main() {
     });
   }
 
+  for (const offer of DEFAULT_BONUS_OFFERS) {
+    await prisma.bonusOffer.upsert({ where: { key: offer.key }, update: {}, create: offer });
+  }
+
   const byClass = Object.entries(MARKET_COUNTS.byClass)
     .map(([assetClass, count]) => `${assetClass.toLowerCase()} ${count}`)
     .join(', ');
   console.log(`Seeded ${MARKET_COUNTS.total} markets (${byClass}; ${MARKET_COUNTS.otc} OTC).`);
   console.log(`Seeded ${SCHEDULES.length} trading schedules.`);
   console.log(`Seeded ${DEFAULT_MARKETPLACE_ITEMS.length} marketplace items.`);
+  console.log(`Seeded ${DEFAULT_BONUS_OFFERS.length} bonus offers.`);
   console.log(`Admin:  ${adminEmail} / ${adminPassword}`);
   console.log(`Trader: ${demoEmail} / Trader123!`);
 }

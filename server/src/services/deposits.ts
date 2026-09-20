@@ -10,6 +10,7 @@ import { applyLedger } from './wallet.js';
 import { previewPromo, redeemPromo } from './promos.js';
 import { depositBonusFor, levelFor, statusConfig } from './status.js';
 import { couponFor, spendCoupon } from './marketplace.js';
+import { previewOffer, quoteOffer, recordBonus } from './bonuses.js';
 import { payReferralCommission } from './referrals.js';
 import { settings } from './settings.js';
 
@@ -34,6 +35,8 @@ export interface CreateDepositInput {
   network: string;
   usdAmount: number; // dollars the user intends to send
   promoCode?: string;
+  /** A bonus offer picked at checkout, from `listOffers()`. */
+  bonusOfferId?: string;
 }
 
 /**
@@ -63,6 +66,11 @@ export async function createDeposit(input: CreateDepositInput): Promise<Deposit>
   const promoCode = input.promoCode?.trim().toUpperCase() || undefined;
   if (promoCode) await previewPromo(promoCode, input.userId, cents);
 
+  // the same for the bonus choice: an offer that does not apply must fail at
+  // checkout, where it can be changed, not silently at credit time
+  const bonusOfferId = input.bonusOfferId?.trim() || undefined;
+  if (bonusOfferId) await previewOffer(bonusOfferId, cents);
+
   const deposit = await prisma.deposit.create({
     data: {
       userId: input.userId,
@@ -73,6 +81,7 @@ export async function createDeposit(input: CreateDepositInput): Promise<Deposit>
       rate,
       requiredConf: spec.confirmations,
       promoCode,
+      bonusOfferId,
       status: 'AWAITING_PAYMENT',
       expiresAt: new Date(Date.now() + settings.get('wallet.depositWindowMinutes') * 60 * 1000),
       adminNote: memo ? `memo:${memo}` : null,
@@ -173,6 +182,45 @@ export async function completeDeposit(
         refId: deposit.id,
         note: `${level.name} deposit bonus`,
       });
+      await recordBonus(tx, {
+        userId: deposit.userId,
+        amount: statusBonus,
+        source: 'status',
+        depositId: deposit.id,
+        note: `${level.name} deposit bonus`,
+      });
+    }
+
+    // the offer the trader picked at checkout
+    let offerBonus = 0;
+    let offerMultiplier: number | undefined;
+    if (deposit.bonusOfferId) {
+      const offer = await tx.bonusOffer.findUnique({ where: { id: deposit.bonusOfferId } });
+      if (offer) {
+        const quote = quoteOffer(offer, credited);
+        if (quote.eligible) {
+          offerBonus = quote.bonus;
+          offerMultiplier = offer.turnoverMultiplier;
+          await applyLedger(tx, {
+            userId: deposit.userId,
+            accountType: 'REAL',
+            type: 'BONUS',
+            amount: offerBonus,
+            refType: 'deposit',
+            refId: deposit.id,
+            note: offer.name,
+          });
+          await recordBonus(tx, {
+            userId: deposit.userId,
+            amount: offerBonus,
+            source: 'deposit',
+            multiplier: offerMultiplier,
+            depositId: deposit.id,
+            offerId: offer.id,
+            note: offer.name,
+          });
+        }
+      }
     }
 
     // a coupon bought in the marketplace, if one is held and worth more than
@@ -190,6 +238,13 @@ export async function completeDeposit(
         refId: deposit.id,
         note: 'Deposit bonus coupon',
       });
+      await recordBonus(tx, {
+        userId: deposit.userId,
+        amount: couponBonus,
+        source: 'coupon',
+        depositId: deposit.id,
+        note: 'Deposit bonus coupon',
+      });
     }
 
     const bonus = deposit.promoCode
@@ -200,7 +255,17 @@ export async function completeDeposit(
           depositCents: credited,
         })
       : 0;
-    const bonusTotal = bonus + statusBonus + couponBonus;
+    if (bonus > 0) {
+      await recordBonus(tx, {
+        userId: deposit.userId,
+        amount: bonus,
+        source: 'promo',
+        depositId: deposit.id,
+        note: deposit.promoCode ?? undefined,
+      });
+    }
+
+    const bonusTotal = bonus + statusBonus + couponBonus + offerBonus;
     if (bonusTotal > 0) {
       await tx.deposit.update({ where: { id: depositId }, data: { bonusAmount: bonusTotal } });
     }

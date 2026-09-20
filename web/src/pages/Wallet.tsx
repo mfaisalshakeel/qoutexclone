@@ -6,6 +6,7 @@ import { realtime } from '../lib/ws';
 import { useAuth } from '../store/auth';
 import { DepositPanel } from '../components/DepositPanel';
 import { WithdrawPanel } from '../components/WithdrawPanel';
+import { BonusProgress } from '../components/BonusProgress';
 import type { Deposit, PaymentMethod, Withdrawal } from '../lib/types';
 import { RowSkeletons } from '../components/Skeleton';
 
@@ -86,7 +87,11 @@ export function Wallet() {
         />
       )}
       {tab === 'withdraw' && (
-        <WithdrawPanel methods={methods} withdrawals={withdrawals} onChanged={() => void loadAll()} />
+        <div className="space-y-4">
+          {/* stated where it matters: on the screen where someone tries to take it out */}
+          <BonusProgress />
+          <WithdrawPanel methods={methods} withdrawals={withdrawals} onChanged={() => void loadAll()} />
+        </div>
       )}
       {tab === 'history' &&
         (listsLoaded ? (

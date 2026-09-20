@@ -9,6 +9,7 @@ import { usdRate } from './rates.js';
 import { holdFunds, releaseHold, settleHold } from './wallet.js';
 import { kycBlocksWithdrawal } from './kyc.js';
 import { settings } from './settings.js';
+import { holdFor } from './bonuses.js';
 
 export const withdrawalEvents = new EventEmitter();
 
@@ -80,6 +81,17 @@ export async function createWithdrawal(input: CreateWithdrawalInput): Promise<Wi
     throw forbidden('Identity verification is required before withdrawing this amount');
   }
   if (user.realBalance < input.amountCents) throw badRequest('Insufficient balance', 'insufficient_funds');
+
+  // bonus money is on the balance but not yet the trader's to take: it is
+  // released by staking it, and until then it cannot leave
+  const hold = await holdFor(input.userId);
+  if (hold.locked > 0 && user.realBalance - hold.locked < input.amountCents) {
+    throw badRequest(
+      `$${(hold.locked / 100).toFixed(2)} of bonus is still locked. Stake $${(hold.remaining / 100).toFixed(2)} more to release it.`,
+      'bonus_locked',
+      { locked: hold.locked, remaining: hold.remaining, percent: hold.percent },
+    );
+  }
 
   const pending = await prisma.withdrawal.count({
     where: { userId: input.userId, status: { in: ['PENDING', 'APPROVED', 'PROCESSING'] } },

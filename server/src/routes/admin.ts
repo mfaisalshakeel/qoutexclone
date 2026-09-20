@@ -18,6 +18,7 @@ import { mailTransportName, sendTestEmail, smtpReady } from '../services/mailer.
 import { previewAll } from '../services/email-preview.js';
 import { levelFor, statusConfig } from '../services/status.js';
 import * as marketplace from '../services/marketplace.js';
+import { forfeitAll, listOffers } from '../services/bonuses.js';
 import { ITEM_KINDS } from '../services/marketplace.js';
 import { marketHours } from '../services/market-hours.js';
 import { describeWindows } from '../lib/sessions.js';
@@ -961,6 +962,100 @@ router.get(
       prisma.inventoryItem.count({ where }),
     ]);
     res.json({ orders, total, page: query.page, pageSize: query.pageSize });
+  }),
+);
+
+/* -------------------------------- bonuses --------------------------------- */
+
+const bonusOfferSchema = z.object({
+  key: z
+    .string()
+    .trim()
+    .min(2)
+    .max(40)
+    .regex(/^[a-z0-9-]+$/, 'Use lower-case letters, numbers and hyphens'),
+  name: z.string().trim().min(2).max(80),
+  description: z.string().trim().min(2).max(400),
+  percent: z.number().min(1).max(500),
+  maxBonusCents: z.number().int().min(100).max(100_000_000),
+  minDepositCents: z.number().int().min(0).max(100_000_000),
+  turnoverMultiplier: z.number().int().min(0).max(100),
+  enabled: z.boolean().default(true),
+  sortOrder: z.number().int().min(0).max(10_000).default(0),
+});
+
+router.get(
+  '/bonus-offers',
+  wrap(async (_req, res) => {
+    res.json({ offers: await listOffers({ includeDisabled: true }) });
+  }),
+);
+
+router.post(
+  '/bonus-offers',
+  wrap(async (req, res) => {
+    const body = bonusOfferSchema.parse(req.body);
+    const existing = await prisma.bonusOffer.findUnique({ where: { key: body.key } });
+    if (existing) throw badRequest('An offer with that key already exists', 'duplicate_key');
+    const offer = await prisma.bonusOffer.create({ data: body });
+    await audit(req.user!.id, 'bonus.offer.create', 'BonusOffer', offer.id, offer.key);
+    res.status(201).json({ offer });
+  }),
+);
+
+router.patch(
+  '/bonus-offers/:id',
+  wrap(async (req, res) => {
+    const id = z.string().min(1).max(40).parse(req.params.id);
+    const body = bonusOfferSchema.partial().parse(req.body);
+    const offer = await prisma.bonusOffer.update({ where: { id }, data: body });
+    await audit(req.user!.id, 'bonus.offer.update', 'BonusOffer', offer.id, offer.key);
+    res.json({ offer });
+  }),
+);
+
+/** Granted bonuses and how far each is through its turnover. */
+router.get(
+  '/bonuses',
+  wrap(async (req, res) => {
+    const query = z
+      .object({
+        status: z.enum(['ACTIVE', 'RELEASED', 'FORFEITED']).optional(),
+        page: z.coerce.number().int().min(1).default(1),
+        pageSize: z.coerce.number().int().min(5).max(100).default(25),
+      })
+      .parse(req.query);
+    const where = query.status ? { status: query.status } : {};
+
+    const [bonuses, total] = await Promise.all([
+      prisma.bonus.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        include: { user: { select: { email: true, name: true } } },
+      }),
+      prisma.bonus.count({ where }),
+    ]);
+    res.json({ bonuses, total, page: query.page, pageSize: query.pageSize });
+  }),
+);
+
+/**
+ * Cancels a trader's outstanding bonuses.
+ *
+ * The money is not clawed back: it was credited through the ledger and taking
+ * it away silently would leave a balance nobody can explain. What this removes
+ * is the hold, which is what an operator actually wants when they are settling
+ * a complaint.
+ */
+router.post(
+  '/users/:id/bonuses/forfeit',
+  wrap(async (req, res) => {
+    const id = z.string().min(1).max(40).parse(req.params.id);
+    const total = await prisma.$transaction((tx) => forfeitAll(tx, id));
+    await audit(req.user!.id, 'bonus.forfeit', 'User', id, `${total} cents released from hold`);
+    res.json({ ok: true, released: total });
   }),
 );
 
