@@ -7,12 +7,17 @@ import type { Deposit, Withdrawal } from '../../lib/types';
 
 const FILTERS = ['ALL', 'PENDING', 'COMPLETED', 'REJECTED'] as const;
 
+/** A withdrawal as the back office sees it, with the trader's status level. */
+interface AdminWithdrawal extends Withdrawal {
+  level?: { id: string; name: string; priority: number };
+}
+
 export function AdminWithdrawals() {
-  const [rows, setRows] = useState<Withdrawal[] | null>(null);
+  const [rows, setRows] = useState<AdminWithdrawal[] | null>(null);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('ALL');
 
   const load = useCallback(async () => {
-    const { withdrawals } = await api.get<{ withdrawals: Withdrawal[] }>('/admin/withdrawals');
+    const { withdrawals } = await api.get<{ withdrawals: AdminWithdrawal[] }>('/admin/withdrawals');
     setRows(withdrawals);
   }, []);
 
@@ -59,6 +64,11 @@ export function AdminWithdrawals() {
                 <span className="block text-[11px] text-slate-500">
                   deposited {money(w.user?.totalDeposited ?? 0)}
                 </span>
+                {/* the pending queue is ordered by this, so the reason a row
+                    sits where it does is on the row */}
+                {w.level && w.level.priority > 0 && (
+                  <span className="chip mt-1 bg-accent/15 text-accent">{w.level.name}</span>
+                )}
               </Td>
               <Td>
                 <span className="tabular block text-xs font-semibold">{money(w.amount)}</span>

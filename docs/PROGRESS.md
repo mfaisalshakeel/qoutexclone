@@ -4,6 +4,20 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-20**: Phase 4 — **Status levels**. Standard, Pro and VIP, reached by lifetime deposits, with the names, thresholds and all three perks configurable from the back office.
+
+  **The rules are pure.** `services/status.ts` takes its numbers as arguments, so `levelFor`, `progressFor`, `payoutWithStatus` and `depositBonusFor` are testable without a database — 16 unit tests, including thresholds an operator has set out of order and the feature being switched off entirely.
+
+  **Payout bonus.** Added to the quoted payout on that trader's own position and written into the row at the instant it opens, so whatever the rules do later the position pays what it was quoted. It reads their lifetime deposits and nothing else — not their open positions, not the book — so the hard rule that prices and payouts never follow the order book still holds; the market's own payout is untouched, which an integration test asserts. Capped by `growth.statusMaxPayoutPct` (95% by default). Tournament chips are deliberately exempt: a contest where the biggest depositor is paid more is not a contest, and there is an integration test that places the same trade on both accounts to prove it.
+
+  **Deposit bonus.** Credited through `applyLedger` inside the same transaction as the deposit itself, so a deposit is whole or it did not happen. The level is read *before* the total is incremented — the deposit that earns a level is paid at the old one, which is the behaviour anyone would expect if they thought about it, and the integration test pins it a cent either side of the threshold.
+
+  **Withdrawal priority.** Only the pending queue is reordered, by level and then by age; history stays in the order things happened. The row carries the level, so the reason it sits where it does is visible.
+
+  **Where a trader sees it.** The level is in the header and in the account menu, the ticket shows the bonus it is adding, and `/account/status` shows the whole ladder — including what the levels above give you, because a perk hidden until you reach it is not a reason to climb.
+
+  **Verified.** 419 server tests (4 new integration tests for the money paths), 221 web tests, build, lint, and a new `e2e/status.spec.ts` (4 tests) covering the ladder, a $250 deposit moving the bar to 25%, a ticket that claims no bonus it has not earned, and the header. Looked at the page at 1440px and on a Pixel 7.
+
 - **2026-09-20**: Phase 4 — **Email**. A nodemailer SMTP transport built from the settings an operator edits in the back office, nine templated HTML emails with plain-text alternatives, an outbox and a preview in admin, and the end of `EXPOSE_RESET_TOKEN`.
 
   **Transport.** `configureMailer()` reads the `email.*` settings and installs either an SMTP transport or none at all; `watchMailSettings()` rebuilds it whenever one of those settings changes, so fixing a password in the back office needs no restart. With nothing configured the messages are still composed and recorded — the outbox is the difference between "we never sent it" and "their provider dropped it". The SMTP password is the registry's first `secret`: it can be written from admin but is never read back out, and `publicValues()` refuses to carry it.
@@ -333,6 +347,8 @@ _Record product choices made without the owner here: what, why, where it's confi
 - **OTC pricing premium**: OTC twins get +3% payout (capped at 95%) and 1.15× volatility, mirroring how brokers price their own books. Both numbers live in `data/markets.ts` and become per-asset admin settings in the OTC engine task.
 - **Outbox before transport**: every email is written to `EmailMessage` and then delivered, so a deployment with no SMTP configured still has a record an operator can read rather than a silently dropped verification link.
 - **Secrets in the settings registry**: a key marked `secret` can be written from the back office but never read back out of it, and never appears in the public settings. The SMTP password is the first; env still seeds its default, so a deployment can keep it out of the database entirely.
+- **Status perks never touch the quote**: the payout bonus is applied to the trader's own position from their lifetime deposits alone. The market's payout is unchanged, and nothing on that path reads a position, an exposure or a result. Tournament trades are exempt so a contest stays a contest, and practice trades are not, so the practice account rehearses what live money would actually pay.
+- **A deposit is paid at the level held before it**: the bonus for the deposit that promotes someone is calculated from their total *before* the credit. The alternative reads as a retroactive promotion and makes the threshold ambiguous.
 - **Two listeners, not one**: the notification centre and the mailer subscribe to the same events separately. Sharing the wording would make both worse — a notification is read in the app, an email is read away from it.
 - **Email verification is a three-way setting** (`off` / `optional` / `required`), matching how brokers differ: optional asks and nags, required blocks deposits and withdrawals but never trading, because the gate is about money moving, not about using the platform.
 - **Device identity is deliberately coarse**: a browser label plus the /24 (or IPv6 /64-ish prefix), hashed. Finer would call a phone a new device every hour; finer still would be fingerprinting, which is not what a device list is for.

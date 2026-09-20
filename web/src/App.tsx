@@ -28,6 +28,7 @@ import { ForgotPassword, ResetPassword } from './pages/ForgotPassword';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Security } from './pages/Security';
+import { Status } from './pages/Status';
 import { VerifyEmail } from './pages/VerifyEmail';
 import { Terminal } from './pages/Terminal';
 import { Tournaments } from './pages/Tournaments';
@@ -70,6 +71,7 @@ export default function App() {
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/account" element={<Account />} />
             <Route path="/account/security" element={<Security />} />
+            <Route path="/account/status" element={<Status />} />
           </Route>
 
           {/* back office has its own shell: sidebar navigation, no trading chrome */}

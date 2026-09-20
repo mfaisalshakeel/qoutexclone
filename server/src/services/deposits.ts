@@ -8,6 +8,7 @@ import { custody } from './custody.js';
 import { usdRate } from './rates.js';
 import { applyLedger } from './wallet.js';
 import { previewPromo, redeemPromo } from './promos.js';
+import { depositBonusFor, levelFor, statusConfig } from './status.js';
 import { payReferralCommission } from './referrals.js';
 import { settings } from './settings.js';
 
@@ -135,6 +136,13 @@ export async function completeDeposit(
     });
     if (claimed.count === 0) return tx.deposit.findUnique({ where: { id: depositId } });
 
+    // read before the increment: the deposit that promotes a trader is paid at
+    // the level they held when they made it, not the one it earns them
+    const before = await tx.user.findUniqueOrThrow({
+      where: { id: deposit.userId },
+      select: { totalDeposited: true },
+    });
+
     await applyLedger(tx, {
       userId: deposit.userId,
       accountType: 'REAL',
@@ -149,7 +157,23 @@ export async function completeDeposit(
       data: { totalDeposited: { increment: credited } },
     });
 
-    // bonus and partner commission ride on the same transaction as the credit
+    // every bonus and the partner commission ride on the same transaction as
+    // the credit, so a deposit is whole or it did not happen
+    const config = statusConfig();
+    const level = levelFor(before.totalDeposited, config);
+    const statusBonus = depositBonusFor(credited, level, config);
+    if (statusBonus > 0) {
+      await applyLedger(tx, {
+        userId: deposit.userId,
+        accountType: 'REAL',
+        type: 'BONUS',
+        amount: statusBonus,
+        refType: 'deposit',
+        refId: deposit.id,
+        note: `${level.name} deposit bonus`,
+      });
+    }
+
     const bonus = deposit.promoCode
       ? await redeemPromo(tx, {
           code: deposit.promoCode,
@@ -158,7 +182,10 @@ export async function completeDeposit(
           depositCents: credited,
         })
       : 0;
-    if (bonus > 0) await tx.deposit.update({ where: { id: depositId }, data: { bonusAmount: bonus } });
+    const bonusTotal = bonus + statusBonus;
+    if (bonusTotal > 0) {
+      await tx.deposit.update({ where: { id: depositId }, data: { bonusAmount: bonusTotal } });
+    }
 
     await payReferralCommission(tx, {
       referredId: deposit.userId,

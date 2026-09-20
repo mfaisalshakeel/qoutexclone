@@ -4,6 +4,7 @@ import { duration as fmtDuration, dateTime, money, price, untilShort } from '../
 import { useAuth, activeBalance } from '../store/auth';
 import { useTradingAccount } from '../store/tradingAccount';
 import { useMarket } from '../store/market';
+import { useSettings } from '../store/settings';
 import { toast } from '../store/toast';
 import type { Asset, ClockSlot, PendingOrder, Trade } from '../lib/types';
 
@@ -91,6 +92,8 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
   const prices = useMarket((s) => s.prices);
   const ticketConfig = useMarket((s) => s.ticket);
   const sentimentConfig = useMarket((s) => s.sentimentConfig);
+  const statusCeiling =
+    useSettings((s) => s.values['growth.statusMaxPayoutPct'] as number | undefined) ?? 100;
   const [amount, setAmount] = useState(10);
   const [durationSec, setDurationSec] = useState(60);
   const [busy, setBusy] = useState<'UP' | 'DOWN' | null>(null);
@@ -234,7 +237,14 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
 
   const balance = tournamentId ? (tournamentBalance ?? 0) : activeBalance(user);
   const stake = Math.round(amount * 100);
-  const profit = Math.floor((stake * asset.payoutPct) / 100);
+
+  // a status bonus lifts this trader's own payout, and never inside a
+  // tournament, where everyone trades on the same terms. The server decides
+  // the number that is written into the position; this mirrors it so the
+  // ticket quotes what the trade will actually pay.
+  const statusBonus = tournamentId ? 0 : (user.statusLevel?.payoutBonus ?? 0);
+  const payoutPct = Math.min(asset.payoutPct + statusBonus, statusCeiling);
+  const profit = Math.floor((stake * payoutPct) / 100);
 
   // the base payout and what moved it, for the line under the figure
   const base = asset.basePayoutPct ?? asset.payoutPct;
@@ -397,7 +407,12 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
       <div className="flex items-center justify-between">
         <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-wide text-slate-400">Payout</p>
-          <p className="text-lg font-bold text-up">{asset.payoutPct}%</p>
+          <p className="text-lg font-bold text-up">{payoutPct}%</p>
+          {statusBonus > 0 && payoutPct > asset.payoutPct && (
+            <p className="truncate text-[10px] text-accent">
+              +{payoutPct - asset.payoutPct}% {user.statusLevel?.name} bonus
+            </p>
+          )}
           {/* when a rule has moved the payout, say so rather than leave the
               trader wondering why the number changed */}
           {adjusted && (

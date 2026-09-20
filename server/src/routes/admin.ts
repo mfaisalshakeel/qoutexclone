@@ -16,6 +16,7 @@ import { listAllTickets, postMessage, readTicket, setTicketStatus } from '../ser
 import { SETTINGS, settings } from '../services/settings.js';
 import { mailTransportName, sendTestEmail, smtpReady } from '../services/mailer.js';
 import { previewAll } from '../services/email-preview.js';
+import { levelFor, statusConfig } from '../services/status.js';
 import { marketHours } from '../services/market-hours.js';
 import { describeWindows } from '../lib/sessions.js';
 import { DEFAULT_OTC_PARAMS, initialState, nextTick, resolveParams } from '../engine/otc.js';
@@ -214,7 +215,24 @@ router.get(
       take: 100,
       include: { user: { select: { email: true, name: true, totalDeposited: true } } },
     });
-    res.json({ withdrawals: withdrawals.map((w) => ({ ...publicWithdrawal(w), user: w.user })) });
+
+    // withdrawal priority is a status perk: a higher level is served first, and
+    // within a level the oldest request still goes first. Only the pending
+    // queue is reordered — history stays in the order things happened.
+    const config = statusConfig();
+    const rows = withdrawals.map((w) => ({
+      ...publicWithdrawal(w),
+      user: w.user,
+      level: levelFor(w.user.totalDeposited, config),
+    }));
+    if (status === 'PENDING') {
+      rows.sort(
+        (a, b) =>
+          b.level.priority - a.level.priority ||
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      );
+    }
+    res.json({ withdrawals: rows });
   }),
 );
 

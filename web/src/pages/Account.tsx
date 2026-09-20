@@ -70,6 +70,26 @@ export function Account() {
         </div>
       </div>
 
+      {user.statusLevel?.enabled && (
+        <Link
+          to="/account/status"
+          className="card flex items-center gap-3 p-5 transition hover:border-ink-400"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">Status</p>
+            <p className="truncate text-xs text-slate-400">
+              {user.statusLevel.name}
+              {user.statusLevel.payoutBonus > 0
+                ? ` · +${user.statusLevel.payoutBonus}% payout on your positions`
+                : ' · see what the next level is worth'}
+            </p>
+          </div>
+          <span aria-hidden="true" className="text-slate-500">
+            ›
+          </span>
+        </Link>
+      )}
+
       <Link
         to="/account/security"
         className="card flex items-center gap-3 p-5 transition hover:border-ink-400"

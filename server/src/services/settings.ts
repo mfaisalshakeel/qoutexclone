@@ -338,6 +338,87 @@ export const SETTINGS = {
     public: true,
   }),
 
+  'growth.statusEnabled': define({
+    schema: z.boolean(),
+    default: true,
+    group: 'growth',
+    label: 'Status levels',
+    help: 'Off hides them everywhere and removes every perk.',
+    public: true,
+  }),
+  'growth.statusStandardName': define({
+    schema: z.string().min(1).max(24),
+    default: 'Standard',
+    group: 'growth',
+    label: 'Level 1 name',
+    public: true,
+  }),
+  'growth.statusProName': define({
+    schema: z.string().min(1).max(24),
+    default: 'Pro',
+    group: 'growth',
+    label: 'Level 2 name',
+    public: true,
+  }),
+  'growth.statusVipName': define({
+    schema: z.string().min(1).max(24),
+    default: 'VIP',
+    group: 'growth',
+    label: 'Level 3 name',
+    public: true,
+  }),
+  'growth.statusProThreshold': define({
+    schema: money,
+    default: 100_000, // $1,000 lifetime deposits
+    group: 'growth',
+    label: 'Level 2 threshold (cents of lifetime deposits)',
+    public: true,
+  }),
+  'growth.statusVipThreshold': define({
+    schema: money,
+    default: 1_000_000, // $10,000 lifetime deposits
+    group: 'growth',
+    label: 'Level 3 threshold (cents of lifetime deposits)',
+    public: true,
+  }),
+  'growth.statusProPayoutBonus': define({
+    schema: percent,
+    default: 2,
+    group: 'growth',
+    label: 'Level 2 payout bonus (percentage points)',
+    help: "Added to the quoted payout on this trader's own positions. It never moves the price.",
+    public: true,
+  }),
+  'growth.statusVipPayoutBonus': define({
+    schema: percent,
+    default: 4,
+    group: 'growth',
+    label: 'Level 3 payout bonus (percentage points)',
+    public: true,
+  }),
+  'growth.statusProDepositBonus': define({
+    schema: percent,
+    default: 0,
+    group: 'growth',
+    label: 'Level 2 deposit bonus (%)',
+    public: true,
+  }),
+  'growth.statusVipDepositBonus': define({
+    schema: percent,
+    default: 5,
+    group: 'growth',
+    label: 'Level 3 deposit bonus (%)',
+    public: true,
+  }),
+  'growth.statusMaxPayoutPct': define({
+    schema: percent,
+    default: 95,
+    group: 'growth',
+    label: 'Payout ceiling with a status bonus (%)',
+    help: 'A bonus can never take a payout above this.',
+    public: true,
+  }),
+
   'compliance.requireKycForWithdrawal': define({
     schema: z.boolean(),
     default: env.requireKycForWithdrawal,

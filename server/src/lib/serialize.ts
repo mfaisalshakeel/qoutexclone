@@ -8,6 +8,20 @@ import type {
   Withdrawal,
 } from '@prisma/client';
 import { findNetwork } from './crypto-networks.js';
+import { levelFor, statusConfig } from '../services/status.js';
+
+/** The level and the perks that come with it, for the header and the ticket. */
+function statusOf(totalDeposited: number) {
+  const config = statusConfig();
+  const level = levelFor(totalDeposited, config);
+  return {
+    enabled: config.enabled,
+    id: level.id,
+    name: level.name,
+    payoutBonus: config.enabled ? level.payoutBonus : 0,
+    depositBonus: config.enabled ? level.depositBonus : 0,
+  };
+}
 
 export function publicUser(user: User) {
   return {
@@ -32,6 +46,9 @@ export function publicUser(user: User) {
     leaderboardOptOut: user.leaderboardOptOut,
     emailVerifiedAt: user.emailVerifiedAt,
     twoFactorEnabled: user.twoFactorEnabledAt !== null,
+    // the level itself, so the header and the ticket can show it without a
+    // second request; the full progress lives at /me/status
+    statusLevel: statusOf(user.totalDeposited),
     createdAt: user.createdAt,
   };
 }

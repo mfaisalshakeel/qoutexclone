@@ -23,6 +23,16 @@ export interface User {
   /** Null until they follow the link we emailed them. */
   emailVerifiedAt?: string | null;
   twoFactorEnabled?: boolean;
+  /** The trader's status level and the perks it carries. */
+  statusLevel?: {
+    enabled: boolean;
+    id: 'STANDARD' | 'PRO' | 'VIP';
+    name: string;
+    /** Percentage points added to this trader's payout. */
+    payoutBonus: number;
+    /** Percentage added to their deposits. */
+    depositBonus: number;
+  };
   createdAt: string;
 }
 

@@ -7,6 +7,7 @@ import { marketFeed } from '../engine/feed.js';
 import { applyLedger, type AccountType } from './wallet.js';
 import { activeEntry, adjustEntryBalance } from './tournaments.js';
 import { settings } from './settings.js';
+import { levelFor, payoutWithStatus, statusConfig } from './status.js';
 import { marketHours, otcAlternative } from './market-hours.js';
 import { payouts } from './payouts.js';
 import { assessStake } from './risk.js';
@@ -104,6 +105,14 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
   const entryPrice = marketFeed.getPrice(asset.symbol);
   if (entryPrice == null) throw conflict('No market price available for this asset', 'no_price');
 
+  // lifetime deposits decide the status perks; nothing else about the trader
+  // is read on this path
+  const trader = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { totalDeposited: true },
+  });
+  if (!trader) throw notFound('Account not found');
+
   // tournament positions are staked in chips held by the entry, never cash
   const entry =
     input.accountType === 'TOURNAMENT' ? await activeEntry(input.userId, input.tournamentId) : null;
@@ -137,7 +146,7 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
   if (closeRejection) throw conflict(closeRejection.message, closeRejection.code);
 
   // Resolved once, here, and written into the row: whatever the rules do later,
-  // this position pays what it was quoted. The status bonus arrives in Phase 4.
+  // this position pays what it was quoted.
   const payout = payouts.resolve(
     {
       id: asset.id,
@@ -148,6 +157,15 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
     },
     { at: openedAt },
   );
+
+  // A status bonus lifts what *this* trader is paid, from their lifetime
+  // deposits alone. It reads nothing about anyone's positions, so it cannot
+  // move a price or pick an outcome. Tournament chips are left out: everyone
+  // inside a contest trades on the same terms.
+  const config = statusConfig();
+  const level = levelFor(input.accountType === 'TOURNAMENT' ? 0 : trader.totalDeposited, config);
+  const quotedPct =
+    input.accountType === 'TOURNAMENT' ? payout.pct : payoutWithStatus(payout.pct, level, config);
 
   const trade = await prisma.$transaction(async (tx) => {
     // Risk is checked here, inside the transaction, so the aggregate it reads
@@ -177,7 +195,7 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
         direction: input.direction,
         expiryMode: mode,
         stake: input.stake,
-        payoutPct: payout.pct,
+        payoutPct: quotedPct,
         entryPrice,
         durationSec,
         openedAt,

@@ -15,6 +15,7 @@ import { refillPractice } from '../services/practice.js';
 import { retryOnConflict } from '../lib/retry.js';
 import * as notifications from '../services/notifications.js';
 import * as security from '../services/security.js';
+import { progressFor, statusConfig } from '../services/status.js';
 
 // mounted at /api/me — every route here needs a signed-in user
 const router = Router();
@@ -364,6 +365,30 @@ router.get(
   '/referrals',
   wrap(async (req, res) => {
     res.json(await referralSummary(req.user!.id));
+  }),
+);
+
+/**
+ * Where this trader stands, and what the levels are worth.
+ *
+ * The whole ladder comes back, not just their rung: a progress page that
+ * cannot say what the next level gives you is not a progress page.
+ */
+router.get(
+  '/status',
+  wrap(async (req, res) => {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { totalDeposited: true },
+    });
+    if (!user) throw notFound('Account not found');
+    const config = statusConfig();
+    res.json({
+      enabled: config.enabled,
+      maxPayoutPct: config.maxPayoutPct,
+      levels: config.levels,
+      progress: progressFor(user.totalDeposited, config),
+    });
   }),
 );
 

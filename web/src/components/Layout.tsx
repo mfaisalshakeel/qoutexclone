@@ -86,6 +86,18 @@ export function Layout() {
               Deposit
             </Link>
 
+            {/* the level belongs in the header, where the trader sees what
+                their deposits have bought them without going looking */}
+            {user?.statusLevel?.enabled && (
+              <Link
+                to="/account/status"
+                title={`${user.statusLevel.name} status`}
+                className="hidden items-center rounded-lg bg-accent/15 px-2.5 py-1.5 text-xs font-semibold text-accent transition hover:bg-accent/25 lg:inline-flex"
+              >
+                {user.statusLevel.name}
+              </Link>
+            )}
+
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen((v) => !v)}
@@ -98,6 +110,9 @@ export function Layout() {
                   <div className="px-3 py-2">
                     <p className="truncate text-sm font-semibold">{user?.name}</p>
                     <p className="truncate text-xs text-slate-400">{user?.email}</p>
+                    {user?.statusLevel?.enabled && (
+                      <span className="chip mt-1.5 bg-accent/15 text-accent">{user.statusLevel.name}</span>
+                    )}
                   </div>
                   <div className="my-1 h-px bg-ink-600" />
                   {nav.map((item) => (
@@ -110,6 +125,13 @@ export function Layout() {
                       {item.label}
                     </Link>
                   ))}
+                  <Link
+                    to="/account/status"
+                    onClick={() => setMenuOpen(false)}
+                    className="block rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-ink-700"
+                  >
+                    Status
+                  </Link>
                   <Link
                     to="/account/security"
                     onClick={() => setMenuOpen(false)}
