@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { TRADER, login, openMarket } from './helpers';
+import { newCredentials, openMarket, register } from './helpers';
 
 /**
  * Screenshot tests for the chart engine.
@@ -158,9 +158,12 @@ test.describe('chart visuals', () => {
   // a fixed timezone, or the time axis reads differently on another machine
   test.use({ timezoneId: 'UTC', locale: 'en-GB' });
 
+  // a brand new account every time: the shared trader carries whatever the
+  // specs before it left behind — open positions draw strike lines, and a
+  // strike line far from the last price stretches the whole price scale
   test.beforeEach(async ({ page }) => {
     await pin(page);
-    await login(page, TRADER);
+    await register(page, newCredentials('visual'));
     await openMarket(page, 'EURUSD_OTC', 'EUR/USD (OTC)');
   });
 
