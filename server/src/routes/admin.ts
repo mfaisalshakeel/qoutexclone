@@ -19,6 +19,7 @@ import { previewAll } from '../services/email-preview.js';
 import { levelFor, statusConfig } from '../services/status.js';
 import * as marketplace from '../services/marketplace.js';
 import { forfeitAll, listOffers } from '../services/bonuses.js';
+import * as paymentsService from '../services/payments.js';
 import { ITEM_KINDS } from '../services/marketplace.js';
 import { marketHours } from '../services/market-hours.js';
 import { describeWindows } from '../lib/sessions.js';
@@ -1056,6 +1057,65 @@ router.post(
     const total = await prisma.$transaction((tx) => forfeitAll(tx, id));
     await audit(req.user!.id, 'bonus.forfeit', 'User', id, `${total} cents released from hold`);
     res.json({ ok: true, released: total });
+  }),
+);
+
+/* ------------------------------ payment methods ---------------------------- */
+
+const paymentMethodSchema = z.object({
+  label: z.string().trim().min(2).max(80),
+  enabled: z.boolean(),
+  feePct: z.number().min(0).max(100),
+  feeFlatCents: z.number().int().min(0).max(10_000_000),
+  minDepositCents: z.number().int().min(0).max(100_000_000),
+  maxDepositCents: z.number().int().min(0).max(100_000_000),
+  minWithdrawCents: z.number().int().min(0).max(100_000_000),
+  maxWithdrawCents: z.number().int().min(0).max(100_000_000),
+  /** ISO 3166-1 alpha-2 codes. Empty array means every country. */
+  countries: z.array(z.string().length(2)).max(300),
+  sortOrder: z.number().int().min(0).max(10_000),
+});
+
+/**
+ * The methods behind the provider framework.
+ *
+ * Structural fields (provider, key, currency, network) are not editable here:
+ * they identify which `PaymentProvider` implementation and which of its
+ * mechanics a row configures, and changing them would silently repoint a
+ * method's money at a different provider. Only the operator-editable half —
+ * fees, limits, countries, whether it is offered — can be patched.
+ */
+router.get(
+  '/payment-methods',
+  wrap(async (_req, res) => {
+    res.json({ methods: await paymentsService.listMethods({ includeDisabled: true }) });
+  }),
+);
+
+router.patch(
+  '/payment-methods/:id',
+  wrap(async (req, res) => {
+    const id = z.string().min(1).max(40).parse(req.params.id);
+    const body = paymentMethodSchema.partial().parse(req.body);
+    const existing = await prisma.paymentMethod.findUnique({ where: { id } });
+    if (!existing) throw notFound('That payment method does not exist');
+
+    if (body.maxDepositCents !== undefined && body.maxDepositCents > 0) {
+      const min = body.minDepositCents ?? existing.minDepositCents;
+      if (body.maxDepositCents < min) {
+        throw badRequest('The deposit maximum cannot be below the minimum', 'bad_limits');
+      }
+    }
+    if (body.maxWithdrawCents !== undefined && body.maxWithdrawCents > 0) {
+      const min = body.minWithdrawCents ?? existing.minWithdrawCents;
+      if (body.maxWithdrawCents < min) {
+        throw badRequest('The withdrawal maximum cannot be below the minimum', 'bad_limits');
+      }
+    }
+
+    const method = await prisma.paymentMethod.update({ where: { id }, data: body });
+    await audit(req.user!.id, 'payment-method.update', 'PaymentMethod', method.id, method.key);
+    res.json({ method });
   }),
 );
 

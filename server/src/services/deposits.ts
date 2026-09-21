@@ -14,6 +14,7 @@ import { previewOffer, quoteOffer, recordBonus } from './bonuses.js';
 import { assertCanDeposit } from './responsible.js';
 import { payReferralCommission } from './referrals.js';
 import { settings } from './settings.js';
+import { assertMethodAvailable, assertWithinLimits, cryptoMethodKey, findMethod } from './payments.js';
 
 export const depositEvents = new EventEmitter();
 
@@ -49,10 +50,25 @@ export async function createDeposit(input: CreateDepositInput): Promise<Deposit>
   const spec = findNetwork(input.currency, input.network);
   if (!spec) throw badRequest('Unsupported currency/network combination', 'unsupported_network');
 
-  const minUsd = Math.max(spec.minDepositUsd, settings.get('wallet.minDepositUsd'));
+  // the provider-framework method row is the operator-editable source of
+  // truth for whether this method is offered at all, and to whom; a network
+  // just added in code and not yet seeded falls back to the static minimum
+  // rather than refusing every deposit on it
+  const method = await findMethod(cryptoMethodKey(input.currency, input.network));
+  if (method) {
+    const trader = await prisma.user.findUnique({ where: { id: input.userId }, select: { country: true } });
+    assertMethodAvailable(method, trader?.country);
+  }
+
+  const minUsd = Math.max(
+    spec.minDepositUsd,
+    settings.get('wallet.minDepositUsd'),
+    method ? method.minDepositCents / 100 : 0,
+  );
   if (!(input.usdAmount >= minUsd)) {
     throw badRequest(`Minimum deposit for ${input.currency} (${spec.label}) is $${minUsd}`, 'below_minimum');
   }
+  if (method) assertWithinLimits(method, usdToCents(input.usdAmount), 'deposit');
 
   const pending = await prisma.deposit.count({
     where: { userId: input.userId, status: { in: ['AWAITING_PAYMENT', 'CONFIRMING'] } },

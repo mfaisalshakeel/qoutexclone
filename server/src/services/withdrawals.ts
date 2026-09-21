@@ -10,6 +10,8 @@ import { holdFunds, releaseHold, settleHold } from './wallet.js';
 import { kycBlocksWithdrawal } from './kyc.js';
 import { settings } from './settings.js';
 import { holdFor } from './bonuses.js';
+import { assertMethodAvailable, assertWithinLimits, cryptoMethodKey, findMethod } from './payments.js';
+import type { PaymentMethod } from '@prisma/client';
 
 export const withdrawalEvents = new EventEmitter();
 
@@ -25,13 +27,34 @@ export interface WithdrawalQuote {
 }
 
 /** Fee model: flat network fee plus a percentage of the gross amount. */
-export function quoteWithdrawal(currency: string, network: string, amountCents: number): WithdrawalQuote {
+/**
+ * Pure and synchronous on purpose: the network's static mechanics
+ * (`NETWORKS`) always apply, and a `PaymentMethod` row — the operator-editable
+ * fees and limits — is layered on top when the caller has one. Callers fetch
+ * it themselves (`findMethod(cryptoMethodKey(...))`) rather than this function
+ * doing it, so quoting a price is not a database call and stays unit-testable.
+ */
+export function quoteWithdrawal(
+  currency: string,
+  network: string,
+  amountCents: number,
+  method?: PaymentMethod | null,
+): WithdrawalQuote {
   const spec = findNetwork(currency, network);
   if (!spec) throw badRequest('Unsupported currency/network combination', 'unsupported_network');
 
-  const minAmount = usdToCents(Math.max(spec.minWithdrawUsd, settings.get('wallet.minWithdrawUsd')));
-  const flatFee = usdToCents(spec.networkFeeUsd + settings.get('wallet.withdrawFlatFeeUsd'));
-  const pctFee = Math.round((amountCents * settings.get('wallet.withdrawFeePct')) / 100);
+  const minAmount = usdToCents(
+    Math.max(
+      spec.minWithdrawUsd,
+      settings.get('wallet.minWithdrawUsd'),
+      (method?.minWithdrawCents ?? 0) / 100,
+    ),
+  );
+  const flatFee =
+    usdToCents(spec.networkFeeUsd + settings.get('wallet.withdrawFlatFeeUsd')) + (method?.feeFlatCents ?? 0);
+  const pctFee = Math.round(
+    (amountCents * (settings.get('wallet.withdrawFeePct') + (method?.feePct ?? 0))) / 100,
+  );
   const fee = flatFee + pctFee;
   const netAmount = amountCents - fee;
   const rate = usdRate(currency);
@@ -65,7 +88,8 @@ export async function createWithdrawal(input: CreateWithdrawalInput): Promise<Wi
     throw badRequest(`That does not look like a valid ${spec.label} address`, 'invalid_address');
   }
 
-  const quote = quoteWithdrawal(input.currency, input.network, input.amountCents);
+  const method = await findMethod(cryptoMethodKey(input.currency, input.network));
+  const quote = quoteWithdrawal(input.currency, input.network, input.amountCents, method);
   if (input.amountCents < quote.minAmount) {
     throw badRequest(`Minimum withdrawal is $${(quote.minAmount / 100).toFixed(2)}`, 'below_minimum');
   }
@@ -73,10 +97,15 @@ export async function createWithdrawal(input: CreateWithdrawalInput): Promise<Wi
 
   const user = await prisma.user.findUnique({
     where: { id: input.userId },
-    select: { realBalance: true, status: true, totalDeposited: true, kycStatus: true },
+    select: { realBalance: true, status: true, totalDeposited: true, kycStatus: true, country: true },
   });
   if (!user) throw notFound('Account not found');
   if (user.status !== 'ACTIVE') throw forbidden('Your account is suspended');
+
+  if (method) {
+    assertMethodAvailable(method, user.country);
+    assertWithinLimits(method, input.amountCents, 'withdraw');
+  }
   if (kycBlocksWithdrawal(user.kycStatus, input.amountCents)) {
     throw forbidden('Identity verification is required before withdrawing this amount');
   }

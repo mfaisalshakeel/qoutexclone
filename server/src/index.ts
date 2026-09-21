@@ -19,6 +19,8 @@ import { loadRevocations, pruneRevocations } from './services/revocations.js';
 import { configureMailer, watchMailSettings } from './services/mailer.js';
 import { attachEmailNotifications } from './services/email-notifications.js';
 import { attachProgression } from './services/progression.js';
+import { registerProvider } from './services/payments.js';
+import { cryptoProvider } from './services/providers/crypto.js';
 import { expireStale } from './services/marketplace.js';
 import type { OtcParams } from './engine/otc.js';
 
@@ -35,6 +37,7 @@ async function main() {
   // email last of the configuration: it reads the settings that just loaded
   configureMailer();
   watchMailSettings();
+  registerProvider(cryptoProvider);
   const revocationSweeper = setInterval(pruneRevocations, 15 * 60 * 1000);
   revocationSweeper.unref();
 

@@ -4,6 +4,20 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-21**: Phase 5 — **Provider framework**. A `PaymentProvider` interface (create a deposit destination, verify a webhook, pay out), a registry, and a `PaymentMethod` table that is the operator-editable half of every method: enabled, fees, limits, countries.
+
+  **The split is deliberate.** A provider's mechanics — address derivation, signature verification, sending money — need a deploy and live in code (`services/providers/crypto.ts` wraps the existing custody layer unchanged, so the crypto flow that already works keeps working). A method's fees, limits, whether it is offered, and to which countries are an operator's business and live in the database, edited without a deploy. `verifyWebhook` on the crypto provider always returns null — crypto deposits are proven by the chain watcher polling confirmations, never by an inbound webhook — which is what makes room for the card and e-wallet providers in the next task, whose whole deposit story *is* a webhook.
+
+  **Wired into the real flows, not left decorative.** `createDeposit` and `createWithdrawal` now check `assertMethodAvailable` (enabled, offered in the trader's country — read from their profile) and `assertWithinLimits` (an operator's min/max) against the `PaymentMethod` row for the network in use, and `quoteWithdrawal` layers the method's fee on top of the existing network and platform fees. A method not yet seeded (a network just added in code) falls back to its static defaults rather than refusing every deposit on it.
+
+  **`quoteWithdrawal` stayed synchronous and pure on purpose.** It already had unit tests asserting the fee arithmetic with no database involved; making it fetch its own method row would have turned a pure function into a database call and broken that contract. Callers fetch the row themselves and pass it in.
+
+  **Seeded from what already existed.** `DEFAULT_PAYMENT_METHODS` derives one row per entry in `NETWORKS`, so the four crypto methods already running keep their exact fees and limits after the migration — nothing silently changed underneath a live deposit form.
+
+  **Admin CRUD is built** (list, and an edit that refuses to touch the structural fields — provider, key, currency, network — because changing those would silently repoint a method's money at a different provider); the dedicated screen lands with the rest of Growth/Payments in Phase 6, the same pattern already used for the marketplace and bonus offers.
+
+  **Verified.** 516 server tests (13 new unit tests for the pure fee/limit/country functions, 7 new integration tests proving a disabled method, a country restriction, an operator's limit and an operator's fee edit all actually reach a deposit or withdrawal), 221 web tests, build, lint. New `e2e/payment-methods.spec.ts` (3 tests) drives the admin API directly — there is no screen yet — to raise a minimum, disable a method, and prove the structural fields cannot be edited, then checks each change reaches the wallet a trader sees.
+
 - **2026-09-20**: Phase 4 — **Profile**. Avatar, country, timezone, language, number format and notification preferences, and Phase 4 is finished.
 
   **The avatar is a monogram on a colour the trader picks**, not an upload. An upload needs somewhere to put a file and something to check what is in it, and that interface arrives with the KYC document store in Phase 8; a data URL in a database column is not the answer.
@@ -418,6 +432,8 @@ _Record product choices made without the owner here: what, why, where it's confi
 - **Outbox before transport**: every email is written to `EmailMessage` and then delivered, so a deployment with no SMTP configured still has a record an operator can read rather than a silently dropped verification link.
 - **Secrets in the settings registry**: a key marked `secret` can be written from the back office but never read back out of it, and never appears in the public settings. The SMTP password is the first; env still seeds its default, so a deployment can keep it out of the database entirely.
 - **Self-exclusion never blocks a withdrawal, or the sign-in that reaches one**: trading and deposits close, the account does not. Anything else holds someone's money hostage at the worst possible moment.
+- **Provider mechanics in code, method configuration in the database**: a `PaymentProvider` implementation needs a deploy; the fees, limits, countries and on/off switch for one of its methods do not, and are edited from the back office instead.
+- **Crypto has no webhook**: it is proven by the chain watcher, so `CryptoProvider.verifyWebhook` always returns null. Card and e-wallet, arriving next, are webhook-driven from the start.
 - **Number format, not currency conversion**: the profile changes how amounts are written, never what they are worth. Showing a balance converted into another currency means the balance itself has to be denominated in it — a real change to the ledger and a business decision, not a display preference.
 - **Avatars are presets until there is an object store**: Phase 8 brings the upload interface for KYC documents; avatars will use the same one.
 - **Loosening a limit waits, tightening does not**: the moment someone wants their limit raised is the moment it is working. The session reminder is exempt — it is a nudge, not a guard.

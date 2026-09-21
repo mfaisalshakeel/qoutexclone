@@ -7,6 +7,8 @@ import { publicDeposit, publicTransaction, publicWithdrawal } from '../lib/seria
 import { prisma } from '../lib/prisma.js';
 import { requireActiveUser, requireAuth, requireVerifiedEmail } from '../middleware/auth.js';
 import { bonusesEnabled, holdFor, listOffers, quoteOffer } from '../services/bonuses.js';
+import { cryptoMethodKey, findMethod } from '../services/payments.js';
+import * as paymentsService from '../services/payments.js';
 import { getBalances, listTransactions } from '../services/wallet.js';
 import { createDeposit, getDepositAddress, listDeposits, markSeen } from '../services/deposits.js';
 import {
@@ -23,24 +25,57 @@ import { mockTxHash } from '../lib/crypto-networks.js';
 const router = Router();
 router.use(requireAuth);
 
-/** Currencies, networks, limits and live rates the wallet UI renders from. */
-router.get('/methods', (_req, res) => {
-  res.json({
-    methods: NETWORKS.map((spec) => ({
-      currency: spec.currency,
-      network: spec.network,
-      label: spec.label,
-      decimals: spec.decimals,
-      confirmations: spec.confirmations,
-      minDepositUsd: Math.max(spec.minDepositUsd, settings.get('wallet.minDepositUsd')),
-      minWithdrawUsd: Math.max(spec.minWithdrawUsd, settings.get('wallet.minWithdrawUsd')),
-      networkFeeUsd: spec.networkFeeUsd + settings.get('wallet.withdrawFlatFeeUsd'),
-      rate: usdRate(spec.currency),
-    })),
-    withdrawFeePct: settings.get('wallet.withdrawFeePct'),
-    mockChain: env.mockChainWatcher,
-  });
-});
+/**
+ * Currencies, networks, limits and live rates the wallet UI renders from.
+ *
+ * Filtered to what the provider framework says is actually on: enabled, and
+ * offered in the trader's country. A network defined in code but not yet
+ * seeded into `PaymentMethod` still shows with its static defaults, so adding
+ * one is never blocked on a migration landing first.
+ */
+router.get(
+  '/methods',
+  wrap(async (req, res) => {
+    const trader = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { country: true } });
+    const rows = await paymentsService.listMethods({ includeDisabled: false });
+    const byKey = new Map(rows.map((row) => [row.key, row]));
+
+    const methods = NETWORKS.filter((spec) => {
+      const method = byKey.get(cryptoMethodKey(spec.currency, spec.network));
+      // no row yet: show it rather than hide a network nobody has seeded
+      if (!method) return true;
+      return paymentsService.isOfferedIn(method, trader?.country);
+    }).map((spec) => {
+      const method = byKey.get(cryptoMethodKey(spec.currency, spec.network));
+      return {
+        currency: spec.currency,
+        network: spec.network,
+        label: method?.label ?? spec.label,
+        decimals: spec.decimals,
+        confirmations: spec.confirmations,
+        minDepositUsd: Math.max(
+          spec.minDepositUsd,
+          settings.get('wallet.minDepositUsd'),
+          (method?.minDepositCents ?? 0) / 100,
+        ),
+        minWithdrawUsd: Math.max(
+          spec.minWithdrawUsd,
+          settings.get('wallet.minWithdrawUsd'),
+          (method?.minWithdrawCents ?? 0) / 100,
+        ),
+        networkFeeUsd:
+          spec.networkFeeUsd + settings.get('wallet.withdrawFlatFeeUsd') + (method?.feeFlatCents ?? 0) / 100,
+        rate: usdRate(spec.currency),
+      };
+    });
+
+    res.json({
+      methods,
+      withdrawFeePct: settings.get('wallet.withdrawFeePct'),
+      mockChain: env.mockChainWatcher,
+    });
+  }),
+);
 
 /**
  * The bonus offers a trader can pick from, and what each is worth on the
@@ -198,12 +233,11 @@ router.get(
         amount: z.coerce.number().positive(),
       })
       .parse(req.query);
+    const currency = query.currency.toUpperCase();
+    const network = query.network.toUpperCase();
+    const method = await findMethod(cryptoMethodKey(currency, network));
     res.json({
-      quote: quoteWithdrawal(
-        query.currency.toUpperCase(),
-        query.network.toUpperCase(),
-        Math.round(query.amount * 100),
-      ),
+      quote: quoteWithdrawal(currency, network, Math.round(query.amount * 100), method),
     });
   }),
 );

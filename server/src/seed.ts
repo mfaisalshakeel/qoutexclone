@@ -6,6 +6,7 @@ import { MARKETS, MARKET_COUNTS } from './data/markets.js';
 import { SCHEDULES, scheduleKeyFor } from './data/schedules.js';
 import { DEFAULT_MARKETPLACE_ITEMS } from './data/marketplace.js';
 import { DEFAULT_BONUS_OFFERS } from './data/bonus-offers.js';
+import { DEFAULT_PAYMENT_METHODS } from './data/payment-methods.js';
 
 async function main() {
   // schedules first: markets reference them
@@ -104,6 +105,10 @@ async function main() {
     });
   }
 
+  for (const method of DEFAULT_PAYMENT_METHODS) {
+    await prisma.paymentMethod.upsert({ where: { key: method.key }, update: {}, create: method });
+  }
+
   for (const offer of DEFAULT_BONUS_OFFERS) {
     await prisma.bonusOffer.upsert({ where: { key: offer.key }, update: {}, create: offer });
   }
@@ -115,6 +120,7 @@ async function main() {
   console.log(`Seeded ${SCHEDULES.length} trading schedules.`);
   console.log(`Seeded ${DEFAULT_MARKETPLACE_ITEMS.length} marketplace items.`);
   console.log(`Seeded ${DEFAULT_BONUS_OFFERS.length} bonus offers.`);
+  console.log(`Seeded ${DEFAULT_PAYMENT_METHODS.length} payment methods.`);
   console.log(`Admin:  ${adminEmail} / ${adminPassword}`);
   console.log(`Trader: ${demoEmail} / Trader123!`);
 }

@@ -228,6 +228,43 @@ model ResponsibleLimits {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+/// A payment method behind the `PaymentProvider` interface.
+///
+/// One row per method a trader can pick (a crypto network, a card currency, an
+/// e-wallet currency). The provider's *mechanics* — address derivation,
+/// signature verification, payout — live in code; what an operator can change
+/// without a deploy — whether it is offered, its fees, its limits, which
+/// countries see it — lives here.
+model PaymentMethod {
+  id       String  @id @default(cuid())
+  /// CRYPTO | CARD | EWALLET — which PaymentProvider implementation handles it.
+  provider String
+  /// Stable identifier used in code and tests, e.g. "crypto-usdt-trc20".
+  key      String  @unique
+  label    String
+  currency String
+  /// Network name for a crypto method (TRC20, ERC20…); null otherwise.
+  network  String?
+  enabled  Boolean @default(true)
+
+  feePct       Float @default(0)
+  feeFlatCents Int   @default(0)
+
+  minDepositCents  Int @default(0)
+  maxDepositCents  Int @default(0) // 0 = no cap
+  minWithdrawCents Int @default(0)
+  maxWithdrawCents Int @default(0) // 0 = no cap
+
+  /// ISO 3166-1 alpha-2 codes this method is offered in. Empty = every country.
+  countries Json?
+  sortOrder Int   @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([provider, enabled, sortOrder])
+}
+
 /// A bonus offer a trader can pick at deposit time. Edited in the back office.
 model BonusOffer {
   id                 String  @id @default(cuid())
