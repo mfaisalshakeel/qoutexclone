@@ -4,6 +4,7 @@ import { dateTime, money, shortHash } from '../lib/format';
 import { toast } from '../store/toast';
 import { useAuth } from '../store/auth';
 import type { PaymentMethod, Withdrawal, WithdrawalQuote } from '../lib/types';
+import { MethodIcon } from './MethodIcon';
 import { PaymentPanelSkeleton } from './Skeleton';
 
 interface Props {
@@ -134,15 +135,15 @@ export function WithdrawPanel({ methods, withdrawals, onChanged }: Props) {
                   : 'border-ink-600 bg-ink-800 hover:border-ink-500'
               }`}
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-600 text-[10px] font-bold">
-                {m.currency}
-              </span>
+              <MethodIcon currency={m.currency} network={m.network} />
               <span>
                 <span className="block text-sm font-semibold">{m.currency}</span>
                 <span className="block text-[11px] text-slate-400">{m.label}</span>
               </span>
               <span className="ml-auto text-right text-[11px] text-slate-500">
-                min ${m.minWithdrawUsd}
+                {m.maxWithdrawUsd > 0
+                  ? `$${m.minWithdrawUsd.toLocaleString()}–$${m.maxWithdrawUsd.toLocaleString()}`
+                  : `min $${m.minWithdrawUsd}`}
                 <span className="block">fee ${m.networkFeeUsd}</span>
               </span>
             </button>

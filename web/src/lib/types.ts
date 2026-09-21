@@ -191,6 +191,9 @@ export interface PaymentMethod {
   confirmations: number;
   minDepositUsd: number;
   minWithdrawUsd: number;
+  /** 0 means uncapped. */
+  maxDepositUsd: number;
+  maxWithdrawUsd: number;
   networkFeeUsd: number;
   rate: number;
   /** False only for a method that can never pay out — a card cannot receive

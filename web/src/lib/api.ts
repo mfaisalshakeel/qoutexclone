@@ -155,8 +155,43 @@ async function request<T>(
   return payload as T;
 }
 
+/**
+ * A GET that returns a file rather than JSON — a statement download, say.
+ * Triggers the browser's own save flow via a throwaway object URL rather than
+ * returning the blob, since every caller wants exactly that.
+ */
+async function downloadFile(path: string, refreshed = false): Promise<void> {
+  const res = await fetch(`${BASE}/api${path}`, {
+    headers: tokens.access ? { authorization: `Bearer ${tokens.access}` } : {},
+  }).catch(() => {
+    throw new ApiError(0, 'Cannot reach the server. Check your connection and try again.', 'network_error');
+  });
+
+  if (res.status === 401 && !refreshed && tokens.refresh) {
+    if (await refreshSession()) return downloadFile(path, true);
+  }
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}));
+    const error = payload?.error ?? {};
+    throw new ApiError(res.status, error.message ?? 'Request failed', error.code ?? 'error', error.details);
+  }
+
+  const disposition = res.headers.get('content-disposition') ?? '';
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'download';
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
   get: <T>(path: string, options?: RequestOptions) => request<T>('GET', path, undefined, options),
+  download: downloadFile,
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>('POST', path, body ?? {}, options),
   patch: <T>(path: string, body: unknown, options?: RequestOptions) =>

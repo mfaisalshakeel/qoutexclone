@@ -67,7 +67,7 @@ test.describe('wallet', () => {
     await page.fill('#withdraw-amount', '100');
     await expect(page.getByText('You receive')).toBeVisible();
     await page.click('button:has-text("Request withdrawal")');
-    await expect(page.getByText(/e-wallet account uses/i)).toBeVisible();
+    await expect(page.getByText('Enter the email address your e-wallet account uses')).toBeVisible();
 
     await page.fill('#withdraw-address', 'trader@example.test');
     // 1.5% of $100 on the seeded ewallet-usd method
@@ -76,6 +76,35 @@ test.describe('wallet', () => {
     await expect(page.getByText('Withdrawal requested')).toBeVisible();
     await expect(page.getByText('In progress')).toBeVisible();
     await expect(page.getByText('Requested').first()).toBeVisible();
+
+    expect(errors).toEqual([]);
+  });
+
+  test('method grid shows the limit range up front, and a statement downloads as CSV and PDF', async ({
+    page,
+  }) => {
+    const errors = failOnPageErrors(page);
+    await register(page, newCredentials('statement'));
+    await fundAccount(page, '$250');
+
+    // the sandbox e-wallet method has a real min/max on both sides
+    await page.goto('/wallet');
+    await expect(page.getByText('$10–$10,000')).toBeVisible();
+    await page.goto('/wallet?tab=withdraw');
+    await expect(page.getByText('$10–$10,000')).toBeVisible();
+
+    await page.goto('/wallet?tab=history');
+    const [csv] = await Promise.all([
+      page.waitForEvent('download'),
+      page.click('button:has-text("Download CSV")'),
+    ]);
+    expect(csv.suggestedFilename()).toMatch(/^statement-.*\.csv$/);
+
+    const [pdf] = await Promise.all([
+      page.waitForEvent('download'),
+      page.click('button:has-text("Download PDF")'),
+    ]);
+    expect(pdf.suggestedFilename()).toMatch(/^statement-.*\.pdf$/);
 
     expect(errors).toEqual([]);
   });

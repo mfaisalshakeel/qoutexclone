@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api } from '../lib/api';
+import { ApiError, api } from '../lib/api';
 import { dateTime, money, shortHash } from '../lib/format';
 import { realtime } from '../lib/ws';
+import { toast } from '../store/toast';
 import { useAuth } from '../store/auth';
 import { DepositPanel } from '../components/DepositPanel';
 import { WithdrawPanel } from '../components/WithdrawPanel';
@@ -95,10 +96,85 @@ export function Wallet() {
       )}
       {tab === 'history' &&
         (listsLoaded ? (
-          <WalletHistory deposits={deposits} withdrawals={withdrawals} />
+          <div className="space-y-4">
+            <StatementDownload />
+            <WalletHistory deposits={deposits} withdrawals={withdrawals} />
+          </div>
         ) : (
           <RowSkeletons rows={6} className="card divide-y divide-ink-700" />
         ))}
+    </div>
+  );
+}
+
+/**
+ * A statement of the real-money ledger, CSV or PDF, over an optional date
+ * range. Left blank on both ends, it covers everything — the common case for
+ * someone who just wants a record of the account.
+ */
+function StatementDownload() {
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [busy, setBusy] = useState<'csv' | 'pdf' | null>(null);
+
+  const download = async (format: 'csv' | 'pdf') => {
+    setBusy(format);
+    try {
+      const params = new URLSearchParams({ format });
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      await api.download(`/wallet/statement?${params.toString()}`);
+    } catch (err) {
+      toast.error('Could not download the statement', err instanceof ApiError ? err.message : undefined);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="card flex flex-wrap items-end gap-3 p-4">
+      <div className="min-w-0">
+        <label className="label" htmlFor="statement-from">
+          From <span className="normal-case text-slate-500">(optional)</span>
+        </label>
+        <input
+          id="statement-from"
+          type="date"
+          value={from}
+          max={to || undefined}
+          onChange={(e) => setFrom(e.target.value)}
+          className="field !py-1.5 !text-xs"
+        />
+      </div>
+      <div className="min-w-0">
+        <label className="label" htmlFor="statement-to">
+          To <span className="normal-case text-slate-500">(optional)</span>
+        </label>
+        <input
+          id="statement-to"
+          type="date"
+          value={to}
+          min={from || undefined}
+          onChange={(e) => setTo(e.target.value)}
+          className="field !py-1.5 !text-xs"
+        />
+      </div>
+      <span className="ml-auto flex gap-2">
+        <button
+          onClick={() => void download('csv')}
+          disabled={busy !== null}
+          className="btn-ghost !px-3 !py-2 text-xs"
+        >
+          {busy === 'csv' ? 'Preparing…' : 'Download CSV'}
+        </button>
+        <button
+          onClick={() => void download('pdf')}
+          disabled={busy !== null}
+          className="btn-ghost !px-3 !py-2 text-xs"
+        >
+          {busy === 'pdf' ? 'Preparing…' : 'Download PDF'}
+        </button>
+      </span>
     </div>
   );
 }

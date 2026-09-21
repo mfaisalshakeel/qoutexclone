@@ -12,6 +12,7 @@ import { createProviderDeposit, simulateProviderPayment } from '../services/prov
 import * as paymentsService from '../services/payments.js';
 import type { ProviderKind } from '../services/payments.js';
 import { getBalances, listTransactions } from '../services/wallet.js';
+import { renderStatementCsv, renderStatementPdf, statementRows } from '../services/statements.js';
 import { createDeposit, getDepositAddress, listDeposits, markSeen } from '../services/deposits.js';
 import {
   cancelWithdrawal,
@@ -66,6 +67,9 @@ router.get(
           settings.get('wallet.minWithdrawUsd'),
           (method?.minWithdrawCents ?? 0) / 100,
         ),
+        // 0 means uncapped, matching how PaymentMethod itself documents the column
+        maxDepositUsd: (method?.maxDepositCents ?? 0) / 100,
+        maxWithdrawUsd: (method?.maxWithdrawCents ?? 0) / 100,
         networkFeeUsd:
           spec.networkFeeUsd + settings.get('wallet.withdrawFlatFeeUsd') + (method?.feeFlatCents ?? 0) / 100,
         rate: usdRate(spec.currency),
@@ -87,6 +91,8 @@ router.get(
         confirmations: 1,
         minDepositUsd: row.minDepositCents / 100,
         minWithdrawUsd: row.minWithdrawCents / 100,
+        maxDepositUsd: row.maxDepositCents / 100,
+        maxWithdrawUsd: row.maxWithdrawCents / 100,
         networkFeeUsd: row.feeFlatCents / 100,
         rate: 1,
         payoutSupported: paymentsService.providerFor(row.provider as ProviderKind).supportsPayout,
@@ -159,6 +165,41 @@ router.get(
       .parse(req.query);
     const { items, nextCursor } = await listTransactions(req.user!.id, query);
     res.json({ transactions: items.map(publicTransaction), nextCursor });
+  }),
+);
+
+/**
+ * A downloadable statement of the real-money ledger, CSV or PDF. Practice and
+ * tournament balances never appear on it — a statement is a record of money
+ * that actually moved.
+ */
+router.get(
+  '/statement',
+  wrap(async (req, res) => {
+    const query = z
+      .object({
+        format: z.enum(['csv', 'pdf']),
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
+      })
+      .parse(req.query);
+
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { email: true } });
+    if (!user) throw notFound('Account not found');
+
+    const rows = await statementRows(req.user!.id, { from: query.from, to: query.to });
+    const stamp = new Date().toISOString().slice(0, 10);
+
+    if (query.format === 'csv') {
+      res.setHeader('content-type', 'text/csv; charset=utf-8');
+      res.setHeader('content-disposition', `attachment; filename="statement-${stamp}.csv"`);
+      res.send(renderStatementCsv(rows));
+    } else {
+      const pdf = await renderStatementPdf(rows, { email: user.email, range: { from: query.from, to: query.to } });
+      res.setHeader('content-type', 'application/pdf');
+      res.setHeader('content-disposition', `attachment; filename="statement-${stamp}.pdf"`);
+      res.send(pdf);
+    }
   }),
 );
 

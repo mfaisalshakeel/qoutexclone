@@ -4,6 +4,7 @@ import { countdown, money, shortHash } from '../lib/format';
 import { toast } from '../store/toast';
 import { useAuth } from '../store/auth';
 import { CopyButton } from './Copy';
+import { MethodIcon } from './MethodIcon';
 import { QR } from './QR';
 import type { Deposit, PaymentMethod } from '../lib/types';
 import { PaymentPanelSkeleton } from './Skeleton';
@@ -345,15 +346,15 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
                   : 'border-ink-600 bg-ink-800 hover:border-ink-500'
               }`}
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-600 text-[10px] font-bold">
-                {m.currency}
-              </span>
+              <MethodIcon currency={m.currency} network={m.network} />
               <span className="min-w-0">
                 <span className="block text-sm font-semibold">{m.currency}</span>
                 <span className="block text-[11px] text-slate-400">{m.label}</span>
               </span>
               <span className="ml-auto text-right text-[11px] text-slate-500">
-                min ${m.minDepositUsd}
+                {m.maxDepositUsd > 0
+                  ? `$${m.minDepositUsd.toLocaleString()}–$${m.maxDepositUsd.toLocaleString()}`
+                  : `min $${m.minDepositUsd}`}
                 <span className="block">{m.confirmations} conf</span>
               </span>
             </button>
