@@ -1,6 +1,15 @@
+import crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { PaymentMethod } from '@prisma/client';
-import { assertMethodAvailable, assertWithinLimits, feeFor, isOfferedIn } from './payments.js';
+import {
+  assertMethodAvailable,
+  assertWithinLimits,
+  buildSandboxWebhook,
+  feeFor,
+  isOfferedIn,
+  sandboxSecret,
+  verifySandboxWebhook,
+} from './payments.js';
 
 function method(overrides: Partial<PaymentMethod> = {}): PaymentMethod {
   return {
@@ -93,5 +102,52 @@ describe('assertWithinLimits', () => {
 
   it('applies exactly on the boundary', () => {
     expect(() => assertWithinLimits(method(), 1_000, 'deposit')).not.toThrow();
+  });
+});
+
+describe('sandbox webhook signing', () => {
+  const payload = { externalId: 'card_abc123', amountCents: 5_000 };
+
+  it('verifies a signature it signed itself', () => {
+    const { body, headers } = buildSandboxWebhook('CARD', payload);
+    const event = verifySandboxWebhook('CARD', headers, body);
+    expect(event).toEqual({
+      externalId: 'card_abc123',
+      kind: 'deposit_confirmed',
+      amountCents: 5_000,
+      raw: payload,
+    });
+  });
+
+  it('refuses a signature for the wrong provider', () => {
+    const { body, headers } = buildSandboxWebhook('CARD', payload);
+    expect(verifySandboxWebhook('EWALLET', headers, body)).toBeNull();
+  });
+
+  it('refuses a body that was tampered with after signing', () => {
+    const { headers } = buildSandboxWebhook('CARD', payload);
+    const tampered = Buffer.from(JSON.stringify({ ...payload, amountCents: 999_999 }));
+    expect(verifySandboxWebhook('CARD', headers, tampered)).toBeNull();
+  });
+
+  it('refuses a missing or malformed signature header', () => {
+    const { body } = buildSandboxWebhook('CARD', payload);
+    expect(verifySandboxWebhook('CARD', {}, body)).toBeNull();
+    expect(verifySandboxWebhook('CARD', { 'x-quantex-signature': 'not-a-real-signature' }, body)).toBeNull();
+  });
+
+  it('refuses a body that is not JSON, or missing its externalId', () => {
+    const secret = sandboxSecret('CARD');
+    const bad = Buffer.from('not json at all');
+    const sig = `sha256=${crypto.createHmac('sha256', secret).update(bad).digest('hex')}`;
+    expect(verifySandboxWebhook('CARD', { 'x-quantex-signature': sig }, bad)).toBeNull();
+
+    const { body, headers } = buildSandboxWebhook('CARD', { externalId: '', amountCents: 1 });
+    expect(verifySandboxWebhook('CARD', headers, body)).toBeNull();
+  });
+
+  it('gives every provider kind its own distinct secret', () => {
+    expect(sandboxSecret('CARD')).not.toBe(sandboxSecret('EWALLET'));
+    expect(sandboxSecret('CARD')).not.toBe(sandboxSecret('CRYPTO'));
   });
 });

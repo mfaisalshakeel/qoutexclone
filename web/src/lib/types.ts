@@ -199,6 +199,8 @@ export interface Deposit {
   id: string;
   currency: string;
   network: string;
+  /** Which PaymentProvider this went through: CRYPTO, CARD or EWALLET. */
+  provider: string;
   networkLabel: string;
   address: string;
   cryptoAmount: string;

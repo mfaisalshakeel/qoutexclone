@@ -21,6 +21,8 @@ import { attachEmailNotifications } from './services/email-notifications.js';
 import { attachProgression } from './services/progression.js';
 import { registerProvider } from './services/payments.js';
 import { cryptoProvider } from './services/providers/crypto.js';
+import { cardProvider } from './services/providers/card.js';
+import { ewalletProvider } from './services/providers/ewallet.js';
 import { expireStale } from './services/marketplace.js';
 import type { OtcParams } from './engine/otc.js';
 
@@ -38,6 +40,8 @@ async function main() {
   configureMailer();
   watchMailSettings();
   registerProvider(cryptoProvider);
+  registerProvider(cardProvider);
+  registerProvider(ewalletProvider);
   const revocationSweeper = setInterval(pruneRevocations, 15 * 60 * 1000);
   revocationSweeper.unref();
 

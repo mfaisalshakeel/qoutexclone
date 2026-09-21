@@ -8,6 +8,7 @@ import { prisma } from '../lib/prisma.js';
 import { requireActiveUser, requireAuth, requireVerifiedEmail } from '../middleware/auth.js';
 import { bonusesEnabled, holdFor, listOffers, quoteOffer } from '../services/bonuses.js';
 import { cryptoMethodKey, findMethod } from '../services/payments.js';
+import { createProviderDeposit, simulateProviderPayment } from '../services/provider-deposits.js';
 import * as paymentsService from '../services/payments.js';
 import { getBalances, listTransactions } from '../services/wallet.js';
 import { createDeposit, getDepositAddress, listDeposits, markSeen } from '../services/deposits.js';
@@ -69,8 +70,25 @@ router.get(
       };
     });
 
+    // card and e-wallet have no NETWORKS entry — a decimal precision or an
+    // on-chain confirmation count means nothing for either — so their rows
+    // are read straight from the provider-framework table instead
+    const providerMethods = rows
+      .filter((row) => row.provider !== 'CRYPTO' && paymentsService.isOfferedIn(row, trader?.country))
+      .map((row) => ({
+        currency: row.currency,
+        network: row.provider,
+        label: row.label,
+        decimals: 2,
+        confirmations: 1,
+        minDepositUsd: row.minDepositCents / 100,
+        minWithdrawUsd: row.minWithdrawCents / 100,
+        networkFeeUsd: row.feeFlatCents / 100,
+        rate: 1,
+      }));
+
     res.json({
-      methods,
+      methods: [...methods, ...providerMethods],
       withdrawFeePct: settings.get('wallet.withdrawFeePct'),
       mockChain: env.mockChainWatcher,
     });
@@ -188,6 +206,31 @@ router.post(
   }),
 );
 
+/** The provider-framework deposit path: a checkout session, not an address. */
+router.post(
+  '/deposits/provider',
+  requireActiveUser,
+  requireVerifiedEmail,
+  wrap(async (req, res) => {
+    const body = z
+      .object({
+        methodKey: z.string().min(2).max(40),
+        amount: z.number().positive().max(1_000_000),
+        promoCode: z.string().max(32).optional(),
+        bonusOfferId: z.string().max(40).optional(),
+      })
+      .parse(req.body);
+    const deposit = await createProviderDeposit({
+      userId: req.user!.id,
+      methodKey: body.methodKey,
+      usdAmount: body.amount,
+      promoCode: body.promoCode,
+      bonusOfferId: body.bonusOfferId,
+    });
+    res.status(201).json({ deposit: publicDeposit(deposit) });
+  }),
+);
+
 router.get(
   '/deposits',
   wrap(async (req, res) => {
@@ -196,17 +239,27 @@ router.get(
 );
 
 /**
- * Demo helper: pretends the user broadcast the payment so the invoice moves to
- * CONFIRMING immediately instead of waiting for the mock watcher. Only exists
- * while the mock chain watcher is enabled.
+ * Demo helper: simulates the payment that would otherwise arrive from a real
+ * chain, card gateway or e-wallet, so the invoice completes without one.
+ *
+ * Crypto pretends the trader broadcast the payment, moving the invoice to
+ * CONFIRMING for the mock watcher to pick up. Card and e-wallet instead build
+ * and deliver a genuinely signed webhook through the real verification path —
+ * this button is the sandbox's "customer paid", not a shortcut around it.
  */
 router.post(
   '/deposits/:id/simulate-payment',
   wrap(async (req, res) => {
-    if (!env.mockChainWatcher) throw forbidden('Payment simulation is disabled on this deployment');
     const deposit = await prisma.deposit.findUnique({ where: { id: req.params.id } });
     if (!deposit || deposit.userId !== req.user!.id) throw notFound('Deposit not found');
-    const updated = await markSeen(deposit.id, mockTxHash(deposit.network, deposit.id));
+
+    if (deposit.network === 'CARD' || deposit.network === 'EWALLET') {
+      await simulateProviderPayment(req.user!.id, deposit.id);
+    } else {
+      if (!env.mockChainWatcher) throw forbidden('Payment simulation is disabled on this deployment');
+      await markSeen(deposit.id, mockTxHash(deposit.network, deposit.id));
+    }
+    const updated = await prisma.deposit.findUniqueOrThrow({ where: { id: deposit.id } });
     res.json({ deposit: publicDeposit(updated) });
   }),
 );

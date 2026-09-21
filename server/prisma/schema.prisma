@@ -525,6 +525,10 @@ model Deposit {
   bonusAmount    Int       @default(0)
   /// The bonus offer the trader chose at checkout, if any.
   bonusOfferId   String?
+  /// The card/e-wallet provider's own reference for this transfer (a checkout
+  /// session id). Unique so a webhook can find its deposit; crypto deposits
+  /// leave this null and are found by id instead.
+  externalRef    String?   @unique
   confirmations  Int       @default(0)
   requiredConf   Int       @default(2)
   status         String    @default("AWAITING_PAYMENT") // AWAITING_PAYMENT | CONFIRMING | COMPLETED | REJECTED | EXPIRED

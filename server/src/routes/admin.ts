@@ -176,7 +176,11 @@ router.get(
       include: { user: { select: { email: true, name: true } } },
     });
     res.json({
-      deposits: deposits.map((d) => ({ ...publicDeposit(d), user: d.user })),
+      // externalRef is the provider's own checkout/session reference — not
+      // secret, and useful to an operator matching a support ticket to a
+      // provider's own dashboard, so it rides along here though not in the
+      // trader-facing shape
+      deposits: deposits.map((d) => ({ ...publicDeposit(d), user: d.user, externalRef: d.externalRef })),
     });
   }),
 );

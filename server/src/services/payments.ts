@@ -1,6 +1,8 @@
+import crypto from 'node:crypto';
 import type { PaymentMethod } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { badRequest, forbidden, notFound } from '../lib/errors.js';
+import { env } from '../env.js';
 
 /**
  * The provider framework.
@@ -120,6 +122,74 @@ export function assertMethodAvailable(method: PaymentMethod, countryCode?: strin
   if (!isOfferedIn(method, countryCode)) {
     throw forbidden('That payment method is not offered in your country');
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Sandbox signing                                                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A per-provider secret for the sandbox card and e-wallet providers.
+ *
+ * Derived rather than stored, the same way `MockCustodyProvider` derives
+ * deposit addresses from `env.jwtSecret`: there is nothing to configure and
+ * nothing to leak, because there is no real counterparty on the other end. A
+ * real card or e-wallet integration replaces this with credentials read from
+ * settings — the interface does not change, only which secret verifies the
+ * signature.
+ */
+export function sandboxSecret(kind: ProviderKind): string {
+  return crypto.createHmac('sha256', env.jwtSecret).update(`sandbox-webhook:${kind}`).digest('hex');
+}
+
+function sign(kind: ProviderKind, body: Buffer | string): string {
+  return `sha256=${crypto.createHmac('sha256', sandboxSecret(kind)).update(body).digest('hex')}`;
+}
+
+/** Builds a signed sandbox webhook body and its header, ready to deliver. */
+export function buildSandboxWebhook(
+  kind: ProviderKind,
+  payload: { externalId: string; amountCents: number },
+): { body: Buffer; headers: Record<string, string> } {
+  const body = Buffer.from(JSON.stringify(payload));
+  return { body, headers: { 'x-quantex-signature': sign(kind, body) } };
+}
+
+/**
+ * Verifies a sandbox webhook's signature and shape.
+ *
+ * Never throws: a bad signature is exactly as valid a thing for a webhook
+ * endpoint to receive as a wrong password is for a login, and is handled the
+ * same way — refused, not crashed on.
+ */
+export function verifySandboxWebhook(
+  kind: ProviderKind,
+  headers: Record<string, string | string[] | undefined>,
+  rawBody: Buffer,
+): WebhookEvent | null {
+  const header = headers['x-quantex-signature'];
+  const signature = Array.isArray(header) ? header[0] : header;
+  if (!signature) return null;
+
+  const expected = sign(kind, rawBody);
+  const given = Buffer.from(signature);
+  const want = Buffer.from(expected);
+  if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) return null;
+
+  let payload: { externalId?: unknown; amountCents?: unknown };
+  try {
+    payload = JSON.parse(rawBody.toString('utf8'));
+  } catch {
+    return null;
+  }
+  if (typeof payload.externalId !== 'string' || !payload.externalId) return null;
+
+  return {
+    externalId: payload.externalId,
+    kind: 'deposit_confirmed',
+    amountCents: typeof payload.amountCents === 'number' ? payload.amountCents : undefined,
+    raw: payload,
+  };
 }
 
 export interface FeeQuote {

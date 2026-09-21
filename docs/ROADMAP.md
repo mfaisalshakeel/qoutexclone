@@ -81,7 +81,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 ## Phase 5 — Payments
 
 - [x] **Provider framework.** A `PaymentProvider` interface (create deposit, webhook verify, payout) with registry and admin enable/disable, fees, limits per method, and countries.
-- [ ] **Methods.** Crypto (existing flow kept) plus a sandbox card gateway and an e-wallet provider behind the interface, with signed webhooks and idempotent crediting. Real credentials are listed as "Blocked on owner".
+- [x] **Methods.** Crypto (existing flow kept) plus a sandbox card gateway and an e-wallet provider behind the interface, with signed webhooks and idempotent crediting. Real credentials are listed as "Blocked on owner".
 - [ ] **Withdrawals.** Method-specific fields and validation, KYC gate, bonus turnover gate, daily limits, and an admin review queue with notes. The trader sees the status timeline.
 - [ ] **Wallet UI.** Method grid with logos, limits and fees shown up front, transaction timeline, and downloadable statements (CSV/PDF).
 

@@ -18,6 +18,7 @@ import walletRoutes from './routes/wallet.js';
 import adminRoutes from './routes/admin.js';
 import tournamentRoutes from './routes/tournaments.js';
 import supportRoutes from './routes/support.js';
+import webhookRoutes from './routes/webhooks.js';
 import { marketFeed } from './engine/feed.js';
 
 /**
@@ -85,7 +86,17 @@ export function createApp() {
       credentials: true,
     }),
   );
-  app.use(express.json({ limit: '256kb' }));
+  app.use(
+    express.json({
+      limit: '256kb',
+      // captured for webhook signature verification — a provider signs the
+      // exact bytes it sent, and re-serialising the parsed JSON would not
+      // reliably reproduce them
+      verify: (req, _res, buf) => {
+        (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buf);
+      },
+    }),
+  );
   app.use(
     rateLimit({
       windowMs: 60 * 1000,
@@ -153,6 +164,7 @@ export function createApp() {
   app.use('/api/tournaments', tournamentRoutes);
   app.use('/api/support', supportRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/webhooks', webhookRoutes);
 
   serveWebClient(app);
 

@@ -107,13 +107,22 @@ export function publicTransaction(tx: Transaction) {
   };
 }
 
+const PROVIDER_LABELS: Record<string, string> = {
+  CARD: 'Card (sandbox)',
+  EWALLET: 'E-wallet (sandbox)',
+};
+
 export function publicDeposit(deposit: Deposit) {
   const spec = findNetwork(deposit.currency, deposit.network);
   return {
     id: deposit.id,
     currency: deposit.currency,
     network: deposit.network,
-    networkLabel: spec?.label ?? deposit.network,
+    // which PaymentProvider this deposit went through, so the client can tell
+    // a crypto invoice (an address to send to) from a sandbox checkout (a
+    // button to press) without guessing from the network string
+    provider: spec ? 'CRYPTO' : deposit.network,
+    networkLabel: spec?.label ?? PROVIDER_LABELS[deposit.network] ?? deposit.network,
     address: deposit.address,
     cryptoAmount: deposit.cryptoAmount,
     rate: deposit.rate,
