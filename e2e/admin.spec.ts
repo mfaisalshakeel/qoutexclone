@@ -110,6 +110,10 @@ test.describe('admin', () => {
     await page.goto('/admin');
 
     await expect(page.getByText('New registrations')).toBeVisible();
+    await expect(page.getByText('First-time depositors')).toBeVisible();
+    await expect(page.getByText('Active traders')).toBeVisible();
+    await expect(page.getByText('Average stake')).toBeVisible();
+    await expect(page.getByText('Win rate')).toBeVisible();
     // "Today" is the default; a comparison badge sits beside a period KPI's label
     const depositCard = page.locator('.card', { hasText: 'Deposit volume' });
     await expect(depositCard.getByText(/▲|▼|flat|new/)).toBeVisible();

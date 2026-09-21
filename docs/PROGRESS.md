@@ -4,6 +4,18 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-21**: Phase 6 — **KPIs**, filling out the dashboard's period stats with the rest of the roadmap's list: first-time depositors, trading volume (as its own tile, split out from House P&L's hint), active traders, average stake, and platform win rate. Registrations, deposit/withdrawal volume, net deposits, house P&L, bonus cost and the pending queues already existed from the period-selector task just before this one.
+
+  **A first-time depositor is found in two lookups, not one.** "Whose first-ever completed deposit falls in this window" isn't a single `GROUP BY` Prisma's query builder expresses cleanly, so `firstTimeDepositors` first finds who deposited in the window, then excludes anyone who also has a completed deposit before it — a repeat depositor who happens to deposit again during the window is still a repeat, not new.
+
+  **Average stake and win rate come nearly free.** The trade aggregate `periodStats` already ran for volume and house P&L grows an `_avg: { stake }` alongside its existing `_sum`, and a single `groupBy(['status'])` over WON/LOST replaces what would otherwise be two separate counts. Win rate is `null`, not `0`, when nothing settled in the period — a market with no trades has no rate, not a 0% one.
+
+  **Active traders counts distinct traders, not trades** — `groupBy(['userId'])` on positions opened in the window, so a trader who opened five positions counts once. A new `Trade(accountType, openedAt)` index backs it; nothing indexed `openedAt` before.
+
+  **The dashboard is now two sections, not one flat grid**: "This period" (ten period KPIs, each with a comparison badge) and "Right now" (the three snapshot tiles carried over from the period-selector task). Splitting the heading is the only layout change this task needed — the delta component and the snapshot/flow split were already built.
+
+  **Verified.** 560 server tests (3 new: a first-time depositor correctly separated from a repeat one, distinct active traders with an average stake and a win rate computed from a mix of wins and losses, and a null win rate when nothing settled), 221 web tests, typecheck, build, lint all green. The e2e period-selector spec now also asserts the four new tiles render; the full admin suite and the 1440px/390px responsive check stay green.
+
 - **2026-09-21**: Phase 6 — **Period selector**, opening the admin back office. `/admin/overview` takes an optional `from`/`to` and returns three shapes rather than one flat object: `current` and `previous` (the same set of flow KPIs, scoped to the requested window and the immediately preceding window of equal length) and `snapshot` (queue depths and lifetime totals, unscoped — see Decisions). The dashboard gets a period picker (Today/Yesterday/7 days/30 days/This month/Custom) and every flow KPI card grows a ▲/▼/flat/new comparison badge against the previous period.
 
   **Only flow metrics get a comparison.** Registrations, deposit volume, withdrawal volume, net flow, house P&L and bonuses paid all happened *within* a window, so "vs. the same length window before it" is a real question. A pending-withdrawal count or a total-traders count is a state of right now, not a thing that happened during a period — there is no meaningful "previous period" for a queue depth — so those stay a single unscoped snapshot, refreshed independently of whatever period is selected (`AdminLayout`'s 30-second poll for sidebar badges keeps reading `snapshot` unconditionally).

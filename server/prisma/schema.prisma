@@ -479,6 +479,8 @@ model Trade {
   @@index([assetId, status, direction])
   /// today's settled positions, for the leaderboard
   @@index([status, settledAt])
+  /// admin dashboard: active traders within a period
+  @@index([accountType, openedAt])
 }
 
 model Transaction {

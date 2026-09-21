@@ -8,12 +8,16 @@ import { Skeleton, StatSkeletons } from '../../components/Skeleton';
 
 interface PeriodStats {
   registrations: number;
+  firstTimeDepositors: number;
   depositVolume: number;
   withdrawalVolume: number;
   netFlow: number;
   realVolume: number;
   housePnl: number;
   bonusPaid: number;
+  activeTraders: number;
+  averageStake: number;
+  winRatePct: number | null;
 }
 
 interface Overview {
@@ -100,7 +104,7 @@ export function AdminDashboard() {
           <Skeleton className="h-5 w-32" />
           <Skeleton className="h-2.5 w-64 max-w-full" />
         </div>
-        <StatSkeletons count={9} className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4" />
+        <StatSkeletons count={13} className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4" />
         <div className="mb-6 grid gap-3 sm:grid-cols-3">
           {[0, 1, 2].map((i) => (
             <Skeleton key={i} className="h-16 !rounded-xl" />
@@ -121,11 +125,17 @@ export function AdminDashboard() {
         action={<PeriodPicker preset={preset} onChange={setPreset} custom={custom} onCustom={setCustom} />}
       />
 
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <h2 className="mb-2 text-sm font-semibold">This period</h2>
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           label="New registrations"
           value={String(current.registrations)}
           delta={<Delta current={current.registrations} previous={previous.registrations} />}
+        />
+        <StatCard
+          label="First-time depositors"
+          value={String(current.firstTimeDepositors)}
+          delta={<Delta current={current.firstTimeDepositors} previous={previous.firstTimeDepositors} />}
         />
         <StatCard
           label="Deposit volume"
@@ -139,33 +149,64 @@ export function AdminDashboard() {
           delta={<Delta current={current.withdrawalVolume} previous={previous.withdrawalVolume} />}
         />
         <StatCard
-          label="Net flow"
+          label="Net deposits"
           value={money(current.netFlow, { sign: true })}
           tone={current.netFlow >= 0 ? 'up' : 'down'}
-          hint="deposits minus payouts"
+          hint="deposits minus withdrawals"
           delta={<Delta current={current.netFlow} previous={previous.netFlow} />}
         />
         <StatCard
           label="House P&L"
           value={money(current.housePnl, { sign: true })}
           tone={current.housePnl >= 0 ? 'up' : 'down'}
-          hint={`on ${money(current.realVolume)} live volume`}
+          hint="live accounts only"
           delta={<Delta current={current.housePnl} previous={previous.housePnl} />}
+        />
+        <StatCard
+          label="Trading volume"
+          value={money(current.realVolume)}
+          hint="live stakes"
+          delta={<Delta current={current.realVolume} previous={previous.realVolume} />}
         />
         <StatCard
           label="Bonuses paid"
           value={money(current.bonusPaid)}
           delta={<Delta current={current.bonusPaid} previous={previous.bonusPaid} />}
         />
+        <StatCard
+          label="Active traders"
+          value={String(current.activeTraders)}
+          hint="placed a live trade"
+          delta={<Delta current={current.activeTraders} previous={previous.activeTraders} />}
+        />
+        <StatCard
+          label="Average stake"
+          value={money(current.averageStake)}
+          delta={<Delta current={current.averageStake} previous={previous.averageStake} />}
+        />
+        <StatCard
+          label="Win rate"
+          value={current.winRatePct === null ? '—' : `${current.winRatePct}%`}
+          hint="platform-wide, live accounts"
+          delta={
+            current.winRatePct !== null && previous.winRatePct !== null ? (
+              <Delta current={current.winRatePct} previous={previous.winRatePct} />
+            ) : undefined
+          }
+        />
+      </div>
+
+      <h2 className="mb-2 text-sm font-semibold">Right now</h2>
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Total traders" value={String(snapshot.users)} hint="all time" />
-        <StatCard label="Live tournaments" value={String(snapshot.liveTournaments)} hint="right now" />
+        <StatCard label="Live tournaments" value={String(snapshot.liveTournaments)} />
         <StatCard
           label="Needs attention"
           value={String(snapshot.pendingWithdrawals + snapshot.pendingKyc + snapshot.openTickets)}
           tone={
             snapshot.pendingWithdrawals + snapshot.pendingKyc + snapshot.openTickets > 0 ? 'warn' : undefined
           }
-          hint="payouts, verifications, messages · right now"
+          hint="payouts, verifications, messages"
         />
       </div>
 
