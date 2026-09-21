@@ -28,6 +28,7 @@ import { resolvePayout } from '../engine/payout.js';
 import { RULE_KINDS, parseRuleConfig, payouts } from '../services/payouts.js';
 import { exposureByMarket } from '../services/risk.js';
 import { dashboardOverview } from '../services/admin-stats.js';
+import { dashboardCharts } from '../services/admin-charts.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -51,6 +52,17 @@ router.get(
       feedProvider: marketFeed.provider,
       providers: marketFeed.providerHealth(),
     });
+  }),
+);
+
+/** Trailing-window charts: deposits/withdrawals and house P&L over time, a
+ *  registration→FTD funnel, volume by asset class and top assets, live
+ *  exposure, and an hourly activity heatmap. */
+router.get(
+  '/charts',
+  wrap(async (req, res) => {
+    const query = z.object({ days: z.coerce.number().int().min(7).max(90).default(30) }).parse(req.query);
+    res.json(await dashboardCharts(query.days));
   }),
 );
 

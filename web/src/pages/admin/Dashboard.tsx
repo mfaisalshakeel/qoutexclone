@@ -1,10 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
 import { dateTime, money } from '../../lib/format';
 import { Empty, Loading, PageHead, StatCard, StatusPill, Table, Td } from '../../components/admin/ui';
+import type { ChartsData } from '../../components/admin/Charts';
 import type { Deposit, Withdrawal } from '../../lib/types';
 import { Skeleton, StatSkeletons } from '../../components/Skeleton';
+
+// recharts pulls in d3 and is sizeable; traders never hit this bundle, only
+// admins landing on the dashboard, so it is worth the extra request.
+const AdminCharts = lazy(() =>
+  import('../../components/admin/Charts').then((m) => ({ default: m.AdminCharts })),
+);
 
 interface PeriodStats {
   registrations: number;
@@ -73,12 +80,17 @@ function presetRange(preset: Preset, custom: { from: string; to: string }): { fr
   }
 }
 
+const CHART_WINDOWS = [7, 30, 90] as const;
+
 export function AdminDashboard() {
   const [preset, setPreset] = useState<Preset>('today');
   const [custom, setCustom] = useState({ from: '', to: '' });
   const [overview, setOverview] = useState<Overview | null>(null);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [deposits, setDeposits] = useState<Deposit[]>([]);
+  const [chartDays, setChartDays] = useState<(typeof CHART_WINDOWS)[number]>(30);
+  const [charts, setCharts] = useState<ChartsData | null>(null);
+  const [chartsError, setChartsError] = useState('');
 
   const range = useMemo(() => presetRange(preset, custom), [preset, custom]);
 
@@ -87,6 +99,20 @@ export function AdminDashboard() {
     setOverview(null);
     void api.get<Overview>(`/admin/overview?${params.toString()}`).then(setOverview).catch(() => undefined);
   }, [range]);
+
+  const loadCharts = () => {
+    setCharts(null);
+    setChartsError('');
+    api
+      .get<ChartsData>(`/admin/charts?days=${chartDays}`)
+      .then(setCharts)
+      .catch((err) => setChartsError(err instanceof ApiError ? err.message : 'Could not load the charts'));
+  };
+
+  useEffect(() => {
+    loadCharts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartDays]);
 
   useEffect(() => {
     void Promise.all([
@@ -210,10 +236,43 @@ export function AdminDashboard() {
         />
       </div>
 
-      <div className="mb-3 grid gap-3 sm:grid-cols-3">
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
         <Queue label="Withdrawals to review" count={snapshot.pendingWithdrawals} to="/admin/withdrawals" />
         <Queue label="Verifications waiting" count={snapshot.pendingKyc} to="/admin/kyc" />
         <Queue label="Unread support" count={snapshot.openTickets} to="/admin/support" />
+      </div>
+
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">Charts</h2>
+        <div className="flex gap-1 rounded-lg border border-ink-600 bg-ink-800 p-1">
+          {CHART_WINDOWS.map((d) => (
+            <button
+              key={d}
+              onClick={() => setChartDays(d)}
+              className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition ${
+                chartDays === d ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Last {d}d
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="mb-6">
+        {chartsError ? (
+          <div className="card flex flex-col items-center gap-2 p-8 text-center">
+            <p className="text-xs text-slate-400">{chartsError}</p>
+            <button onClick={loadCharts} className="btn-ghost text-xs">
+              Retry
+            </button>
+          </div>
+        ) : charts ? (
+          <Suspense fallback={<ChartsGridSkeleton />}>
+            <AdminCharts data={charts} />
+          </Suspense>
+        ) : (
+          <ChartsGridSkeleton />
+        )}
       </div>
 
       <h2 className="mb-2 mt-6 text-sm font-semibold">Market data</h2>
@@ -348,6 +407,20 @@ function PeriodPicker({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+/** Shown while the charts data loads, and again while the lazy chart bundle itself downloads. */
+function ChartsGridSkeleton() {
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="card p-4">
+          <Skeleton className="mb-3 h-3 w-40" />
+          <Skeleton className="h-56 !rounded-xl" />
+        </div>
+      ))}
     </div>
   );
 }

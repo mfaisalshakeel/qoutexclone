@@ -4,6 +4,24 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-21**: Phase 6 — **Charts**, closing out the Dashboard section. Deposits vs withdrawals over time, house P&L over time, a registrations→first-deposit funnel, volume by asset class, top 10 assets by volume, live exposure per market, and an hourly activity heatmap.
+
+  **Charts answer a different question from the KPI cards above them, so they get their own control.** The period picker compares "this window vs. the one before it"; the charts show a trailing trend (7/30/90 days) with its own selector, because a funnel or a daily series doesn't mean much sliced to an arbitrary custom range the same way a single comparison number does.
+
+  **`recharts` for line/bar charts, a hand-rolled grid for the heatmap.** The roadmap allows either a real chart library or the Phase 3 canvas engine; the Phase 3 engine is purpose-built for OHLC candles with zoom/pan/drawing tools, and reusing it for six unrelated chart shapes would have been more code than a general-purpose library. A heatmap has no such library primitive worth pulling in for — it is a coloured grid, so it is just one.
+
+  **Exposure reuses `exposureByMarket`, not a second copy of it.** It is the one live (not historical) chart on the dashboard, and the Risk screen already computes exactly this per market; the chart just takes its top 10 by total exposure.
+
+  **First-time depositors is two `groupBy` calls, not one `GROUP BY ... HAVING`.** Same reasoning as the period-selector task's version of this query, exported from `admin-stats.ts` and reused here rather than duplicated.
+
+  **The lazy-loaded chunk is deliberate, not incidental.** `recharts` pulls in `d3` and added ~390KB to what had been a single bundle; since only admins ever load the dashboard, `AdminCharts` is `React.lazy`-imported so every trader-facing page is unaffected. This is the first code-split point in the app — a scoped fix for the regression this task itself introduced, not a broader bundling change.
+
+  **Two real bugs, both caught by the same mechanism that caught the Withdrawals/Wallet-UI bugs earlier this session — an actual browser run, not just the test suite:**
+  - CSS Grid sizes a track to its item's content by default; a recharts `ResponsiveContainer` on a grid item with no `min-width: 0` fights its own shrink-to-fit and blows the column out to the chart's last-measured intrinsic width. Every chart card overflowed identically at 390px until `min-w-0` was added to each one — caught by the existing `responsive.spec.ts` mobile check, not written for this task but still doing its job.
+  - The new chart time-window buttons ("7 days"/"30 days"/"90 days") collided by exact accessible name with the KPI period picker's presets from the task before this one. Relabelled to "Last 7d/30d/90d".
+
+  **Verified.** 564 server tests (4 new: day-bucketing by UTC calendar day, asset-class/top-asset grouping, a fixed-instant placed in the correct weekday/hour heatmap cell, and exposure read straight from the risk book), 221 web tests, typecheck, build, lint all green — plus a manual screenshot pass at 1440px and 390px that is what actually caught both bugs above. New e2e coverage drives every chart section and both window controls; the full admin and responsive-shell suites (desktop and mobile) stay green after the fixes.
+
 - **2026-09-21**: Phase 6 — **KPIs**, filling out the dashboard's period stats with the rest of the roadmap's list: first-time depositors, trading volume (as its own tile, split out from House P&L's hint), active traders, average stake, and platform win rate. Registrations, deposit/withdrawal volume, net deposits, house P&L, bonus cost and the pending queues already existed from the period-selector task just before this one.
 
   **A first-time depositor is found in two lookups, not one.** "Whose first-ever completed deposit falls in this window" isn't a single `GROUP BY` Prisma's query builder expresses cleanly, so `firstTimeDepositors` first finds who deposited in the window, then excludes anyone who also has a completed deposit before it — a repeat depositor who happens to deposit again during the window is still a repeat, not new.

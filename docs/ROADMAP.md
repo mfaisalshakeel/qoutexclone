@@ -90,7 +90,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 ### Dashboard
 - [x] **Period selector** (today, yesterday, 7d, 30d, this month, custom range) and comparison vs the previous period with ▲▼ deltas on every KPI.
 - [x] **KPIs:** registrations, first-time depositors, deposit volume, withdrawal volume, net deposits, house P&L (live accounts), trading volume, active traders, average stake, win rate (platform), pending queues (withdrawals, KYC, tickets), bonus cost.
-- [ ] **Charts:** deposits vs withdrawals over time, house P&L over time, registrations and FTD funnel, volume by asset class and top 10 assets, live exposure per asset/direction, hourly activity heatmap. Built with a real chart library for admin, or the Phase 3 engine, and they must be fully responsive.
+- [x] **Charts:** deposits vs withdrawals over time, house P&L over time, registrations and FTD funnel, volume by asset class and top 10 assets, live exposure per asset/direction, hourly activity heatmap. Built with a real chart library for admin, or the Phase 3 engine, and they must be fully responsive.
 - [ ] **Live panels:** latest trades stream (ws), latest deposits/withdrawals, online users count, and system health (feed status per provider, settlement lag, ws connections).
 
 ### Data tables — one reusable, server-driven `DataTable`

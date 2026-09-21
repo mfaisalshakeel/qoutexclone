@@ -54,7 +54,7 @@ export interface DashboardOverview {
  * who deposited in the window, then which of those never had a completed
  * deposit before it.
  */
-async function firstTimeDepositors(from: Date, to: Date): Promise<number> {
+export async function firstTimeDepositors(from: Date, to: Date): Promise<number> {
   const inWindow = await prisma.deposit.groupBy({
     by: ['userId'],
     where: { status: 'COMPLETED', confirmedAt: { gte: from, lt: to } },

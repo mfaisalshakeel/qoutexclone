@@ -137,6 +137,30 @@ test.describe('admin', () => {
     expect(errors).toEqual([]);
   });
 
+  test('dashboard charts render for every window and switch without breaking the page', async ({
+    page,
+  }) => {
+    const errors = failOnPageErrors(page);
+    await login(page, ADMIN);
+    await page.goto('/admin');
+
+    await expect(page.getByText('Deposits vs withdrawals')).toBeVisible();
+    await expect(page.getByText('House P&L · last')).toBeVisible();
+    await expect(page.getByText('Registrations → first deposit')).toBeVisible();
+    await expect(page.getByText('Volume by asset class')).toBeVisible();
+    await expect(page.getByText('Top 10 assets by volume')).toBeVisible();
+    await expect(page.getByText('Live exposure per market')).toBeVisible();
+    await expect(page.getByText('Hourly activity')).toBeVisible();
+
+    // the chart window is independent of the KPI period picker above it
+    await page.getByRole('button', { name: 'Last 7d' }).click();
+    await expect(page.getByText('Deposits vs withdrawals · last 7 days')).toBeVisible();
+    await page.getByRole('button', { name: 'Last 90d' }).click();
+    await expect(page.getByText('Deposits vs withdrawals · last 90 days')).toBeVisible();
+
+    expect(errors).toEqual([]);
+  });
+
   test('back office sections all load', async ({ page }) => {
     const errors = failOnPageErrors(page, [/CERT_AUTHORITY/, /favicon/]);
     await login(page, ADMIN);
