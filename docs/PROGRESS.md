@@ -4,6 +4,18 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-21**: Phase 6 — **Data tables, Server**. A generic list-query helper — offset pagination with a total, cursor pagination for huge tables, multi-column sort, free-text search across configured fields, typed filters (enum, date range, number range, boolean), and a streamed CSV export — reused by every admin list rather than each route inventing its own query parsing. The client (search box, filter chips, URL-synced state, row selection) and retrofitting every other list are separate roadmap lines, left for their own tasks.
+
+  **The helper stays untyped against Prisma's per-model types on purpose.** Genericising `findMany`/`count`/`orderBy` across arbitrary Prisma models without fighting the generated types would have meant either a much heavier generic signature or giving up type safety somewhere anyway; instead each call site passes its own delegate methods and casts its own `where`/`orderBy` to its model's type, which is a few lines at the call site instead of a fragile shared generic.
+
+  **`/admin/users` is the proof, not a rewrite.** Pagination, sort, search and three typed filters (status, kycStatus, createdAt range) now back the existing endpoint; a `GET /users/export` streams the same filtered result as CSV. The response still nests the same `users` array the current Traders page reads, so nothing there had to change — the page still shows the same first 50 traders it always did, now with pagination metadata available for whenever the client task builds on it. An invalid sort column or filter value is refused (400), not silently ignored.
+
+  **`listTransactions` (the wallet ledger) was refactored onto the new `paginateCursor` rather than left with its own copy of the same cursor logic** — it was already doing exactly what the helper now does, take `limit + 1` and see if there's a row left over. Same behaviour, same return shape, one fewer bespoke implementation.
+
+  **CSV escaping lives in one place now.** The quoting logic `statements.ts` already had for account statements moved to `lib/csv.ts`, and the export helper reuses it rather than writing it a third time.
+
+  **Verified.** 598 server tests (34 new: pure builder tests for sort/search/filter parsing and their refusals, offset and cursor pagination against real rows including the empty-page-past-the-end case, and a streamed CSV export proven against a real database), typecheck, build, lint all green. Manually verified the live endpoints — pagination, sort, each filter type, the refusal paths, and the CSV download — against the running server. Two pre-existing e2e specs (a payout-rule WebSocket delivery and a registration navigation) stayed flaky across three re-runs during this task; neither touches anything list-query related, and both cleared on their own in other runs during the same session, consistent with the dev server's accumulated load after several hours of continuous e2e use rather than a regression here.
+
 - **2026-09-21**: Phase 6 — **Charts**, closing out the Dashboard section. Deposits vs withdrawals over time, house P&L over time, a registrations→first-deposit funnel, volume by asset class, top 10 assets by volume, live exposure per market, and an hourly activity heatmap.
 
   **Charts answer a different question from the KPI cards above them, so they get their own control.** The period picker compares "this window vs. the one before it"; the charts show a trailing trend (7/30/90 days) with its own selector, because a funnel or a daily series doesn't mean much sliced to an arbitrary custom range the same way a single comparison number does.

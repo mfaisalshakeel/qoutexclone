@@ -94,7 +94,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [ ] **Live panels:** latest trades stream (ws), latest deposits/withdrawals, online users count, and system health (feed status per provider, settlement lag, ws connections).
 
 ### Data tables — one reusable, server-driven `DataTable`
-- [ ] **Server:** a generic list endpoint helper with pagination (page + pageSize + total, and cursor for huge tables), multi-column sort, text search across configured fields, typed filters (enum multi-select, date range, number range, boolean), and CSV export of the full filtered result (streamed). Indexed queries only. Add the DB indexes needed.
+- [x] **Server:** a generic list endpoint helper with pagination (page + pageSize + total, and cursor for huge tables), multi-column sort, text search across configured fields, typed filters (enum multi-select, date range, number range, boolean), and CSV export of the full filtered result (streamed). Indexed queries only. Add the DB indexes needed.
 - [ ] **Client:** search box with debounce, filter bar with chips, column show/hide, sortable headers, page size selector, page numbers, sticky header, row selection with bulk actions, and a row click that opens a detail drawer. State is synced to the URL (shareable, back button works), with skeleton rows while loading, and empty and error states. Cards on phones.
 - [ ] **Applied to every admin list:** users, trades, deposits, withdrawals, ledger transactions, KYC submissions, support tickets, tournaments and entries, promo codes and redemptions, referrals/commissions, marketplace orders, assets, and the audit log.
 

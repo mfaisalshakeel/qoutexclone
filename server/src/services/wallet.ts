@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { AppError, badRequest } from '../lib/errors.js';
+import { paginateCursor } from '../lib/list-query.js';
 
 export type AccountType = 'DEMO' | 'REAL' | 'TOURNAMENT';
 export type TxClient = Prisma.TransactionClient;
@@ -143,13 +144,11 @@ export async function listTransactions(
   userId: string,
   options: { accountType?: AccountType; limit?: number; cursor?: string },
 ) {
-  const limit = Math.min(options.limit ?? 50, 200);
-  const rows = await prisma.transaction.findMany({
+  return paginateCursor({
+    findMany: (args) => prisma.transaction.findMany(args as never),
     where: { userId, ...(options.accountType ? { accountType: options.accountType } : {}) },
     orderBy: { createdAt: 'desc' },
-    take: limit + 1,
-    ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
+    cursor: options.cursor,
+    pageSize: Math.min(options.limit ?? 50, 200),
   });
-  const hasMore = rows.length > limit;
-  return { items: hasMore ? rows.slice(0, limit) : rows, nextCursor: hasMore ? rows[limit - 1].id : null };
 }

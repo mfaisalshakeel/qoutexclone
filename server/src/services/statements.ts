@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit';
 import type { Transaction } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { badRequest } from '../lib/errors.js';
+import { renderCsv } from '../lib/csv.js';
 import { settings } from './settings.js';
 
 /**
@@ -46,25 +47,17 @@ function typeLabel(type: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-function csvCell(value: string): string {
-  // quote only when the value could otherwise be misread — a comma, a quote, a newline
-  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-}
-
 export function renderStatementCsv(rows: Transaction[]): string {
-  const header = ['Date (UTC)', 'Type', 'Note', 'Amount (USD)', 'Balance after (USD)'];
-  const lines = rows.map((row) =>
-    [
+  return renderCsv(
+    ['Date (UTC)', 'Type', 'Note', 'Amount (USD)', 'Balance after (USD)'],
+    rows.map((row) => [
       row.createdAt.toISOString(),
       typeLabel(row.type),
       row.note ?? '',
       (row.amount / 100).toFixed(2),
       (row.balanceAfter / 100).toFixed(2),
-    ]
-      .map(csvCell)
-      .join(','),
+    ]),
   );
-  return [header.join(','), ...lines].join('\r\n') + '\r\n';
 }
 
 function formatRangeLabel(range: StatementRange): string {
@@ -102,11 +95,7 @@ export function renderStatementPdf(
       for (const col of COLUMNS) doc.text(col.label, col.x, headerY, { width: col.width, lineBreak: false });
       doc.y = headerY;
       doc.moveDown(1);
-      doc
-        .moveTo(40, doc.y)
-        .lineTo(555, doc.y)
-        .strokeColor('#ccc')
-        .stroke();
+      doc.moveTo(40, doc.y).lineTo(555, doc.y).strokeColor('#ccc').stroke();
       doc.moveDown(0.3);
       doc.font('Helvetica').fillColor('#111');
     };
@@ -135,12 +124,21 @@ export function renderStatementPdf(
           lineBreak: false,
         });
         doc.text(typeLabel(row.type), COLUMNS[1].x, y, { width: COLUMNS[1].width, lineBreak: false });
-        doc.text(row.note ?? '—', COLUMNS[2].x, y, { width: COLUMNS[2].width, lineBreak: false, ellipsis: true });
-        doc.fillColor(row.amount >= 0 ? '#0a7d3c' : '#b91c1c');
-        doc.text(`${row.amount >= 0 ? '+' : '-'}$${(Math.abs(row.amount) / 100).toFixed(2)}`, COLUMNS[3].x, y, {
-          width: COLUMNS[3].width,
+        doc.text(row.note ?? '—', COLUMNS[2].x, y, {
+          width: COLUMNS[2].width,
           lineBreak: false,
+          ellipsis: true,
         });
+        doc.fillColor(row.amount >= 0 ? '#0a7d3c' : '#b91c1c');
+        doc.text(
+          `${row.amount >= 0 ? '+' : '-'}$${(Math.abs(row.amount) / 100).toFixed(2)}`,
+          COLUMNS[3].x,
+          y,
+          {
+            width: COLUMNS[3].width,
+            lineBreak: false,
+          },
+        );
         doc.fillColor('#111');
         doc.text(`$${(row.balanceAfter / 100).toFixed(2)}`, COLUMNS[4].x, y, {
           width: COLUMNS[4].width,

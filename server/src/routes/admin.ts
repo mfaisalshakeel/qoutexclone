@@ -3,6 +3,15 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { badRequest, notFound, wrap } from '../lib/errors.js';
+import {
+  buildFilterWhere,
+  buildOrderBy,
+  buildSearchWhere,
+  combineWhere,
+  listQuerySchema,
+  paginateOffset,
+  streamCsvExport,
+} from '../lib/list-query.js';
 import { publicDeposit, publicUser, publicWithdrawal } from '../lib/serialize.js';
 import { requireAdmin, requireAuth } from '../middleware/auth.js';
 import { applyLedger } from '../services/wallet.js';
@@ -66,23 +75,86 @@ router.get(
   }),
 );
 
+/** Fields a `/users` list request may search, sort or filter on. */
+const USER_SEARCH_FIELDS = ['email', 'name'] as const;
+const USER_SORT_FIELDS = ['createdAt', 'email', 'name', 'totalDeposited', 'totalWithdrawn'] as const;
+const USER_FILTERS = {
+  status: { type: 'enum', values: ['ACTIVE', 'SUSPENDED'] },
+  kycStatus: { type: 'enum', values: ['NOT_SUBMITTED', 'PENDING', 'APPROVED', 'REJECTED'] },
+  createdAt: { type: 'dateRange' },
+} as const;
+
+function usersListWhere(req: { query: Record<string, unknown> }) {
+  const query = listQuerySchema.parse(req.query);
+  return {
+    query,
+    where: combineWhere(
+      buildSearchWhere(query.search, USER_SEARCH_FIELDS),
+      buildFilterWhere(USER_FILTERS, req.query as Record<string, string | undefined>),
+    ),
+    orderBy: buildOrderBy(query.sort, USER_SORT_FIELDS, { createdAt: 'desc' }),
+  };
+}
+
 router.get(
   '/users',
   wrap(async (req, res) => {
-    const query = z
-      .object({
-        search: z.string().max(120).optional(),
-        limit: z.coerce.number().int().min(1).max(200).default(50),
-      })
-      .parse(req.query);
-    const users = await prisma.user.findMany({
-      where: query.search
-        ? { OR: [{ email: { contains: query.search } }, { name: { contains: query.search } }] }
-        : undefined,
-      orderBy: { createdAt: 'desc' },
-      take: query.limit,
+    // pageSize defaults to the old endpoint's fixed limit, so a client that
+    // has not adopted pagination yet still sees the same first page it always did
+    const { query, where, orderBy } = usersListWhere({ query: { pageSize: '50', ...req.query } });
+    const page = await paginateOffset({
+      findMany: (args) =>
+        prisma.user.findMany(
+          args as {
+            where: Prisma.UserWhereInput;
+            orderBy: Prisma.UserOrderByWithRelationInput[];
+            skip: number;
+            take: number;
+          },
+        ),
+      count: (args) => prisma.user.count(args as { where: Prisma.UserWhereInput }),
+      where,
+      orderBy,
+      page: query.page,
+      pageSize: query.pageSize,
     });
-    res.json({ users: users.map(publicUser) });
+    res.json({
+      users: page.items.map(publicUser),
+      total: page.total,
+      page: page.page,
+      pageSize: page.pageSize,
+      pageCount: page.pageCount,
+    });
+  }),
+);
+
+/** The same search/sort/filter as the list, but every matching row, streamed. */
+router.get(
+  '/users/export',
+  wrap(async (req, res) => {
+    const { where, orderBy } = usersListWhere({ query: req.query as Record<string, unknown> });
+    await streamCsvExport<Prisma.UserGetPayload<object>>(
+      res,
+      'traders.csv',
+      ['Email', 'Name', 'Country', 'Status', 'KYC', 'Created', 'Deposited (USD)', 'Withdrawn (USD)'],
+      (user) => [
+        user.email,
+        user.name,
+        user.country ?? '',
+        user.status,
+        user.kycStatus,
+        user.createdAt.toISOString(),
+        (user.totalDeposited / 100).toFixed(2),
+        (user.totalWithdrawn / 100).toFixed(2),
+      ],
+      (skip, take) =>
+        prisma.user.findMany({
+          where: where as Prisma.UserWhereInput,
+          orderBy: orderBy as Prisma.UserOrderByWithRelationInput[],
+          skip,
+          take,
+        }),
+    );
   }),
 );
 
