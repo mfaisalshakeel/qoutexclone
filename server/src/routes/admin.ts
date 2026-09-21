@@ -27,6 +27,7 @@ import { DEFAULT_OTC_PARAMS, initialState, nextTick, resolveParams } from '../en
 import { resolvePayout } from '../engine/payout.js';
 import { RULE_KINDS, parseRuleConfig, payouts } from '../services/payouts.js';
 import { exposureByMarket } from '../services/risk.js';
+import { dashboardOverview } from '../services/admin-stats.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -37,49 +38,16 @@ async function audit(actorId: string, action: string, targetType: string, target
 
 router.get(
   '/overview',
-  wrap(async (_req, res) => {
-    const [
-      users,
-      openTrades,
-      pendingDeposits,
-      pendingWithdrawals,
-      deposits,
-      withdrawals,
-      tradeAgg,
-      pendingKyc,
-      bonuses,
-      openTickets,
-      liveTournaments,
-    ] = await Promise.all([
-      prisma.user.count(),
-      prisma.trade.count({ where: { status: 'OPEN' } }),
-      prisma.deposit.count({ where: { status: { in: ['AWAITING_PAYMENT', 'CONFIRMING'] } } }),
-      prisma.withdrawal.count({ where: { status: 'PENDING' } }),
-      prisma.deposit.aggregate({ _sum: { creditedAmount: true }, where: { status: 'COMPLETED' } }),
-      prisma.withdrawal.aggregate({ _sum: { amount: true }, where: { status: 'COMPLETED' } }),
-      prisma.trade.aggregate({
-        _sum: { stake: true, profit: true },
-        where: { accountType: 'REAL', status: { in: ['WON', 'LOST'] } },
-      }),
-      prisma.kycSubmission.count({ where: { status: 'PENDING' } }),
-      prisma.promoRedemption.aggregate({ _sum: { amount: true } }),
-      prisma.supportTicket.count({ where: { unreadByAgent: { gt: 0 } } }),
-      prisma.tournament.count({ where: { status: 'RUNNING' } }),
-    ]);
+  wrap(async (req, res) => {
+    const query = z
+      .object({
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
+      })
+      .parse(req.query);
+    const overview = await dashboardOverview(query);
     res.json({
-      users,
-      openTrades,
-      pendingDeposits,
-      pendingWithdrawals,
-      depositVolume: deposits._sum.creditedAmount ?? 0,
-      withdrawalVolume: withdrawals._sum.amount ?? 0,
-      realVolume: tradeAgg._sum.stake ?? 0,
-      // house result is the inverse of trader P&L
-      housePnl: -(tradeAgg._sum.profit ?? 0),
-      pendingKyc,
-      bonusPaid: bonuses._sum.amount ?? 0,
-      openTickets,
-      liveTournaments,
+      ...overview,
       feedProvider: marketFeed.provider,
       providers: marketFeed.providerHealth(),
     });

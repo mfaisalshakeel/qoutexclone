@@ -27,17 +27,23 @@ export function StatCard({
   value,
   hint,
   tone,
+  delta,
 }: {
   label: string;
   value: string;
   hint?: string;
   tone?: 'up' | 'down' | 'warn';
+  /** A comparison badge (▲/▼ vs. the previous period), rendered beside the label. */
+  delta?: ReactNode;
 }) {
   const toneClass =
     tone === 'up' ? 'text-up' : tone === 'down' ? 'text-down' : tone === 'warn' ? 'text-amber-300' : '';
   return (
     <div className="card p-4">
-      <p className="text-[10px] uppercase tracking-wide text-slate-400">{label}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] uppercase tracking-wide text-slate-400">{label}</p>
+        {delta}
+      </div>
       <p className={`tabular mt-1 text-xl font-bold ${toneClass}`}>{value}</p>
       {hint && <p className="mt-0.5 text-[11px] text-slate-500">{hint}</p>}
     </div>

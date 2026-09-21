@@ -98,6 +98,8 @@ model User {
   emails             EmailMessage[]
 
   @@index([referredById])
+  /// admin dashboard: registrations within a period
+  @@index([createdAt])
 }
 
 /// One line in a trader's notification centre. `dedupeKey` is the natural key of
@@ -542,6 +544,8 @@ model Deposit {
 
   @@index([userId, status])
   @@index([txHash])
+  /// admin dashboard: deposit volume within a period
+  @@index([status, confirmedAt])
 }
 
 model Withdrawal {
@@ -567,6 +571,8 @@ model Withdrawal {
 
   @@index([userId, status])
   @@index([status, createdAt])
+  /// admin dashboard: withdrawal volume within a period
+  @@index([status, processedAt])
 }
 
 model AuditLog {
@@ -653,6 +659,8 @@ model PromoRedemption {
 
   @@unique([promoCodeId, userId])
   @@index([userId])
+  /// admin dashboard: bonuses paid within a period
+  @@index([createdAt])
 }
 
 model ReferralCommission {

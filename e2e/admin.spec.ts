@@ -102,6 +102,37 @@ test.describe('admin', () => {
     await adminContext.close();
   });
 
+  test('dashboard period selector switches ranges and compares against the previous one', async ({
+    page,
+  }) => {
+    const errors = failOnPageErrors(page);
+    await login(page, ADMIN);
+    await page.goto('/admin');
+
+    await expect(page.getByText('New registrations')).toBeVisible();
+    // "Today" is the default; a comparison badge sits beside a period KPI's label
+    const depositCard = page.locator('.card', { hasText: 'Deposit volume' });
+    await expect(depositCard.getByText(/▲|▼|flat|new/)).toBeVisible();
+    // a snapshot tile (not a period flow) never grows a comparison badge
+    const tradersCard = page.locator('.card', { hasText: 'Total traders' });
+    await expect(tradersCard.getByText(/▲|▼|flat|new/)).toHaveCount(0);
+
+    // switching the preset re-fetches without breaking the page
+    await page.getByRole('button', { name: '30 days' }).click();
+    await expect(page.getByText('New registrations')).toBeVisible();
+    await expect(depositCard.getByText(/▲|▼|flat|new/)).toBeVisible();
+
+    // a custom range reveals its own date inputs, hidden for every preset
+    await expect(page.getByLabel('From')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Custom' }).click();
+    await expect(page.getByLabel('From')).toBeVisible();
+    await page.getByLabel('From').fill('2020-01-01');
+    await page.getByLabel('To').fill('2020-01-31');
+    await expect(page.getByText('New registrations')).toBeVisible();
+
+    expect(errors).toEqual([]);
+  });
+
   test('back office sections all load', async ({ page }) => {
     const errors = failOnPageErrors(page, [/CERT_AUTHORITY/, /favicon/]);
     await login(page, ADMIN);

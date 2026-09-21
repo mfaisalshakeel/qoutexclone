@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { dateTime, money } from '../../lib/format';
@@ -6,31 +6,86 @@ import { Empty, Loading, PageHead, StatCard, StatusPill, Table, Td } from '../..
 import type { Deposit, Withdrawal } from '../../lib/types';
 import { Skeleton, StatSkeletons } from '../../components/Skeleton';
 
-interface Overview {
-  users: number;
-  openTrades: number;
-  pendingDeposits: number;
-  pendingWithdrawals: number;
+interface PeriodStats {
+  registrations: number;
   depositVolume: number;
   withdrawalVolume: number;
+  netFlow: number;
   realVolume: number;
   housePnl: number;
-  pendingKyc: number;
   bonusPaid: number;
-  openTickets: number;
-  liveTournaments: number;
+}
+
+interface Overview {
+  period: { from: string; to: string };
+  current: PeriodStats;
+  previous: PeriodStats;
+  snapshot: {
+    users: number;
+    openTrades: number;
+    pendingDeposits: number;
+    pendingWithdrawals: number;
+    pendingKyc: number;
+    openTickets: number;
+    liveTournaments: number;
+  };
   feedProvider: string;
   providers: { name: string; status: string; symbols: number; lastTickAt: number | null; detail?: string }[];
 }
 
+type Preset = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'custom';
+
+const PRESETS: { key: Preset; label: string }[] = [
+  { key: 'today', label: 'Today' },
+  { key: 'yesterday', label: 'Yesterday' },
+  { key: '7d', label: '7 days' },
+  { key: '30d', label: '30 days' },
+  { key: 'month', label: 'This month' },
+  { key: 'custom', label: 'Custom' },
+];
+
+const startOfUtcDay = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+
+/** Every preset resolves to an explicit [from, to) the server just aggregates over. */
+function presetRange(preset: Preset, custom: { from: string; to: string }): { from: Date; to: Date } {
+  const now = new Date();
+  const today0 = startOfUtcDay(now);
+  switch (preset) {
+    case 'today':
+      return { from: today0, to: now };
+    case 'yesterday':
+      return { from: new Date(today0.getTime() - 86_400_000), to: today0 };
+    case '7d':
+      return { from: new Date(now.getTime() - 7 * 86_400_000), to: now };
+    case '30d':
+      return { from: new Date(now.getTime() - 30 * 86_400_000), to: now };
+    case 'month':
+      return { from: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)), to: now };
+    case 'custom': {
+      if (!custom.from || !custom.to) return { from: today0, to: now };
+      const to = new Date(`${custom.to}T23:59:59.999Z`);
+      return { from: new Date(`${custom.from}T00:00:00.000Z`), to: to > now ? now : to };
+    }
+  }
+}
+
 export function AdminDashboard() {
+  const [preset, setPreset] = useState<Preset>('today');
+  const [custom, setCustom] = useState({ from: '', to: '' });
   const [overview, setOverview] = useState<Overview | null>(null);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [deposits, setDeposits] = useState<Deposit[]>([]);
 
+  const range = useMemo(() => presetRange(preset, custom), [preset, custom]);
+
+  useEffect(() => {
+    const params = new URLSearchParams({ from: range.from.toISOString(), to: range.to.toISOString() });
+    setOverview(null);
+    void api.get<Overview>(`/admin/overview?${params.toString()}`).then(setOverview).catch(() => undefined);
+  }, [range]);
+
   useEffect(() => {
     void Promise.all([
-      api.get<Overview>('/admin/overview').then(setOverview),
       api
         .get<{ withdrawals: Withdrawal[] }>('/admin/withdrawals')
         .then((d) => setWithdrawals(d.withdrawals.slice(0, 6))),
@@ -45,7 +100,7 @@ export function AdminDashboard() {
           <Skeleton className="h-5 w-32" />
           <Skeleton className="h-2.5 w-64 max-w-full" />
         </div>
-        <StatSkeletons count={8} className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4" />
+        <StatSkeletons count={9} className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4" />
         <div className="mb-6 grid gap-3 sm:grid-cols-3">
           {[0, 1, 2].map((i) => (
             <Skeleton key={i} className="h-16 !rounded-xl" />
@@ -56,47 +111,68 @@ export function AdminDashboard() {
     );
   }
 
-  const netFlow = overview.depositVolume - overview.withdrawalVolume;
+  const { current, previous, snapshot } = overview;
 
   return (
     <>
       <PageHead
         title="Dashboard"
-        subtitle={`Market data: ${overview.feedProvider} · ${overview.openTrades} positions open right now`}
+        subtitle={`Market data: ${overview.feedProvider} · ${snapshot.openTrades} positions open right now`}
+        action={<PeriodPicker preset={preset} onChange={setPreset} custom={custom} onCustom={setCustom} />}
       />
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Traders" value={String(overview.users)} />
-        <StatCard label="Deposit volume" value={money(overview.depositVolume)} tone="up" />
-        <StatCard label="Withdrawal volume" value={money(overview.withdrawalVolume)} />
+        <StatCard
+          label="New registrations"
+          value={String(current.registrations)}
+          delta={<Delta current={current.registrations} previous={previous.registrations} />}
+        />
+        <StatCard
+          label="Deposit volume"
+          value={money(current.depositVolume)}
+          tone="up"
+          delta={<Delta current={current.depositVolume} previous={previous.depositVolume} />}
+        />
+        <StatCard
+          label="Withdrawal volume"
+          value={money(current.withdrawalVolume)}
+          delta={<Delta current={current.withdrawalVolume} previous={previous.withdrawalVolume} />}
+        />
         <StatCard
           label="Net flow"
-          value={money(netFlow, { sign: true })}
-          tone={netFlow >= 0 ? 'up' : 'down'}
+          value={money(current.netFlow, { sign: true })}
+          tone={current.netFlow >= 0 ? 'up' : 'down'}
           hint="deposits minus payouts"
+          delta={<Delta current={current.netFlow} previous={previous.netFlow} />}
         />
         <StatCard
           label="House P&L"
-          value={money(overview.housePnl, { sign: true })}
-          tone={overview.housePnl >= 0 ? 'up' : 'down'}
-          hint={`on ${money(overview.realVolume)} live volume`}
+          value={money(current.housePnl, { sign: true })}
+          tone={current.housePnl >= 0 ? 'up' : 'down'}
+          hint={`on ${money(current.realVolume)} live volume`}
+          delta={<Delta current={current.housePnl} previous={previous.housePnl} />}
         />
-        <StatCard label="Bonuses paid" value={money(overview.bonusPaid)} />
-        <StatCard label="Live tournaments" value={String(overview.liveTournaments)} />
+        <StatCard
+          label="Bonuses paid"
+          value={money(current.bonusPaid)}
+          delta={<Delta current={current.bonusPaid} previous={previous.bonusPaid} />}
+        />
+        <StatCard label="Total traders" value={String(snapshot.users)} hint="all time" />
+        <StatCard label="Live tournaments" value={String(snapshot.liveTournaments)} hint="right now" />
         <StatCard
           label="Needs attention"
-          value={String(overview.pendingWithdrawals + overview.pendingKyc + overview.openTickets)}
+          value={String(snapshot.pendingWithdrawals + snapshot.pendingKyc + snapshot.openTickets)}
           tone={
-            overview.pendingWithdrawals + overview.pendingKyc + overview.openTickets > 0 ? 'warn' : undefined
+            snapshot.pendingWithdrawals + snapshot.pendingKyc + snapshot.openTickets > 0 ? 'warn' : undefined
           }
-          hint="payouts, verifications, messages"
+          hint="payouts, verifications, messages · right now"
         />
       </div>
 
       <div className="mb-3 grid gap-3 sm:grid-cols-3">
-        <Queue label="Withdrawals to review" count={overview.pendingWithdrawals} to="/admin/withdrawals" />
-        <Queue label="Verifications waiting" count={overview.pendingKyc} to="/admin/kyc" />
-        <Queue label="Unread support" count={overview.openTickets} to="/admin/support" />
+        <Queue label="Withdrawals to review" count={snapshot.pendingWithdrawals} to="/admin/withdrawals" />
+        <Queue label="Verifications waiting" count={snapshot.pendingKyc} to="/admin/kyc" />
+        <Queue label="Unread support" count={snapshot.openTickets} to="/admin/support" />
       </div>
 
       <h2 className="mb-2 mt-6 text-sm font-semibold">Market data</h2>
@@ -165,6 +241,73 @@ export function AdminDashboard() {
         </Table>
       )}
     </>
+  );
+}
+
+/** A comparison against the immediately preceding period of the same length. */
+function Delta({ current, previous }: { current: number; previous: number }) {
+  if (previous === 0 && current === 0) return null;
+  if (previous === 0) {
+    return <span className="text-[11px] font-semibold text-up">▲ new</span>;
+  }
+  const pct = ((current - previous) / Math.abs(previous)) * 100;
+  if (Math.round(pct) === 0) return <span className="text-[11px] font-semibold text-slate-500">flat</span>;
+  const up = pct > 0;
+  return (
+    <span className={`text-[11px] font-semibold ${up ? 'text-up' : 'text-down'}`}>
+      {up ? '▲' : '▼'} {Math.abs(pct).toFixed(1)}%
+    </span>
+  );
+}
+
+function PeriodPicker({
+  preset,
+  onChange,
+  custom,
+  onCustom,
+}: {
+  preset: Preset;
+  onChange: (p: Preset) => void;
+  custom: { from: string; to: string };
+  onCustom: (c: { from: string; to: string }) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className="flex gap-1 rounded-lg border border-ink-600 bg-ink-800 p-1">
+        {PRESETS.map((p) => (
+          <button
+            key={p.key}
+            onClick={() => onChange(p.key)}
+            className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition ${
+              preset === p.key ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      {preset === 'custom' && (
+        <div className="flex items-center gap-1.5">
+          <input
+            type="date"
+            aria-label="From"
+            value={custom.from}
+            max={custom.to || undefined}
+            onChange={(e) => onCustom({ ...custom, from: e.target.value })}
+            className="field !w-auto !py-1.5 !text-xs"
+          />
+          <span className="text-slate-500">–</span>
+          <input
+            type="date"
+            aria-label="To"
+            value={custom.to}
+            min={custom.from || undefined}
+            onChange={(e) => onCustom({ ...custom, to: e.target.value })}
+            className="field !w-auto !py-1.5 !text-xs"
+          />
+        </div>
+      )}
+    </div>
   );
 }
 

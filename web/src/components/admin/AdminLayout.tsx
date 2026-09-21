@@ -67,8 +67,8 @@ export function AdminLayout() {
 
   const loadCounts = () =>
     api
-      .get<AdminCounts>('/admin/overview')
-      .then(setCounts)
+      .get<{ snapshot: AdminCounts }>('/admin/overview')
+      .then((data) => setCounts(data.snapshot))
       .catch(() => undefined);
 
   useEffect(() => {
