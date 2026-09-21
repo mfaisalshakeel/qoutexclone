@@ -22,6 +22,7 @@ import type {
  */
 export const cryptoProvider: PaymentProvider = {
   kind: 'CRYPTO',
+  supportsPayout: true,
 
   async createDepositDestination(method: PaymentMethod, userId: string): Promise<DepositDestination> {
     const { address, memo } = await custody.getDepositAddress(userId, method.currency, method.network ?? '');

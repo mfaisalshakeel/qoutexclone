@@ -20,6 +20,7 @@ import type {
  */
 export const ewalletProvider: PaymentProvider = {
   kind: 'EWALLET',
+  supportsPayout: true,
 
   async createDepositDestination(_method: PaymentMethod, userId: string): Promise<DepositDestination> {
     const sessionId = `ewallet_${crypto.randomBytes(12).toString('hex')}`;

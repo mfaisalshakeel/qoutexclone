@@ -10,10 +10,12 @@ import { bonusesEnabled, holdFor, listOffers, quoteOffer } from '../services/bon
 import { cryptoMethodKey, findMethod } from '../services/payments.js';
 import { createProviderDeposit, simulateProviderPayment } from '../services/provider-deposits.js';
 import * as paymentsService from '../services/payments.js';
+import type { ProviderKind } from '../services/payments.js';
 import { getBalances, listTransactions } from '../services/wallet.js';
 import { createDeposit, getDepositAddress, listDeposits, markSeen } from '../services/deposits.js';
 import {
   cancelWithdrawal,
+  createEwalletWithdrawal,
   createWithdrawal,
   listWithdrawals,
   quoteWithdrawal,
@@ -67,6 +69,8 @@ router.get(
         networkFeeUsd:
           spec.networkFeeUsd + settings.get('wallet.withdrawFlatFeeUsd') + (method?.feeFlatCents ?? 0) / 100,
         rate: usdRate(spec.currency),
+        // crypto always pays out — only a provider method needs the registry to say so
+        payoutSupported: true,
       };
     });
 
@@ -85,6 +89,7 @@ router.get(
         minWithdrawUsd: row.minWithdrawCents / 100,
         networkFeeUsd: row.feeFlatCents / 100,
         rate: 1,
+        payoutSupported: paymentsService.providerFor(row.provider as ProviderKind).supportsPayout,
       }));
 
     res.json({
@@ -276,6 +281,32 @@ router.get(
 
 /* ------------------------------ withdrawals ------------------------------ */
 
+/** A withdrawal quote for a provider method (e-wallet), by its key rather
+ *  than a currency/network pair — there is no network here to look one up by. */
+router.get(
+  '/withdrawals/provider-quote',
+  wrap(async (req, res) => {
+    const query = z
+      .object({ methodKey: z.string().min(2).max(40), amount: z.coerce.number().positive() })
+      .parse(req.query);
+    const method = await paymentsService.methodByKey(query.methodKey);
+    const amountCents = Math.round(query.amount * 100);
+    const priced = paymentsService.feeFor(method, amountCents);
+    res.json({
+      quote: {
+        currency: method.currency,
+        network: method.provider,
+        amount: amountCents,
+        fee: priced.fee,
+        netAmount: priced.net,
+        rate: 1,
+        cryptoAmount: (priced.net / 100).toFixed(2),
+        minAmount: method.minWithdrawCents,
+      },
+    });
+  }),
+);
+
 router.get(
   '/withdrawals/quote',
   wrap(async (req, res) => {
@@ -314,6 +345,28 @@ router.post(
       currency: body.currency.toUpperCase(),
       network: body.network.toUpperCase(),
       address: body.address,
+      amountCents: Math.round(body.amount * 100),
+    });
+    const balances = await getBalances(req.user!.id);
+    res.status(201).json({ withdrawal: publicWithdrawal(withdrawal), balances });
+  }),
+);
+
+/** The provider-framework withdrawal path: an e-wallet handle, not an address. */
+router.post(
+  '/withdrawals/provider',
+  requireActiveUser,
+  requireVerifiedEmail,
+  wrap(async (req, res) => {
+    const body = z
+      .object({
+        destination: z.string().min(3).max(120),
+        amount: z.number().positive().max(1_000_000),
+      })
+      .parse(req.body);
+    const withdrawal = await createEwalletWithdrawal({
+      userId: req.user!.id,
+      destination: body.destination,
       amountCents: Math.round(body.amount * 100),
     });
     const balances = await getBalances(req.user!.id);

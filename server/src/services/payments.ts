@@ -57,6 +57,10 @@ export interface PayoutResult {
  */
 export interface PaymentProvider {
   readonly kind: ProviderKind;
+  /** Whether `payout` is a real operation or a guaranteed refusal. A card
+   *  cannot receive an arbitrary payout — only refund a charge it captured —
+   *  so the withdrawal picker filters on this rather than trying and failing. */
+  readonly supportsPayout: boolean;
   createDepositDestination(method: PaymentMethod, userId: string): Promise<DepositDestination>;
   verifyWebhook(headers: Record<string, string | string[] | undefined>, rawBody: Buffer): WebhookEvent | null;
   payout(request: PayoutRequest): Promise<PayoutResult>;

@@ -25,6 +25,7 @@ import type {
  */
 export const cardProvider: PaymentProvider = {
   kind: 'CARD',
+  supportsPayout: false,
 
   async createDepositDestination(_method: PaymentMethod, userId: string): Promise<DepositDestination> {
     const sessionId = `card_${crypto.randomBytes(12).toString('hex')}`;

@@ -499,6 +499,15 @@ export const SETTINGS = {
     help: 'Higher makes each level cost more than the last. 1 is a flat ladder.',
   }),
 
+  'wallet.maxDailyWithdrawalCents': define({
+    schema: money,
+    default: 5_000_000, // $50,000
+    group: 'wallet',
+    label: 'Maximum withdrawn per trader per day (cents)',
+    help: '0 removes the cap. Counts requests still pending or in progress, not only completed ones.',
+    public: true,
+  }),
+
   'compliance.limitCoolingOffHours': define({
     schema: z.number().int().min(0).max(168),
     default: 24,

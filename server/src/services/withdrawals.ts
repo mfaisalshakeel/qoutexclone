@@ -10,8 +10,17 @@ import { holdFunds, releaseHold, settleHold } from './wallet.js';
 import { kycBlocksWithdrawal } from './kyc.js';
 import { settings } from './settings.js';
 import { holdFor } from './bonuses.js';
-import { assertMethodAvailable, assertWithinLimits, cryptoMethodKey, findMethod } from './payments.js';
+import {
+  assertMethodAvailable,
+  assertWithinLimits,
+  cryptoMethodKey,
+  feeFor,
+  findMethod,
+  methodByKey,
+  providerFor,
+} from './payments.js';
 import type { PaymentMethod } from '@prisma/client';
+import { startOfDay } from './responsible.js';
 
 export const withdrawalEvents = new EventEmitter();
 
@@ -71,6 +80,41 @@ export function quoteWithdrawal(
   };
 }
 
+/**
+ * How much of the operator's daily cap this trader has already used today.
+ *
+ * Counts a request the moment it exists, not only once it settles: money held
+ * against a pending withdrawal is committed, and letting it back out of the
+ * count would let someone file five at once and beat the cap on the gap
+ * between "requested" and "completed".
+ */
+async function withdrawnToday(userId: string): Promise<number> {
+  const result = await prisma.withdrawal.aggregate({
+    where: {
+      userId,
+      status: { in: ['PENDING', 'APPROVED', 'PROCESSING', 'COMPLETED'] },
+      createdAt: { gte: startOfDay() },
+    },
+    _sum: { amount: true },
+  });
+  return result._sum.amount ?? 0;
+}
+
+/** Refuses a withdrawal that would take the trader past the operator's daily cap. */
+async function assertWithinDailyCap(userId: string, amountCents: number): Promise<void> {
+  const cap = settings.get('wallet.maxDailyWithdrawalCents');
+  if (cap <= 0) return;
+  const already = await withdrawnToday(userId);
+  if (already + amountCents > cap) {
+    const left = Math.max(cap - already, 0);
+    throw forbidden(
+      left === 0
+        ? 'You have reached the daily withdrawal limit on this platform. It resets at midnight UTC.'
+        : `That would pass the daily withdrawal limit on this platform. You can withdraw $${(left / 100).toFixed(2)} more today.`,
+    );
+  }
+}
+
 export interface CreateWithdrawalInput {
   userId: string;
   currency: string;
@@ -110,6 +154,7 @@ export async function createWithdrawal(input: CreateWithdrawalInput): Promise<Wi
     throw forbidden('Identity verification is required before withdrawing this amount');
   }
   if (user.realBalance < input.amountCents) throw badRequest('Insufficient balance', 'insufficient_funds');
+  await assertWithinDailyCap(input.userId, input.amountCents);
 
   // bonus money is on the balance but not yet the trader's to take: it is
   // released by staking it, and until then it cannot leave
@@ -158,6 +203,95 @@ export async function createWithdrawal(input: CreateWithdrawalInput): Promise<Wi
   return withdrawal;
 }
 
+/**
+ * An e-wallet withdrawal, in place of a crypto address, network and fee: a
+ * handle the sandbox provider will send to, and its own fee schedule from the
+ * `PaymentMethod` row. Everything else — KYC, the bonus hold, the pending-
+ * request cap, the daily cap, the ledger hold — is the same gate a crypto
+ * withdrawal goes through, because none of those checks have anything to do
+ * with which provider ends up moving the money.
+ */
+export interface CreateEwalletWithdrawalInput {
+  userId: string;
+  destination: string;
+  amountCents: number;
+}
+
+/** A loose but real check: an e-wallet handle is conventionally an email. */
+const EWALLET_HANDLE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export async function createEwalletWithdrawal(input: CreateEwalletWithdrawalInput): Promise<Withdrawal> {
+  const destination = input.destination.trim();
+  if (!EWALLET_HANDLE.test(destination)) {
+    throw badRequest('Enter the email address your e-wallet account uses', 'invalid_address');
+  }
+
+  const method = await methodByKey('ewallet-usd');
+  const priced = feeFor(method, input.amountCents);
+  const netAmount = priced.net;
+  if (input.amountCents < method.minWithdrawCents) {
+    throw badRequest(`Minimum withdrawal is $${(method.minWithdrawCents / 100).toFixed(2)}`, 'below_minimum');
+  }
+  if (netAmount <= 0) throw badRequest('Amount does not cover the fee', 'below_fee');
+
+  const user = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { realBalance: true, status: true, totalDeposited: true, kycStatus: true, country: true },
+  });
+  if (!user) throw notFound('Account not found');
+  if (user.status !== 'ACTIVE') throw forbidden('Your account is suspended');
+
+  assertMethodAvailable(method, user.country);
+  assertWithinLimits(method, input.amountCents, 'withdraw');
+  if (kycBlocksWithdrawal(user.kycStatus, input.amountCents)) {
+    throw forbidden('Identity verification is required before withdrawing this amount');
+  }
+  if (user.realBalance < input.amountCents) throw badRequest('Insufficient balance', 'insufficient_funds');
+  await assertWithinDailyCap(input.userId, input.amountCents);
+
+  const hold = await holdFor(input.userId);
+  if (hold.locked > 0 && user.realBalance - hold.locked < input.amountCents) {
+    throw badRequest(
+      `$${(hold.locked / 100).toFixed(2)} of bonus is still locked. Stake $${(hold.remaining / 100).toFixed(2)} more to release it.`,
+      'bonus_locked',
+      { locked: hold.locked, remaining: hold.remaining, percent: hold.percent },
+    );
+  }
+
+  const pending = await prisma.withdrawal.count({
+    where: { userId: input.userId, status: { in: ['PENDING', 'APPROVED', 'PROCESSING'] } },
+  });
+  if (pending >= settings.get('wallet.maxPendingWithdrawals')) {
+    throw conflict('You already have withdrawals in progress', 'too_many_pending');
+  }
+
+  const withdrawal = await prisma.$transaction(async (tx) => {
+    const created = await tx.withdrawal.create({
+      data: {
+        userId: input.userId,
+        currency: method.currency,
+        network: method.provider,
+        address: destination,
+        amount: input.amountCents,
+        fee: priced.fee,
+        netAmount,
+        rate: 1,
+        cryptoAmount: (netAmount / 100).toFixed(2),
+        status: 'PENDING',
+      },
+    });
+    await holdFunds(tx, input.userId, input.amountCents, created.id);
+    return created;
+  });
+
+  withdrawalEvents.emit('created', withdrawal);
+
+  if (settings.get('wallet.autoApproveWithdrawals')) {
+    return approveWithdrawal(withdrawal.id, null, 'Auto-approved');
+  }
+  return withdrawal;
+}
+
 /** Marks the payout approved, broadcasts it through custody and consumes the hold. */
 export async function approveWithdrawal(
   withdrawalId: string,
@@ -176,14 +310,25 @@ export async function approveWithdrawal(
 
   let txHash: string;
   try {
-    const payout = await custody.sendPayout({
-      currency: withdrawal.currency,
-      network: withdrawal.network,
-      address: withdrawal.address,
-      amount: withdrawal.cryptoAmount,
-      reference: withdrawal.id,
-    });
-    txHash = payout.txHash;
+    if (withdrawal.network === 'EWALLET') {
+      const method = await methodByKey('ewallet-usd');
+      const payout = await providerFor('EWALLET').payout({
+        method,
+        amountCents: withdrawal.amount,
+        destination: withdrawal.address,
+        reference: withdrawal.id,
+      });
+      txHash = payout.externalId;
+    } else {
+      const payout = await custody.sendPayout({
+        currency: withdrawal.currency,
+        network: withdrawal.network,
+        address: withdrawal.address,
+        amount: withdrawal.cryptoAmount,
+        reference: withdrawal.id,
+      });
+      txHash = payout.txHash;
+    }
   } catch (err) {
     // Broadcast failed: park it back in PENDING so the funds stay held and an
     // operator can retry rather than silently losing the request.

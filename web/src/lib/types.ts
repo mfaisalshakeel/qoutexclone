@@ -193,6 +193,9 @@ export interface PaymentMethod {
   minWithdrawUsd: number;
   networkFeeUsd: number;
   rate: number;
+  /** False only for a method that can never pay out — a card cannot receive
+   *  an arbitrary payout, only refund a charge it captured. */
+  payoutSupported: boolean;
 }
 
 export interface Deposit {
@@ -223,6 +226,8 @@ export interface Withdrawal {
   id: string;
   currency: string;
   network: string;
+  /** Which PaymentProvider this went through: CRYPTO or EWALLET. */
+  provider: string;
   networkLabel: string;
   address: string;
   amount: number;

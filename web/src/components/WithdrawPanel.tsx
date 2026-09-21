@@ -23,6 +23,9 @@ const STATUS_TONE: Record<Withdrawal['status'], string> = {
 
 export function WithdrawPanel({ methods, withdrawals, onChanged }: Props) {
   const { user, refreshUser } = useAuth();
+  // a card cannot receive an arbitrary payout, so it never appears here even
+  // though it is offered for deposits
+  const payable = methods.filter((m) => m.payoutSupported);
   const [index, setIndex] = useState(0);
   const [address, setAddress] = useState('');
   const [amount, setAmount] = useState(50);
@@ -30,7 +33,8 @@ export function WithdrawPanel({ methods, withdrawals, onChanged }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const method = methods[index];
+  const method = payable[index];
+  const isEwallet = method?.network === 'EWALLET';
   const available = user?.realBalance ?? 0;
 
   // live fee quote, debounced so typing does not hammer the API
@@ -40,15 +44,16 @@ export function WithdrawPanel({ methods, withdrawals, onChanged }: Props) {
       return;
     }
     const id = window.setTimeout(() => {
+      const path = isEwallet
+        ? `/wallet/withdrawals/provider-quote?methodKey=${method.network.toLowerCase()}-${method.currency.toLowerCase()}&amount=${amount}`
+        : `/wallet/withdrawals/quote?currency=${method.currency}&network=${method.network}&amount=${amount}`;
       api
-        .get<{ quote: WithdrawalQuote }>(
-          `/wallet/withdrawals/quote?currency=${method.currency}&network=${method.network}&amount=${amount}`,
-        )
+        .get<{ quote: WithdrawalQuote }>(path)
         .then(({ quote: q }) => setQuote(q))
         .catch(() => setQuote(null));
     }, 250);
     return () => window.clearTimeout(id);
-  }, [method, amount]);
+  }, [method, isEwallet, amount]);
 
   if (!method) return <PaymentPanelSkeleton />;
 
@@ -62,12 +67,16 @@ export function WithdrawPanel({ methods, withdrawals, onChanged }: Props) {
     setError('');
     setBusy(true);
     try {
-      await api.post('/wallet/withdrawals', {
-        currency: method.currency,
-        network: method.network,
-        address: address.trim(),
-        amount,
-      });
+      if (isEwallet) {
+        await api.post('/wallet/withdrawals/provider', { destination: address.trim(), amount });
+      } else {
+        await api.post('/wallet/withdrawals', {
+          currency: method.currency,
+          network: method.network,
+          address: address.trim(),
+          amount,
+        });
+      }
       setAddress('');
       onChanged();
       await refreshUser();
@@ -91,6 +100,11 @@ export function WithdrawPanel({ methods, withdrawals, onChanged }: Props) {
   };
 
   const pending = withdrawals.filter((w) => ['PENDING', 'APPROVED', 'PROCESSING'].includes(w.status));
+  // a settled withdrawal keeps its timeline visible for a little while, so
+  // "did that go through" has an answer without a trip to full history
+  const recentSettled = withdrawals
+    .filter((w) => w.status === 'COMPLETED' || w.status === 'REJECTED')
+    .slice(0, RECENT_SETTLED);
 
   return (
     <div className="space-y-5">
@@ -110,7 +124,7 @@ export function WithdrawPanel({ methods, withdrawals, onChanged }: Props) {
       <div>
         <p className="label">Withdraw to</p>
         <div className="grid gap-2 sm:grid-cols-2">
-          {methods.map((m, i) => (
+          {payable.map((m, i) => (
             <button
               key={`${m.currency}-${m.network}`}
               onClick={() => setIndex(i)}
@@ -138,18 +152,29 @@ export function WithdrawPanel({ methods, withdrawals, onChanged }: Props) {
 
       <div>
         <label className="label" htmlFor="withdraw-address">
-          {method.label} address
+          {isEwallet ? 'E-wallet email' : `${method.label} address`}
         </label>
         <input
           id="withdraw-address"
+          type={isEwallet ? 'email' : 'text'}
           value={address}
           onChange={(e) => setAddress(e.target.value)}
           spellCheck={false}
           className="field font-mono !text-xs"
-          placeholder={method.network === 'TRC20' ? 'T…' : method.network === 'ERC20' ? '0x…' : 'bc1…'}
+          placeholder={
+            isEwallet
+              ? 'you@example.com'
+              : method.network === 'TRC20'
+                ? 'T…'
+                : method.network === 'ERC20'
+                  ? '0x…'
+                  : 'bc1…'
+          }
         />
         <p className="mt-1.5 text-[11px] text-slate-500">
-          Double-check the network. Coins sent to an address on another network cannot be recovered.
+          {isEwallet
+            ? 'The email address your e-wallet account uses.'
+            : 'Double-check the network. Coins sent to an address on another network cannot be recovered.'}
         </p>
       </div>
 
@@ -208,32 +233,108 @@ export function WithdrawPanel({ methods, withdrawals, onChanged }: Props) {
       {pending.length > 0 && (
         <div>
           <p className="label">In progress</p>
-          <ul className="space-y-2">
+          <ul className="space-y-3">
             {pending.map((w) => (
-              <li key={w.id} className="card flex items-center gap-3 p-3">
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold">
-                    {money(w.amount)} → {w.cryptoAmount} {w.currency}
+              <li key={w.id} className="card space-y-3 p-3">
+                <div className="flex items-center gap-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold">
+                      {money(w.amount)} → {w.cryptoAmount} {w.currency}
+                    </span>
+                    <span className="block truncate font-mono text-[11px] text-slate-500">{w.address}</span>
+                    <span className="block text-[11px] text-slate-500">{dateTime(w.createdAt)}</span>
                   </span>
-                  <span className="block truncate font-mono text-[11px] text-slate-500">{w.address}</span>
-                  <span className="block text-[11px] text-slate-500">{dateTime(w.createdAt)}</span>
-                </span>
-                <span className={`chip ${STATUS_TONE[w.status]}`}>{w.status.toLowerCase()}</span>
-                {w.status === 'PENDING' && (
-                  <button onClick={() => void cancel(w.id)} className="btn-ghost !px-2.5 !py-1.5 text-[11px]">
-                    Cancel
-                  </button>
-                )}
+                  {w.status === 'PENDING' && (
+                    <button
+                      onClick={() => void cancel(w.id)}
+                      className="btn-ghost !px-2.5 !py-1.5 text-[11px]"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+                <WithdrawalTimeline withdrawal={w} />
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      {withdrawals.some((w) => w.txHash) && (
-        <p className="text-[11px] text-slate-500">
-          Last payout transaction:{' '}
-          <span className="font-mono">{shortHash(withdrawals.find((w) => w.txHash)?.txHash, 10)}</span>
+      {recentSettled.length > 0 && (
+        <div>
+          <p className="label">Recently settled</p>
+          <ul className="space-y-3">
+            {recentSettled.map((w) => (
+              <li key={w.id} className="card space-y-3 p-3">
+                <div className="flex items-center gap-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold">
+                      {money(w.amount)} → {w.cryptoAmount} {w.currency}
+                    </span>
+                    <span className="block truncate font-mono text-[11px] text-slate-500">{w.address}</span>
+                    <span className="block text-[11px] text-slate-500">{dateTime(w.createdAt)}</span>
+                  </span>
+                </div>
+                <WithdrawalTimeline withdrawal={w} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** How many recently settled withdrawals still show their timeline. */
+const RECENT_SETTLED = 3;
+
+const TIMELINE_STEPS = ['Requested', 'Approved', 'Sent', 'Completed'] as const;
+
+/**
+ * Where a withdrawal stands, as steps rather than a single chip.
+ *
+ * Rejected and cancelled are dead ends, not steps four and five of the same
+ * ladder, so they get their own terminal state with the reason attached
+ * rather than being squeezed onto a line that implies progress.
+ */
+function WithdrawalTimeline({ withdrawal }: { withdrawal: Withdrawal }) {
+  if (withdrawal.status === 'REJECTED' || withdrawal.status === 'CANCELLED') {
+    return (
+      <div className={`rounded-lg px-3 py-2 text-xs ${STATUS_TONE[withdrawal.status]}`}>
+        <p className="font-semibold">
+          {withdrawal.status === 'REJECTED' ? 'Rejected' : 'Cancelled'}
+          {withdrawal.processedAt && ` · ${dateTime(withdrawal.processedAt)}`}
+        </p>
+        {withdrawal.adminNote && <p className="mt-0.5 text-slate-300">{withdrawal.adminNote}</p>}
+      </div>
+    );
+  }
+
+  const step = { PENDING: 0, APPROVED: 1, PROCESSING: 2, COMPLETED: 3 }[withdrawal.status];
+
+  return (
+    <div>
+      <ol className="flex items-center gap-2 text-[11px]">
+        {TIMELINE_STEPS.map((label, i) => (
+          <li key={label} className="flex flex-1 items-center gap-2">
+            <span
+              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
+                i <= step ? 'bg-accent text-white' : 'bg-ink-600 text-slate-400'
+              } ${i === step ? 'animate-ring' : ''}`}
+            >
+              {i + 1}
+            </span>
+            <span className={i <= step ? 'text-slate-200' : 'text-slate-500'}>{label}</span>
+            {i < TIMELINE_STEPS.length - 1 && (
+              <span className={`h-px flex-1 ${i < step ? 'bg-accent' : 'bg-ink-600'}`} />
+            )}
+          </li>
+        ))}
+      </ol>
+      {withdrawal.txHash && (
+        <p className="mt-2 text-[11px] text-slate-500">
+          {withdrawal.provider === 'EWALLET' ? 'Reference' : 'Transaction'}{' '}
+          <span className="font-mono">{shortHash(withdrawal.txHash, 10)}</span>
         </p>
       )}
     </div>

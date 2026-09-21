@@ -15,6 +15,9 @@ interface AdminWithdrawal extends Withdrawal {
 export function AdminWithdrawals() {
   const [rows, setRows] = useState<AdminWithdrawal[] | null>(null);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('ALL');
+  // one free-text note per row, kept until the row is acted on or reloaded —
+  // a reviewer types it once and it applies to whichever button they press
+  const [notes, setNotes] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     const { withdrawals } = await api.get<{ withdrawals: AdminWithdrawal[] }>('/admin/withdrawals');
@@ -26,13 +29,21 @@ export function AdminWithdrawals() {
   }, [load]);
 
   const act = async (id: string, action: 'approve' | 'reject') => {
-    const note =
-      action === 'reject'
-        ? window.prompt('Reason for rejection? The trader sees this.')
-        : 'Approved from back office';
-    if (action === 'reject' && !note) return;
+    const note = notes[id]?.trim();
+    // rejecting without a reason leaves the trader guessing; approving does not
+    if (action === 'reject' && !note) {
+      toast.error('Add a note first', 'The trader sees this when a withdrawal is rejected');
+      return;
+    }
     try {
-      await api.post(`/admin/withdrawals/${id}/${action}`, { note });
+      await api.post(`/admin/withdrawals/${id}/${action}`, {
+        note: note || (action === 'approve' ? 'Approved from back office' : undefined),
+      });
+      setNotes((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
       await load();
       toast.success(action === 'approve' ? 'Payout sent' : 'Withdrawal rejected, funds returned');
     } catch (err) {
@@ -91,20 +102,29 @@ export function AdminWithdrawals() {
               </Td>
               <Td className="text-right">
                 {w.status === 'PENDING' ? (
-                  <span className="flex justify-end gap-2">
-                    <button
-                      onClick={() => void act(w.id, 'approve')}
-                      className="btn-up !px-3 !py-1.5 text-xs"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => void act(w.id, 'reject')}
-                      className="btn-ghost !px-3 !py-1.5 text-xs !text-down"
-                    >
-                      Reject
-                    </button>
-                  </span>
+                  <div className="flex flex-col items-end gap-1.5">
+                    <input
+                      aria-label={`Note for ${w.user?.name ?? 'this withdrawal'}`}
+                      value={notes[w.id] ?? ''}
+                      onChange={(e) => setNotes((current) => ({ ...current, [w.id]: e.target.value }))}
+                      placeholder="Note (required to reject)"
+                      className="field !py-1 !text-[11px]"
+                    />
+                    <span className="flex justify-end gap-2">
+                      <button
+                        onClick={() => void act(w.id, 'approve')}
+                        className="btn-up !px-3 !py-1.5 text-xs"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => void act(w.id, 'reject')}
+                        className="btn-ghost !px-3 !py-1.5 text-xs !text-down"
+                      >
+                        Reject
+                      </button>
+                    </span>
+                  </div>
                 ) : (
                   <span className="text-[11px] text-slate-500">
                     {w.processedAt ? dateTime(w.processedAt) : '—'}

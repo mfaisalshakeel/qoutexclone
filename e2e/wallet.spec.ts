@@ -48,4 +48,35 @@ test.describe('wallet', () => {
     await page.click('button:has-text("Request withdrawal")');
     await expect(page.getByText(/does not look like a valid/i)).toBeVisible();
   });
+
+  test('e-wallet withdrawal: card never offered as a destination, and the handle must look like an email', async ({
+    page,
+  }) => {
+    // the bad-email submission below is deliberately refused with a 400
+    const errors = failOnPageErrors(page, [/status of 400/]);
+    await register(page, newCredentials('ewallet-withdraw'));
+    await fundAccount(page, '$250');
+
+    await page.goto('/wallet?tab=withdraw');
+    // a card cannot receive an arbitrary payout, so it must never appear here
+    // even though it is offered for deposits
+    await expect(page.locator('button:has-text("Card (sandbox)")')).toHaveCount(0);
+
+    await page.locator('button:has-text("E-wallet (sandbox)")').first().click();
+    await page.fill('#withdraw-address', 'not-an-email');
+    await page.fill('#withdraw-amount', '100');
+    await expect(page.getByText('You receive')).toBeVisible();
+    await page.click('button:has-text("Request withdrawal")');
+    await expect(page.getByText(/e-wallet account uses/i)).toBeVisible();
+
+    await page.fill('#withdraw-address', 'trader@example.test');
+    // 1.5% of $100 on the seeded ewallet-usd method
+    await expect(page.getByText('− $1.50')).toBeVisible();
+    await page.click('button:has-text("Request withdrawal")');
+    await expect(page.getByText('Withdrawal requested')).toBeVisible();
+    await expect(page.getByText('In progress')).toBeVisible();
+    await expect(page.getByText('Requested').first()).toBeVisible();
+
+    expect(errors).toEqual([]);
+  });
 });

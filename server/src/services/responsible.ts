@@ -210,7 +210,7 @@ export async function assertNotExcluded(userId: string): Promise<void> {
 /* The limits themselves                                                      */
 /* -------------------------------------------------------------------------- */
 
-function startOfDay(at = new Date()): Date {
+export function startOfDay(at = new Date()): Date {
   return new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate()));
 }
 
