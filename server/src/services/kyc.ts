@@ -86,15 +86,6 @@ export function kycBlocksWithdrawal(kycStatus: string, amountCents: number): boo
   return amountCents > threshold;
 }
 
-export function listKycSubmissions(status?: string) {
-  return prisma.kycSubmission.findMany({
-    where: status ? { status } : undefined,
-    orderBy: { createdAt: 'desc' },
-    take: 100,
-    include: { user: { select: { email: true, name: true, realBalance: true } } },
-  });
-}
-
 export function latestKycSubmission(userId: string) {
   return prisma.kycSubmission.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' } });
 }

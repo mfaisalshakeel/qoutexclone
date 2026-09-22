@@ -18,7 +18,7 @@ import { applyLedger } from '../services/wallet.js';
 import { completeDeposit, rejectDeposit } from '../services/deposits.js';
 import { approveWithdrawal, rejectWithdrawal } from '../services/withdrawals.js';
 import { marketFeed } from '../engine/feed.js';
-import { listKycSubmissions, reviewKyc } from '../services/kyc.js';
+import { reviewKyc } from '../services/kyc.js';
 import { PROMO_KINDS, describe } from '../services/promos.js';
 import { finishTournament, leaderboard, startTournament } from '../services/tournaments.js';
 import { listAllTickets, postMessage, readTicket, setTicketStatus } from '../services/support.js';
@@ -217,23 +217,84 @@ router.post(
 
 /* -------------------------------- deposits ------------------------------- */
 
+const DEPOSIT_SEARCH_FIELDS = ['user.email', 'user.name', 'address', 'txHash'] as const;
+const DEPOSIT_SORT_FIELDS = ['createdAt', 'creditedAmount', 'confirmedAt'] as const;
+const DEPOSIT_FILTERS = {
+  status: {
+    type: 'enum',
+    values: ['AWAITING_PAYMENT', 'CONFIRMING', 'COMPLETED', 'REJECTED', 'EXPIRED'],
+  },
+  currency: { type: 'enum', values: ['BTC', 'ETH', 'USDT', 'USD'] },
+  createdAt: { type: 'dateRange' },
+} as const;
+
 router.get(
   '/deposits',
   wrap(async (req, res) => {
-    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
-    const deposits = await prisma.deposit.findMany({
-      where: status ? { status } : undefined,
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-      include: { user: { select: { email: true, name: true } } },
+    const query = listQuerySchema.parse(req.query);
+    const where = combineWhere(
+      buildSearchWhere(query.search, DEPOSIT_SEARCH_FIELDS),
+      buildFilterWhere(DEPOSIT_FILTERS, req.query as Record<string, string | undefined>),
+    );
+    const orderBy = buildOrderBy(query.sort, DEPOSIT_SORT_FIELDS, { createdAt: 'desc' });
+
+    const page = await paginateOffset({
+      findMany: (args) =>
+        prisma.deposit.findMany({
+          ...(args as { where: Prisma.DepositWhereInput; orderBy: Prisma.DepositOrderByWithRelationInput[]; skip: number; take: number }),
+          include: { user: { select: { email: true, name: true } } },
+        }),
+      count: (args) => prisma.deposit.count(args as { where: Prisma.DepositWhereInput }),
+      where,
+      orderBy,
+      page: query.page,
+      pageSize: query.pageSize,
     });
+
     res.json({
       // externalRef is the provider's own checkout/session reference — not
       // secret, and useful to an operator matching a support ticket to a
       // provider's own dashboard, so it rides along here though not in the
       // trader-facing shape
-      deposits: deposits.map((d) => ({ ...publicDeposit(d), user: d.user, externalRef: d.externalRef })),
+      deposits: page.items.map((d) => ({ ...publicDeposit(d), user: d.user, externalRef: d.externalRef })),
+      total: page.total,
+      page: page.page,
+      pageSize: page.pageSize,
+      pageCount: page.pageCount,
     });
+  }),
+);
+
+router.get(
+  '/deposits/export',
+  wrap(async (req, res) => {
+    const query = listQuerySchema.parse(req.query);
+    const where = combineWhere(
+      buildSearchWhere(query.search, DEPOSIT_SEARCH_FIELDS),
+      buildFilterWhere(DEPOSIT_FILTERS, req.query as Record<string, string | undefined>),
+    );
+    const orderBy = buildOrderBy(query.sort, DEPOSIT_SORT_FIELDS, { createdAt: 'desc' });
+    await streamCsvExport(
+      res,
+      'deposits.csv',
+      ['Trader', 'Currency', 'Amount (crypto)', 'Credited (USD)', 'Status', 'Created'],
+      (d: Prisma.DepositGetPayload<{ include: { user: { select: { email: true } } } }>) => [
+        d.user.email,
+        d.currency,
+        d.cryptoAmount,
+        (d.creditedAmount / 100).toFixed(2),
+        d.status,
+        d.createdAt.toISOString(),
+      ],
+      (skip, take) =>
+        prisma.deposit.findMany({
+          where: where as Prisma.DepositWhereInput,
+          orderBy: orderBy as Prisma.DepositOrderByWithRelationInput[],
+          skip,
+          take,
+          include: { user: { select: { email: true } } },
+        }),
+    );
   }),
 );
 
@@ -324,11 +385,47 @@ router.post(
 
 /* ---------------------------------- kyc ---------------------------------- */
 
+const KYC_SEARCH_FIELDS = ['user.email', 'fullName', 'documentNumber'] as const;
+const KYC_SORT_FIELDS = ['createdAt', 'reviewedAt', 'fullName'] as const;
+const KYC_FILTERS = {
+  status: { type: 'enum', values: ['PENDING', 'APPROVED', 'REJECTED'] },
+  documentType: { type: 'enum', values: ['PASSPORT', 'ID_CARD', 'DRIVING_LICENCE'] },
+  createdAt: { type: 'dateRange' },
+} as const;
+
 router.get(
   '/kyc',
   wrap(async (req, res) => {
-    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
-    res.json({ submissions: await listKycSubmissions(status) });
+    const query = listQuerySchema.parse(req.query);
+    const where = combineWhere(
+      buildSearchWhere(query.search, KYC_SEARCH_FIELDS),
+      buildFilterWhere(KYC_FILTERS, req.query as Record<string, string | undefined>),
+    );
+    const orderBy = buildOrderBy(query.sort, KYC_SORT_FIELDS, { createdAt: 'desc' });
+    const page = await paginateOffset({
+      findMany: (args) =>
+        prisma.kycSubmission.findMany({
+          ...(args as {
+            where: Prisma.KycSubmissionWhereInput;
+            orderBy: Prisma.KycSubmissionOrderByWithRelationInput[];
+            skip: number;
+            take: number;
+          }),
+          include: { user: { select: { email: true, name: true, realBalance: true } } },
+        }),
+      count: (args) => prisma.kycSubmission.count(args as { where: Prisma.KycSubmissionWhereInput }),
+      where,
+      orderBy,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    res.json({
+      submissions: page.items,
+      total: page.total,
+      page: page.page,
+      pageSize: page.pageSize,
+      pageCount: page.pageCount,
+    });
   }),
 );
 

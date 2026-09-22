@@ -45,13 +45,28 @@ export function buildOrderBy(
   });
 }
 
-/** A search term OR'd across every configured field, substring-matched. */
+/**
+ * Builds `{ a: { b: value } }` from a dot-path like `"a.b"` — Prisma's own
+ * shape for filtering through a relation (`user.email` becomes a nested
+ * `user: { email: ... }` clause, not a literal `"user.email"` key).
+ */
+function nested(path: string, value: unknown): Record<string, unknown> {
+  const parts = path.split('.');
+  return parts.reduceRight<unknown>((acc, key) => ({ [key]: acc }), value) as Record<string, unknown>;
+}
+
+/**
+ * A search term OR'd across every configured field, substring-matched. A
+ * field may be a dot-path through a relation, e.g. `user.email`, since
+ * "search by the trader's email" is the common case on almost every list
+ * that is not the trader list itself.
+ */
 export function buildSearchWhere(
   search: string | undefined,
   fields: readonly string[],
 ): Record<string, unknown> | undefined {
   if (!search || fields.length === 0) return undefined;
-  return { OR: fields.map((field) => ({ [field]: { contains: search } })) };
+  return { OR: fields.map((field) => nested(field, { contains: search })) };
 }
 
 export type FilterSpec =

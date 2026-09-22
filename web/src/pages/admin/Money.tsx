@@ -3,6 +3,7 @@ import { ApiError, api } from '../../lib/api';
 import { dateTime, money, shortHash } from '../../lib/format';
 import { toast } from '../../store/toast';
 import { Empty, Loading, PageHead, StatusPill, Table, Td } from '../../components/admin/ui';
+import { DataTable, type DataTableColumn } from '../../components/admin/DataTable';
 import type { Deposit, Withdrawal } from '../../lib/types';
 
 const FILTERS = ['ALL', 'PENDING', 'COMPLETED', 'REJECTED'] as const;
@@ -139,110 +140,151 @@ export function AdminWithdrawals() {
   );
 }
 
+const DEPOSIT_FILTERS = [
+  {
+    key: 'status',
+    label: 'Status',
+    type: 'enum' as const,
+    options: [
+      { value: 'AWAITING_PAYMENT', label: 'Awaiting payment' },
+      { value: 'CONFIRMING', label: 'Confirming' },
+      { value: 'COMPLETED', label: 'Completed' },
+      { value: 'REJECTED', label: 'Rejected' },
+      { value: 'EXPIRED', label: 'Expired' },
+    ],
+  },
+  {
+    key: 'currency',
+    label: 'Currency',
+    type: 'enum' as const,
+    options: [
+      { value: 'BTC', label: 'BTC' },
+      { value: 'ETH', label: 'ETH' },
+      { value: 'USDT', label: 'USDT' },
+      { value: 'USD', label: 'USD' },
+    ],
+  },
+  { key: 'createdAt', label: 'Created', type: 'dateRange' as const },
+];
+
 export function AdminDeposits() {
-  const [rows, setRows] = useState<Deposit[] | null>(null);
-  const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'COMPLETED' | 'REJECTED'>('ALL');
-
-  const load = useCallback(async () => {
-    const { deposits } = await api.get<{ deposits: Deposit[] }>('/admin/deposits');
-    setRows(deposits);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const [reloadToken, setReloadToken] = useState(0);
+  const reload = useCallback(() => setReloadToken((n) => n + 1), []);
 
   const act = async (id: string, action: 'confirm' | 'reject') => {
     const note = action === 'reject' ? window.prompt('Why is this deposit being rejected?') : undefined;
     if (action === 'reject' && !note) return;
     try {
       await api.post(`/admin/deposits/${id}/${action}`, note ? { note } : {});
-      await load();
+      reload();
       toast.success(action === 'confirm' ? 'Deposit credited' : 'Deposit rejected');
     } catch (err) {
       toast.error('Action failed', err instanceof ApiError ? err.message : undefined);
     }
   };
 
-  if (!rows) return <Loading />;
-  const pending = rows.filter((d) => d.status === 'AWAITING_PAYMENT' || d.status === 'CONFIRMING');
-  const visible =
-    filter === 'ALL' ? rows : filter === 'PENDING' ? pending : rows.filter((d) => d.status === filter);
+  const columns: DataTableColumn<Deposit>[] = [
+    {
+      key: 'user',
+      label: 'Trader',
+      render: (d) => (
+        <>
+          <span className="block text-xs font-semibold">{d.user?.name ?? '—'}</span>
+          <span className="block text-[11px] text-slate-500">{d.user?.email}</span>
+        </>
+      ),
+    },
+    {
+      key: 'creditedAmount',
+      label: 'Amount',
+      sortable: true,
+      render: (d) => (
+        <>
+          <span className="block text-xs font-semibold">
+            {d.cryptoAmount} {d.currency}
+          </span>
+          {d.creditedAmount > 0 && (
+            <span className="tabular block text-[11px] text-up">credited {money(d.creditedAmount)}</span>
+          )}
+          {d.bonusAmount > 0 && (
+            <span className="tabular block text-[11px] text-up">bonus {money(d.bonusAmount)}</span>
+          )}
+          {d.promoCode && <span className="block font-mono text-[10px] text-slate-500">{d.promoCode}</span>}
+        </>
+      ),
+    },
+    {
+      key: 'address',
+      label: 'Address',
+      render: (d) => (
+        <>
+          <span className="block font-mono text-[10px] text-slate-500">{d.address}</span>
+          <span className="block text-[10px] text-slate-500">
+            {d.networkLabel} · {d.confirmations}/{d.requiredConf} conf
+          </span>
+          {d.txHash && <span className="block font-mono text-[10px] text-accent">{shortHash(d.txHash)}</span>}
+        </>
+      ),
+    },
+    {
+      key: 'createdAt',
+      label: 'Created',
+      sortable: true,
+      render: (d) => <span className="text-[11px] text-slate-500">{dateTime(d.createdAt)}</span>,
+    },
+    { key: 'status', label: 'Status', render: (d) => <StatusPill status={d.status} /> },
+    {
+      key: 'actions',
+      label: 'Action',
+      align: 'right',
+      render: (d) =>
+        d.status === 'AWAITING_PAYMENT' || d.status === 'CONFIRMING' ? (
+          <span className="flex justify-end gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void act(d.id, 'confirm');
+              }}
+              className="btn-up !px-3 !py-1.5 text-xs"
+            >
+              Credit
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void act(d.id, 'reject');
+              }}
+              className="btn-ghost !px-3 !py-1.5 text-xs !text-down"
+            >
+              Reject
+            </button>
+          </span>
+        ) : (
+          <span className="text-[11px] text-slate-500">{d.confirmedAt ? dateTime(d.confirmedAt) : '—'}</span>
+        ),
+    },
+  ];
 
   return (
-    <>
-      <PageHead
-        title="Deposits"
-        subtitle={`${pending.length} awaiting confirmation`}
-        action={<Filters value={filter} onChange={setFilter} />}
-      />
-
-      {visible.length === 0 ? (
-        <Empty text="Nothing here" />
-      ) : (
-        <Table head={['Trader', 'Amount', 'Address', 'Created', 'Status', 'Action']}>
-          {visible.map((d) => (
-            <tr key={d.id}>
-              <Td>
-                <span className="block text-xs font-semibold">{d.user?.name ?? '—'}</span>
-                <span className="block text-[11px] text-slate-500">{d.user?.email}</span>
-              </Td>
-              <Td>
-                <span className="block text-xs font-semibold">
-                  {d.cryptoAmount} {d.currency}
-                </span>
-                {d.creditedAmount > 0 && (
-                  <span className="tabular block text-[11px] text-up">
-                    credited {money(d.creditedAmount)}
-                  </span>
-                )}
-                {d.bonusAmount > 0 && (
-                  <span className="tabular block text-[11px] text-up">bonus {money(d.bonusAmount)}</span>
-                )}
-                {d.promoCode && (
-                  <span className="block font-mono text-[10px] text-slate-500">{d.promoCode}</span>
-                )}
-              </Td>
-              <Td>
-                <span className="block font-mono text-[10px] text-slate-500">{d.address}</span>
-                <span className="block text-[10px] text-slate-500">
-                  {d.networkLabel} · {d.confirmations}/{d.requiredConf} conf
-                </span>
-                {d.txHash && (
-                  <span className="block font-mono text-[10px] text-accent">{shortHash(d.txHash)}</span>
-                )}
-              </Td>
-              <Td className="text-[11px] text-slate-500">{dateTime(d.createdAt)}</Td>
-              <Td>
-                <StatusPill status={d.status} />
-              </Td>
-              <Td className="text-right">
-                {d.status === 'AWAITING_PAYMENT' || d.status === 'CONFIRMING' ? (
-                  <span className="flex justify-end gap-2">
-                    <button
-                      onClick={() => void act(d.id, 'confirm')}
-                      className="btn-up !px-3 !py-1.5 text-xs"
-                    >
-                      Credit
-                    </button>
-                    <button
-                      onClick={() => void act(d.id, 'reject')}
-                      className="btn-ghost !px-3 !py-1.5 text-xs !text-down"
-                    >
-                      Reject
-                    </button>
-                  </span>
-                ) : (
-                  <span className="text-[11px] text-slate-500">
-                    {d.confirmedAt ? dateTime(d.confirmedAt) : '—'}
-                  </span>
-                )}
-              </Td>
-            </tr>
-          ))}
-        </Table>
-      )}
-    </>
+    <DataTable<Deposit>
+      title="Deposits"
+      columns={columns}
+      filters={DEPOSIT_FILTERS}
+      searchPlaceholder="Search trader, address or tx hash"
+      rowKey={(d) => d.id}
+      reloadToken={reloadToken}
+      fetchPage={async (state) => {
+        const params = new URLSearchParams({ page: String(state.page), pageSize: String(state.pageSize) });
+        if (state.sort) params.set('sort', state.sort);
+        if (state.search) params.set('search', state.search);
+        for (const [key, value] of Object.entries(state.filters)) params.set(key, value);
+        const data = await api.get<{ deposits: Deposit[]; total: number; pageCount: number }>(
+          `/admin/deposits?${params.toString()}`,
+        );
+        return { items: data.deposits, total: data.total, pageCount: data.pageCount };
+      }}
+      exportPath={(params) => `/admin/deposits/export?${params.toString()}`}
+    />
   );
 }
 

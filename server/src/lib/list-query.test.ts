@@ -62,6 +62,18 @@ describe('buildSearchWhere', () => {
       OR: [{ email: { contains: 'alice' } }, { name: { contains: 'alice' } }],
     });
   });
+
+  it('turns a dot-path field into a nested relation clause', () => {
+    expect(buildSearchWhere('alice', ['user.email'])).toEqual({
+      OR: [{ user: { email: { contains: 'alice' } } }],
+    });
+  });
+
+  it('mixes a direct field and a dot-path field in the same search', () => {
+    expect(buildSearchWhere('alice', ['address', 'user.email'])).toEqual({
+      OR: [{ address: { contains: 'alice' } }, { user: { email: { contains: 'alice' } } }],
+    });
+  });
 });
 
 describe('buildFilterWhere', () => {

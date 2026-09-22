@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ApiError, api } from '../../lib/api';
 import { dateTime, money } from '../../lib/format';
 import { toast } from '../../store/toast';
-import { Empty, Loading, PageHead, StatusPill, Table, Td } from '../../components/admin/ui';
+import { StatusPill } from '../../components/admin/ui';
 import { DataTable, type DataTableColumn } from '../../components/admin/DataTable';
 import type { User } from '../../lib/types';
 
@@ -257,17 +257,33 @@ function UserDrawer({ user, reload }: { user: User; reload: () => void }) {
   );
 }
 
+const KYC_FILTERS = [
+  {
+    key: 'status',
+    label: 'Status',
+    type: 'enum' as const,
+    options: [
+      { value: 'PENDING', label: 'Pending' },
+      { value: 'APPROVED', label: 'Approved' },
+      { value: 'REJECTED', label: 'Rejected' },
+    ],
+  },
+  {
+    key: 'documentType',
+    label: 'Document',
+    type: 'enum' as const,
+    options: [
+      { value: 'PASSPORT', label: 'Passport' },
+      { value: 'ID_CARD', label: 'ID card' },
+      { value: 'DRIVING_LICENCE', label: 'Driving licence' },
+    ],
+  },
+  { key: 'createdAt', label: 'Submitted', type: 'dateRange' as const },
+];
+
 export function AdminKyc() {
-  const [rows, setRows] = useState<KycSubmission[] | null>(null);
-
-  const load = useCallback(async () => {
-    const { submissions } = await api.get<{ submissions: KycSubmission[] }>('/admin/kyc');
-    setRows(submissions);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const [reloadToken, setReloadToken] = useState(0);
+  const reload = useCallback(() => setReloadToken((n) => n + 1), []);
 
   const review = async (id: string, decision: 'APPROVED' | 'REJECTED') => {
     const note =
@@ -275,71 +291,117 @@ export function AdminKyc() {
     if (decision === 'REJECTED' && !note) return;
     try {
       await api.post(`/admin/kyc/${id}/review`, { decision, note });
-      await load();
+      reload();
       toast.success(decision === 'APPROVED' ? 'Identity verified' : 'Verification rejected');
     } catch (err) {
       toast.error('Review failed', err instanceof ApiError ? err.message : undefined);
     }
   };
 
-  if (!rows) return <Loading />;
-  const pending = rows.filter((r) => r.status === 'PENDING');
+  const columns: DataTableColumn<KycSubmission>[] = [
+    {
+      key: 'user',
+      label: 'Trader',
+      render: (row) => (
+        <>
+          <span className="block text-xs font-semibold">{row.user?.name}</span>
+          <span className="block text-[11px] text-slate-500">{row.user?.email}</span>
+          <span className="tabular block text-[10px] text-slate-500">
+            balance {money(row.user?.realBalance ?? 0)}
+          </span>
+        </>
+      ),
+    },
+    {
+      key: 'fullName',
+      label: 'Identity',
+      sortable: true,
+      render: (row) => (
+        <>
+          <span className="block text-xs font-semibold text-slate-200">{row.fullName}</span>
+          <span className="block text-[11px] text-slate-400">born {row.dateOfBirth}</span>
+          <span className="block text-[11px] text-slate-400">
+            {row.address}, {row.country}
+          </span>
+        </>
+      ),
+    },
+    {
+      key: 'document',
+      label: 'Document',
+      render: (row) => (
+        <>
+          <span className="block text-[11px] text-slate-400 capitalize">
+            {row.documentType.replace(/_/g, ' ').toLowerCase()}
+          </span>
+          <span className="block font-mono text-[11px] text-slate-400">{row.documentNumber}</span>
+        </>
+      ),
+    },
+    {
+      key: 'createdAt',
+      label: 'Submitted',
+      sortable: true,
+      render: (row) => <span className="text-[11px] text-slate-500">{dateTime(row.createdAt)}</span>,
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (row) => (
+        <>
+          <StatusPill status={row.status} />
+          {row.note && <span className="mt-1 block text-[10px] text-slate-500">{row.note}</span>}
+        </>
+      ),
+    },
+    {
+      key: 'decision',
+      label: 'Decision',
+      align: 'right',
+      render: (row) =>
+        row.status === 'PENDING' ? (
+          <span className="flex justify-end gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void review(row.id, 'APPROVED');
+              }}
+              className="btn-up !px-3 !py-1.5 text-xs"
+            >
+              Approve
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void review(row.id, 'REJECTED');
+              }}
+              className="btn-ghost !px-3 !py-1.5 text-xs !text-down"
+            >
+              Reject
+            </button>
+          </span>
+        ) : null,
+    },
+  ];
 
   return (
-    <>
-      <PageHead title="Identity verification" subtitle={`${pending.length} waiting for review`} />
-
-      {rows.length === 0 ? (
-        <Empty text="No verification requests yet" />
-      ) : (
-        <Table head={['Trader', 'Identity', 'Document', 'Submitted', 'Status', 'Decision']}>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              <Td>
-                <span className="block text-xs font-semibold">{row.user?.name}</span>
-                <span className="block text-[11px] text-slate-500">{row.user?.email}</span>
-                <span className="tabular block text-[10px] text-slate-500">
-                  balance {money(row.user?.realBalance ?? 0)}
-                </span>
-              </Td>
-              <Td className="text-[11px] text-slate-400">
-                <span className="block text-xs font-semibold text-slate-200">{row.fullName}</span>
-                <span className="block">born {row.dateOfBirth}</span>
-                <span className="block">
-                  {row.address}, {row.country}
-                </span>
-              </Td>
-              <Td className="text-[11px] text-slate-400">
-                <span className="block capitalize">{row.documentType.replace(/_/g, ' ').toLowerCase()}</span>
-                <span className="block font-mono">{row.documentNumber}</span>
-              </Td>
-              <Td className="text-[11px] text-slate-500">{dateTime(row.createdAt)}</Td>
-              <Td>
-                <StatusPill status={row.status} />
-                {row.note && <span className="mt-1 block text-[10px] text-slate-500">{row.note}</span>}
-              </Td>
-              <Td className="text-right">
-                {row.status === 'PENDING' && (
-                  <span className="flex justify-end gap-2">
-                    <button
-                      onClick={() => void review(row.id, 'APPROVED')}
-                      className="btn-up !px-3 !py-1.5 text-xs"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => void review(row.id, 'REJECTED')}
-                      className="btn-ghost !px-3 !py-1.5 text-xs !text-down"
-                    >
-                      Reject
-                    </button>
-                  </span>
-                )}
-              </Td>
-            </tr>
-          ))}
-        </Table>
-      )}
-    </>
+    <DataTable<KycSubmission>
+      title="Identity verification"
+      columns={columns}
+      filters={KYC_FILTERS}
+      searchPlaceholder="Search trader, name or document number"
+      rowKey={(row) => row.id}
+      reloadToken={reloadToken}
+      fetchPage={async (state) => {
+        const params = new URLSearchParams({ page: String(state.page), pageSize: String(state.pageSize) });
+        if (state.sort) params.set('sort', state.sort);
+        if (state.search) params.set('search', state.search);
+        for (const [key, value] of Object.entries(state.filters)) params.set(key, value);
+        const data = await api.get<{ submissions: KycSubmission[]; total: number; pageCount: number }>(
+          `/admin/kyc?${params.toString()}`,
+        );
+        return { items: data.submissions, total: data.total, pageCount: data.pageCount };
+      }}
+    />
   );
 }

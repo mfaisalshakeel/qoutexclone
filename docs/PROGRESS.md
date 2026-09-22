@@ -4,6 +4,12 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-22**: Phase 6 — **Data tables, applied to more lists** (in progress). Deposits and KYC submissions moved onto `DataTable`/the generic list-query helper, joining Traders from the Client task. `buildSearchWhere` gained dot-path support (`user.email` → a nested Prisma relation clause) since every list but the trader one searches by the trader's email through a relation, not a field on the record itself. `listKycSubmissions` (superseded by the paginated inline query) was deleted rather than left unused.
+
+  **Verified.** 600 server tests (2 new, for the dot-path search), typecheck, build, lint all green. Verified live against the running server (pagination, nested search, filters, CSV export for deposits) and confirmed no regression in the existing e2e suite, including the sandbox-payments webhook flow that queries `/admin/deposits?status=` directly.
+
+  Withdrawals, support tickets, tournaments, promo codes, assets and the audit log — plus trades, the ledger, referrals/commissions and marketplace orders, which have no admin list page yet — remain. Withdrawals specifically needs care: its pending queue has a standing priority sort (by trader status level) that a generic "sortable columns" system needs to coexist with rather than silently override.
+
 - **2026-09-22**: Phase 6 — **Data tables, Client**. A reusable `DataTable` component — debounced search, chip filters (enum multi-select and date range), a column picker, sortable headers, a sticky header, page size and page-number controls, row selection with bulk actions, a row-click detail drawer, and cards on phones — all synced to the URL. Wired into the Traders (Users) page as the reference implementation, on top of the `/admin/users` endpoint the Server task already built.
 
   **The component owns UI state; the caller owns the HTTP call.** `DataTable` never knows an endpoint URL or a response's field names — it takes a `fetchPage(state)` function and expects `{items, total, pageCount}` back. Traders.tsx's version of that function is four lines: build the query string from the table's state, call `/admin/users`, reshape the response. Every other list this gets applied to will look the same, which is the point of building the shared piece first.
