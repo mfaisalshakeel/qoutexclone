@@ -4,6 +4,20 @@ Newest first. One entry per finished roadmap task: date, task, what changed, how
 
 ## Log
 
+- **2026-09-22**: Phase 6 — **Data tables, Client**. A reusable `DataTable` component — debounced search, chip filters (enum multi-select and date range), a column picker, sortable headers, a sticky header, page size and page-number controls, row selection with bulk actions, a row-click detail drawer, and cards on phones — all synced to the URL. Wired into the Traders (Users) page as the reference implementation, on top of the `/admin/users` endpoint the Server task already built.
+
+  **The component owns UI state; the caller owns the HTTP call.** `DataTable` never knows an endpoint URL or a response's field names — it takes a `fetchPage(state)` function and expects `{items, total, pageCount}` back. Traders.tsx's version of that function is four lines: build the query string from the table's state, call `/admin/users`, reshape the response. Every other list this gets applied to will look the same, which is the point of building the shared piece first.
+
+  **Filter and sort state lives in the URL, not component state** (`lib/table-query.ts`), the same way `Wallet.tsx`'s tab already does — a filtered, sorted, paged view is a link an operator can bookmark or hand to a teammate, and the browser's back button undoes one step at a time rather than losing the whole session. Page 1 and the default page size are left out of the URL on purpose, so the "no filters" state is a clean link rather than one cluttered with defaults.
+
+  **Bulk actions call the existing single-row endpoints in parallel rather than waiting on a dedicated bulk API.** `/admin/users/:id/status` already exists; "Suspend selected" is `Promise.all` over the selected ids. A real bulk endpoint is worth building once a second admin list needs the same shape of action, not preemptively for the first one.
+
+  **The backdrop that closes a drawer or a dropdown is a `<button>`, not a `<div>` with an onClick** — matching the pattern `BottomSheet.tsx` already established, and the only way to close it with a keyboard without hand-rolling `role`/`tabIndex`/key handling a real button gets for free.
+
+  **Verified.** 598 server tests (unchanged — no server code touched by this task), 235 web tests (14 new, covering URL state parsing/serialization round-tripping, page-1-omitted-from-the-URL, and sort-column toggling through its three states), typecheck, build, lint all green. Manually verified every feature in a real browser — search, sort with URL sync, filters with URL sync and the empty-result state, the column picker, bulk selection and the action bar, the detail drawer, page size changes, and page navigation — at 1440px and confirmed zero horizontal overflow with working cards and drawer at 390px.
+
+  **Decisions.** Sort cycles ascending → descending → ascending on repeated clicks of the same column, never to "unsorted" — an admin table without a sort order reads as broken rather than neutral. Retrofitting the other twelve admin lists onto `DataTable` is its own roadmap line, left for its own task now that the shared piece exists.
+
 - **2026-09-21**: Phase 6 — **Data tables, Server**. A generic list-query helper — offset pagination with a total, cursor pagination for huge tables, multi-column sort, free-text search across configured fields, typed filters (enum, date range, number range, boolean), and a streamed CSV export — reused by every admin list rather than each route inventing its own query parsing. The client (search box, filter chips, URL-synced state, row selection) and retrofitting every other list are separate roadmap lines, left for their own tasks.
 
   **The helper stays untyped against Prisma's per-model types on purpose.** Genericising `findMany`/`count`/`orderBy` across arbitrary Prisma models without fighting the generated types would have meant either a much heavier generic signature or giving up type safety somewhere anyway; instead each call site passes its own delegate methods and casts its own `where`/`orderBy` to its model's type, which is a few lines at the call site instead of a fragile shared generic.
