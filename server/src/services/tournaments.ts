@@ -1,7 +1,8 @@
 import { EventEmitter } from 'node:events';
-import type { Tournament, TournamentEntry } from '@prisma/client';
+import type { Prisma, Tournament, TournamentEntry } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
+import { buildSearchWhere, combineWhere, paginateOffset } from '../lib/list-query.js';
 import { applyLedger, type TxClient } from './wallet.js';
 
 export const tournamentEvents = new EventEmitter();
@@ -87,6 +88,75 @@ export async function leaderboard(tournamentId: string, limit = 50) {
     place: entry.rank ?? index + 1,
     prize: entry.prize,
   }));
+}
+
+/**
+ * The same leaderboard, paginated and searchable by trader name for the back
+ * office. A finished tournament's `rank` is exact regardless of page; a
+ * still-running one has no `rank` yet, so `place` is derived from sort
+ * position instead — `skip + index` when the full board is shown in order,
+ * or (since a search narrows to a subset whose position in *that* subset is
+ * not its place on the real board) a count of entries that outrank it, when
+ * a search is active.
+ */
+export async function adminLeaderboardPage(
+  tournamentId: string,
+  options: { search?: string; page: number; pageSize: number },
+) {
+  const where = combineWhere({ tournamentId }, buildSearchWhere(options.search, ['user.name']));
+  const orderBy = [{ balance: 'desc' }, { joinedAt: 'asc' }] as const;
+  const page = await paginateOffset({
+    findMany: (args) =>
+      prisma.tournamentEntry.findMany({
+        ...(args as {
+          where: Prisma.TournamentEntryWhereInput;
+          orderBy: Prisma.TournamentEntryOrderByWithRelationInput[];
+          skip: number;
+          take: number;
+        }),
+        include: { user: { select: { name: true } } },
+      }),
+    count: (args) => prisma.tournamentEntry.count(args as { where: Prisma.TournamentEntryWhereInput }),
+    where,
+    orderBy,
+    page: options.page,
+    pageSize: options.pageSize,
+  });
+
+  const skip = (page.page - 1) * page.pageSize;
+  const items = await Promise.all(
+    page.items.map(async (entry, index) => {
+      let place = entry.rank;
+      if (place == null) {
+        place = options.search
+          ? 1 +
+            (await prisma.tournamentEntry.count({
+              where: {
+                tournamentId,
+                OR: [
+                  { balance: { gt: entry.balance } },
+                  { balance: entry.balance, joinedAt: { lt: entry.joinedAt } },
+                ],
+              },
+            }))
+          : skip + index + 1;
+      }
+      return {
+        id: entry.id,
+        userId: entry.userId,
+        name: entry.user.name,
+        balance: entry.balance,
+        startingBalance: entry.startingBalance,
+        profit: entry.balance - entry.startingBalance,
+        trades: entry.trades,
+        wins: entry.wins,
+        place,
+        prize: entry.prize,
+      };
+    }),
+  );
+
+  return { ...page, items };
 }
 
 /** Buys in: charges the entry fee from the real balance and hands out chips. */

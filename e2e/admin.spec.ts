@@ -235,6 +235,55 @@ test.describe('admin', () => {
     await adminContext.close();
   });
 
+  test('tournament list searches, filters and shows a leaderboard drawer', async ({ page }) => {
+    const errors = failOnPageErrors(page);
+    await login(page, ADMIN);
+    await page.goto('/admin/tournaments');
+
+    const name = `E2E Search Cup ${Date.now()}`;
+    await page.fill('#t-name', name);
+    await page.fill('#t-fee', '0');
+    await page.fill('#t-pool', '0');
+    await page.fill('#t-chips', '500');
+    await page.fill('#t-split', '100');
+    // starts a couple of hours out, so the background sweeper that promotes a
+    // due tournament to RUNNING does not race this test's own SCHEDULED checks
+    await page.fill('#t-start', new Date(Date.now() + 2 * 3600 * 1000).toISOString().slice(0, 16));
+    await page.click('button:has-text("Create tournament")');
+    await expect(page.getByText('Tournament created')).toBeVisible();
+
+    // search narrows the list to just this tournament — wait for the debounced
+    // search to actually land in the URL before touching another control, or a
+    // quick second change can race the first and clobber it
+    await page.getByPlaceholder('Search by name').fill(name);
+    await expect(page).toHaveURL(/search=/);
+    const row = page.getByRole('row', { name: new RegExp(name.replace(/\s/g, '\\s')) }).first();
+    await expect(row).toBeVisible();
+
+    // the status filter narrows it too: a fresh tournament is SCHEDULED, not RUNNING
+    await page.getByText('Status', { exact: true }).click();
+    const runningOption = page.getByLabel('Running', { exact: true });
+    await runningOption.click();
+    await expect(runningOption).toBeChecked();
+    await expect(row).toHaveCount(0);
+    await page.getByText('Clear filters ✕').click();
+    await expect(row).toBeVisible();
+
+    // clicking the row opens its leaderboard, empty until someone joins
+    await row.getByText(name).click();
+    await expect(page.getByText('No entrants match')).toBeVisible();
+    await page.getByRole('button', { name: 'Close ✕' }).click();
+
+    // clean up: start and finish it so it stops appearing as an open contest
+    await row.getByRole('button', { name: 'Start' }).click();
+    await expect(page.getByText('Tournament started')).toBeVisible();
+    await row.getByRole('button', { name: 'Finish & pay' }).click();
+    await row.getByRole('button', { name: 'Confirm payout' }).click();
+    await expect(page.getByText('Prizes paid out')).toBeVisible();
+
+    expect(errors).toEqual([]);
+  });
+
   test('a trader cannot reach the back office', async ({ page }) => {
     await register(page, newCredentials('guard'));
     await page.goto('/admin');

@@ -20,7 +20,7 @@ import { approveWithdrawal, rejectWithdrawal } from '../services/withdrawals.js'
 import { marketFeed } from '../engine/feed.js';
 import { reviewKyc } from '../services/kyc.js';
 import { PROMO_KINDS, describe } from '../services/promos.js';
-import { finishTournament, leaderboard, startTournament } from '../services/tournaments.js';
+import { adminLeaderboardPage, finishTournament, startTournament } from '../services/tournaments.js';
 import { postMessage, readTicket, setTicketStatus } from '../services/support.js';
 import { SETTINGS, settings } from '../services/settings.js';
 import { mailTransportName, sendTestEmail, smtpReady } from '../services/mailer.js';
@@ -504,15 +504,45 @@ router.patch(
 
 /* ------------------------------- tournaments ------------------------------ */
 
+const TOURNAMENT_SEARCH_FIELDS = ['name'] as const;
+const TOURNAMENT_SORT_FIELDS = ['startsAt', 'endsAt', 'createdAt', 'prizePool', 'entryFee'] as const;
+const TOURNAMENT_FILTERS = {
+  status: { type: 'enum', values: ['SCHEDULED', 'RUNNING', 'FINISHED', 'CANCELLED'] },
+} as const;
+
 router.get(
   '/tournaments',
-  wrap(async (_req, res) => {
-    const tournaments = await prisma.tournament.findMany({
-      orderBy: { startsAt: 'desc' },
-      take: 50,
-      include: { _count: { select: { entries: true } } },
+  wrap(async (req, res) => {
+    const query = listQuerySchema.parse(req.query);
+    const where = combineWhere(
+      buildSearchWhere(query.search, TOURNAMENT_SEARCH_FIELDS),
+      buildFilterWhere(TOURNAMENT_FILTERS, req.query as Record<string, string | undefined>),
+    );
+    const orderBy = buildOrderBy(query.sort, TOURNAMENT_SORT_FIELDS, { startsAt: 'desc' });
+    const page = await paginateOffset({
+      findMany: (args) =>
+        prisma.tournament.findMany({
+          ...(args as {
+            where: Prisma.TournamentWhereInput;
+            orderBy: Prisma.TournamentOrderByWithRelationInput[];
+            skip: number;
+            take: number;
+          }),
+          include: { _count: { select: { entries: true } } },
+        }),
+      count: (args) => prisma.tournament.count(args as { where: Prisma.TournamentWhereInput }),
+      where,
+      orderBy,
+      page: query.page,
+      pageSize: query.pageSize,
     });
-    res.json({ tournaments: tournaments.map((t) => ({ ...t, entrants: t._count.entries })) });
+    res.json({
+      tournaments: page.items.map((t) => ({ ...t, entrants: t._count.entries })),
+      total: page.total,
+      page: page.page,
+      pageSize: page.pageSize,
+      pageCount: page.pageCount,
+    });
   }),
 );
 
@@ -546,7 +576,19 @@ router.post(
 router.get(
   '/tournaments/:id/leaderboard',
   wrap(async (req, res) => {
-    res.json({ leaderboard: await leaderboard(req.params.id, 100) });
+    const query = listQuerySchema.parse(req.query);
+    const page = await adminLeaderboardPage(req.params.id, {
+      search: query.search,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    res.json({
+      leaderboard: page.items,
+      total: page.total,
+      page: page.page,
+      pageSize: page.pageSize,
+      pageCount: page.pageCount,
+    });
   }),
 );
 

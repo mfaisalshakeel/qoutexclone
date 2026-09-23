@@ -1,8 +1,9 @@
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ApiError, api } from '../../lib/api';
 import { dateTime, money } from '../../lib/format';
 import { toast } from '../../store/toast';
 import { Empty, Loading, PageHead, StatusPill, Table, Td } from '../../components/admin/ui';
+import { DataTable, type DataTableColumn } from '../../components/admin/DataTable';
 import type { Asset, LeaderboardRow } from '../../lib/types';
 
 type AdminAsset = Asset & {
@@ -45,9 +46,23 @@ function isoIn(hours: number): string {
   return new Date(Date.now() + hours * 3600 * 1000).toISOString().slice(0, 16);
 }
 
+const TOURNAMENT_FILTERS = [
+  {
+    key: 'status',
+    label: 'Status',
+    type: 'enum' as const,
+    options: [
+      { value: 'SCHEDULED', label: 'Scheduled' },
+      { value: 'RUNNING', label: 'Running' },
+      { value: 'FINISHED', label: 'Finished' },
+      { value: 'CANCELLED', label: 'Cancelled' },
+    ],
+  },
+];
+
 export function AdminTournaments() {
-  const [rows, setRows] = useState<AdminTournament[] | null>(null);
-  const [board, setBoard] = useState<{ id: string; rows: LeaderboardRow[] } | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  const reload = useCallback(() => setReloadToken((n) => n + 1), []);
   // paying out is irreversible, so it takes two clicks — in two steps rather
   // than a native confirm, which a keyboard or an automated check cannot reach
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -62,15 +77,6 @@ export function AdminTournaments() {
     startsAt: isoIn(0),
     endsAt: isoIn(24),
   });
-
-  const load = useCallback(async () => {
-    const { tournaments } = await api.get<{ tournaments: AdminTournament[] }>('/admin/tournaments');
-    setRows(tournaments);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const create = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -87,7 +93,7 @@ export function AdminTournaments() {
         endsAt: new Date(form.endsAt).toISOString(),
       });
       setForm({ ...form, name: '', description: '' });
-      await load();
+      reload();
       toast.success('Tournament created');
     } catch (err) {
       toast.error('Could not create', err instanceof ApiError ? err.message : undefined);
@@ -98,24 +104,126 @@ export function AdminTournaments() {
     setConfirming(null);
     try {
       await api.post(`/admin/tournaments/${id}/${action}`);
-      await load();
+      reload();
       toast.success(action === 'start' ? 'Tournament started' : 'Prizes paid out');
     } catch (err) {
       toast.error('Action failed', err instanceof ApiError ? err.message : undefined);
     }
   };
 
-  const showBoard = async (id: string) => {
-    if (board?.id === id) return setBoard(null);
-    const { leaderboard } = await api.get<{ leaderboard: LeaderboardRow[] }>(
-      `/admin/tournaments/${id}/leaderboard`,
-    );
-    setBoard({ id, rows: leaderboard });
-  };
+  const columns: DataTableColumn<AdminTournament>[] = [
+    {
+      key: 'name',
+      label: 'Tournament',
+      sortable: true,
+      render: (t) => (
+        <>
+          <span className="block text-xs font-semibold">{t.name}</span>
+          {t.description && <span className="block text-[11px] text-slate-500">{t.description}</span>}
+          <span className="mt-1 block">
+            <StatusPill status={t.status} />
+          </span>
+        </>
+      ),
+    },
+    {
+      key: 'startsAt',
+      label: 'Window',
+      sortable: true,
+      render: (t) => (
+        <span className="text-[11px] text-slate-500">
+          <span className="block">{dateTime(t.startsAt)}</span>
+          <span className="block">→ {dateTime(t.endsAt)}</span>
+        </span>
+      ),
+    },
+    {
+      key: 'entryFee',
+      label: 'Entry',
+      sortable: true,
+      render: (t) => (
+        <>
+          <span className="tabular block text-xs">{t.entryFee > 0 ? money(t.entryFee) : 'free'}</span>
+          <span className="tabular block text-[10px] text-slate-500">{money(t.startingBalance)} chips</span>
+        </>
+      ),
+    },
+    {
+      key: 'prizePool',
+      label: 'Pool',
+      sortable: true,
+      render: (t) => (
+        <>
+          <span className="tabular block text-xs font-semibold text-up">{money(t.prizePool)}</span>
+          <span className="block font-mono text-[10px] text-slate-500">{t.prizeSplit}</span>
+        </>
+      ),
+    },
+    {
+      key: 'entrants',
+      label: 'Entrants',
+      align: 'right',
+      render: (t) => <span className="tabular text-xs">{t.entrants}</span>,
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      align: 'right',
+      render: (t) => (
+        <span className="flex flex-wrap justify-end gap-2">
+          {t.status === 'SCHEDULED' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void act(t.id, 'start');
+              }}
+              className="btn-primary !px-3 !py-1.5 text-xs"
+            >
+              Start
+            </button>
+          )}
+          {t.status === 'RUNNING' &&
+            (confirming === t.id ? (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void act(t.id, 'finish');
+                  }}
+                  className="btn-up !px-3 !py-1.5 text-xs"
+                >
+                  Confirm payout
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setConfirming(null);
+                  }}
+                  className="btn-ghost !px-3 !py-1.5 text-xs"
+                >
+                  Keep running
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConfirming(t.id);
+                }}
+                className="btn-up !px-3 !py-1.5 text-xs"
+              >
+                Finish &amp; pay
+              </button>
+            ))}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <>
-      <PageHead title="Tournaments" subtitle="Chip-based contests that pay real prizes from the pool" />
+      {/* DataTable below owns the page's one heading; this is a lead-in, not a second h1 */}
+      <p className="mb-4 text-xs text-slate-500">Chip-based contests that pay real prizes from the pool</p>
 
       <form onSubmit={create} className="card mb-4 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="sm:col-span-2">
@@ -225,104 +333,137 @@ export function AdminTournaments() {
         </div>
       </form>
 
-      {!rows ? (
-        <Loading />
-      ) : rows.length === 0 ? (
-        <Empty text="No tournaments yet" />
-      ) : (
-        <Table head={['Tournament', 'Window', 'Entry', 'Pool', 'Entrants', 'Actions']}>
-          {rows.map((t) => (
-            <Fragment key={t.id}>
-              <tr>
-                <Td>
-                  <span className="block text-xs font-semibold">{t.name}</span>
-                  {t.description && <span className="block text-[11px] text-slate-500">{t.description}</span>}
-                  <span className="mt-1 block">
-                    <StatusPill status={t.status} />
-                  </span>
-                </Td>
-                <Td className="text-[11px] text-slate-500">
-                  <span className="block">{dateTime(t.startsAt)}</span>
-                  <span className="block">→ {dateTime(t.endsAt)}</span>
-                </Td>
-                <Td className="tabular text-xs">
-                  {t.entryFee > 0 ? money(t.entryFee) : 'free'}
-                  <span className="block text-[10px] text-slate-500">{money(t.startingBalance)} chips</span>
-                </Td>
-                <Td className="tabular text-xs font-semibold text-up">
-                  {money(t.prizePool)}
-                  <span className="block font-mono text-[10px] text-slate-500">{t.prizeSplit}</span>
-                </Td>
-                <Td className="tabular text-xs">{t.entrants}</Td>
-                <Td className="text-right">
-                  <span className="flex flex-wrap justify-end gap-2">
-                    <button onClick={() => void showBoard(t.id)} className="btn-ghost !px-3 !py-1.5 text-xs">
-                      {board?.id === t.id ? 'Hide' : 'Leaderboard'}
-                    </button>
-                    {t.status === 'SCHEDULED' && (
-                      <button
-                        onClick={() => void act(t.id, 'start')}
-                        className="btn-primary !px-3 !py-1.5 text-xs"
-                      >
-                        Start
-                      </button>
-                    )}
-                    {t.status === 'RUNNING' &&
-                      (confirming === t.id ? (
-                        <>
-                          <button
-                            onClick={() => void act(t.id, 'finish')}
-                            className="btn-up !px-3 !py-1.5 text-xs"
-                          >
-                            Confirm payout
-                          </button>
-                          <button
-                            onClick={() => setConfirming(null)}
-                            className="btn-ghost !px-3 !py-1.5 text-xs"
-                          >
-                            Keep running
-                          </button>
-                        </>
-                      ) : (
-                        <button onClick={() => setConfirming(t.id)} className="btn-up !px-3 !py-1.5 text-xs">
-                          Finish &amp; pay
-                        </button>
-                      ))}
-                  </span>
-                </Td>
-              </tr>
-              {board?.id === t.id && (
-                <tr>
-                  <td colSpan={6} className="bg-ink-900/40 px-4 py-3">
-                    {board.rows.length === 0 ? (
-                      <p className="text-center text-xs text-slate-500">No entrants</p>
-                    ) : (
-                      <ol className="space-y-1">
-                        {board.rows.map((row) => (
-                          <li key={row.id} className="flex items-center gap-3 text-xs">
-                            <span className="w-6 font-bold text-slate-500">{row.place}</span>
-                            <span className="flex-1 truncate">{row.name}</span>
-                            <span className="tabular">{money(row.balance)}</span>
-                            <span
-                              className={`tabular w-20 text-right ${row.profit >= 0 ? 'text-up' : 'text-down'}`}
-                            >
-                              {money(row.profit, { sign: true })}
-                            </span>
-                            <span className="tabular w-20 text-right text-up">
-                              {row.prize > 0 ? money(row.prize) : ''}
-                            </span>
-                          </li>
-                        ))}
-                      </ol>
-                    )}
-                  </td>
-                </tr>
-              )}
-            </Fragment>
-          ))}
-        </Table>
-      )}
+      <DataTable<AdminTournament>
+        title="Tournaments"
+        columns={columns}
+        filters={TOURNAMENT_FILTERS}
+        searchPlaceholder="Search by name"
+        rowKey={(t) => t.id}
+        reloadToken={reloadToken}
+        fetchPage={async (state) => {
+          const params = new URLSearchParams({ page: String(state.page), pageSize: String(state.pageSize) });
+          if (state.sort) params.set('sort', state.sort);
+          if (state.search) params.set('search', state.search);
+          for (const [key, value] of Object.entries(state.filters)) params.set(key, value);
+          const data = await api.get<{ tournaments: AdminTournament[]; total: number; pageCount: number }>(
+            `/admin/tournaments?${params.toString()}`,
+          );
+          return { items: data.tournaments, total: data.total, pageCount: data.pageCount };
+        }}
+        renderDrawer={(t) => <TournamentLeaderboardDrawer tournament={t} />}
+      />
     </>
+  );
+}
+
+function TournamentLeaderboardDrawer({ tournament }: { tournament: AdminTournament }) {
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const [result, setResult] = useState<{ items: LeaderboardRow[]; total: number; pageCount: number } | null>(
+    null,
+  );
+  const [error, setError] = useState('');
+
+  // the search box debounces locally; a change resets to the first page
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      if (searchInput !== search) {
+        setSearch(searchInput);
+        setPage(1);
+      }
+    }, 300);
+    return () => window.clearTimeout(id);
+  }, [searchInput, search]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setError('');
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    if (search) params.set('search', search);
+    api
+      .get<{ leaderboard: LeaderboardRow[]; total: number; pageCount: number }>(
+        `/admin/tournaments/${tournament.id}/leaderboard?${params.toString()}`,
+      )
+      .then((data) => {
+        if (!cancelled) setResult({ items: data.leaderboard, total: data.total, pageCount: data.pageCount });
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof ApiError ? err.message : 'Could not load the leaderboard');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tournament.id, page, search]);
+
+  return (
+    <div>
+      <h2 className="pr-16 text-sm font-bold">{tournament.name}</h2>
+      {tournament.description && <p className="mt-0.5 text-xs text-slate-500">{tournament.description}</p>}
+      <p className="mt-1.5 flex items-center gap-2">
+        <StatusPill status={tournament.status} />
+        <span className="text-[11px] text-slate-500">{tournament.entrants} entrants</span>
+      </p>
+
+      <input
+        value={searchInput}
+        onChange={(e) => setSearchInput(e.target.value)}
+        placeholder="Search by trader name"
+        className="field mt-4 !py-2 !text-xs"
+      />
+
+      {error ? (
+        <div className="mt-4 rounded-lg border border-ink-600 p-4 text-center">
+          <p className="text-xs text-slate-400">{error}</p>
+        </div>
+      ) : !result ? (
+        <p className="mt-4 text-center text-xs text-slate-500">Loading…</p>
+      ) : result.items.length === 0 ? (
+        <p className="mt-4 text-center text-xs text-slate-500">No entrants match</p>
+      ) : (
+        <>
+          <ol className="mt-4 space-y-1.5">
+            {result.items.map((row) => (
+              <li key={row.id} className="flex items-center gap-3 text-xs">
+                <span className="w-6 font-bold text-slate-500">{row.place}</span>
+                <span className="flex-1 truncate">{row.name}</span>
+                <span className="tabular">{money(row.balance)}</span>
+                <span className={`tabular w-20 text-right ${row.profit >= 0 ? 'text-up' : 'text-down'}`}>
+                  {money(row.profit, { sign: true })}
+                </span>
+                <span className="tabular w-20 text-right text-up">
+                  {row.prize > 0 ? money(row.prize) : ''}
+                </span>
+              </li>
+            ))}
+          </ol>
+          {result.pageCount > 1 && (
+            <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500">
+              <span>
+                Page {page} of {result.pageCount} · {result.total} entrants
+              </span>
+              <span className="flex gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="btn-ghost !px-2.5 !py-1 text-xs disabled:opacity-40"
+                >
+                  ‹
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(result.pageCount, p + 1))}
+                  disabled={page >= result.pageCount}
+                  className="btn-ghost !px-2.5 !py-1 text-xs disabled:opacity-40"
+                >
+                  ›
+                </button>
+              </span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
