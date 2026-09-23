@@ -7,9 +7,11 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { Account } from './pages/Account';
 import { AdminDashboard } from './pages/admin/Dashboard';
 import { AdminDeposits, AdminWithdrawals } from './pages/admin/Money';
+import { AdminLedger, AdminReferrals, AdminTrades } from './pages/admin/Activity';
 import {
   AdminAssets,
   AdminAudit,
+  AdminMarketplaceOrders,
   AdminPromos,
   AdminSchedules,
   AdminTournaments,
@@ -94,9 +96,13 @@ export default function App() {
             <Route path="deposits" element={<AdminDeposits />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="kyc" element={<AdminKyc />} />
+            <Route path="trades" element={<AdminTrades />} />
+            <Route path="ledger" element={<AdminLedger />} />
+            <Route path="referrals" element={<AdminReferrals />} />
             <Route path="support" element={<AdminSupport />} />
             <Route path="tournaments" element={<AdminTournaments />} />
             <Route path="promos" element={<AdminPromos />} />
+            <Route path="marketplace-orders" element={<AdminMarketplaceOrders />} />
             <Route path="assets" element={<AdminAssets />} />
             <Route path="schedules" element={<AdminSchedules />} />
             <Route path="price-engine" element={<AdminOtcEngine />} />

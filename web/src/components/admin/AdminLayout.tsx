@@ -26,6 +26,8 @@ const SECTIONS: { label: string; items: { to: string; label: string; badge?: key
     items: [
       { to: '/admin/withdrawals', label: 'Withdrawals', badge: 'pendingWithdrawals' },
       { to: '/admin/deposits', label: 'Deposits', badge: 'pendingDeposits' },
+      { to: '/admin/ledger', label: 'Ledger' },
+      { to: '/admin/referrals', label: 'Referrals' },
     ],
   },
   {
@@ -33,6 +35,7 @@ const SECTIONS: { label: string; items: { to: string; label: string; badge?: key
     items: [
       { to: '/admin/users', label: 'Users' },
       { to: '/admin/kyc', label: 'Verification', badge: 'pendingKyc' },
+      { to: '/admin/trades', label: 'Trades' },
       { to: '/admin/support', label: 'Support', badge: 'openTickets' },
     ],
   },
@@ -41,6 +44,7 @@ const SECTIONS: { label: string; items: { to: string; label: string; badge?: key
     items: [
       { to: '/admin/tournaments', label: 'Tournaments', badge: 'liveTournaments' },
       { to: '/admin/promos', label: 'Promo codes' },
+      { to: '/admin/marketplace-orders', label: 'Marketplace orders' },
       { to: '/admin/assets', label: 'Markets' },
       { to: '/admin/schedules', label: 'Sessions' },
       { to: '/admin/price-engine', label: 'Price engine' },

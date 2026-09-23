@@ -14,7 +14,7 @@ import {
 } from '../lib/list-query.js';
 import { publicDeposit, publicUser, publicWithdrawal } from '../lib/serialize.js';
 import { requireAdmin, requireAuth } from '../middleware/auth.js';
-import { applyLedger } from '../services/wallet.js';
+import { TX_TYPES, applyLedger } from '../services/wallet.js';
 import { completeDeposit, rejectDeposit } from '../services/deposits.js';
 import { approveWithdrawal, priorityOrder, rejectWithdrawal } from '../services/withdrawals.js';
 import { marketFeed } from '../engine/feed.js';
@@ -511,6 +511,276 @@ router.post(
     const submission = await reviewKyc(req.params.id, req.user!.id, body.decision, body.note);
     await audit(req.user!.id, 'kyc.review', 'kyc', submission.id, body.decision);
     res.json({ submission });
+  }),
+);
+
+/* --------------------------------- trades ---------------------------------- */
+
+const TRADE_SEARCH_FIELDS = ['user.email', 'user.name', 'symbol'] as const;
+const TRADE_SORT_FIELDS = ['openedAt', 'settledAt', 'stake', 'profit'] as const;
+const TRADE_FILTERS = {
+  status: { type: 'enum', values: ['OPEN', 'WON', 'LOST', 'REFUNDED'] },
+  accountType: { type: 'enum', values: ['DEMO', 'REAL', 'TOURNAMENT'] },
+  direction: { type: 'enum', values: ['UP', 'DOWN'] },
+  openedAt: { type: 'dateRange' },
+} as const;
+
+function tradesListWhere(req: { query: Record<string, unknown> }) {
+  const query = listQuerySchema.parse(req.query);
+  return {
+    query,
+    where: combineWhere(
+      buildSearchWhere(query.search, TRADE_SEARCH_FIELDS),
+      buildFilterWhere(TRADE_FILTERS, req.query as Record<string, string | undefined>),
+    ),
+    orderBy: buildOrderBy(query.sort, TRADE_SORT_FIELDS, { openedAt: 'desc' }),
+  };
+}
+
+router.get(
+  '/trades',
+  wrap(async (req, res) => {
+    const { query, where, orderBy } = tradesListWhere({ query: req.query as Record<string, unknown> });
+    const page = await paginateOffset({
+      findMany: (args) =>
+        prisma.trade.findMany({
+          ...(args as {
+            where: Prisma.TradeWhereInput;
+            orderBy: Prisma.TradeOrderByWithRelationInput[];
+            skip: number;
+            take: number;
+          }),
+          include: { user: { select: { email: true, name: true } } },
+        }),
+      count: (args) => prisma.trade.count(args as { where: Prisma.TradeWhereInput }),
+      where,
+      orderBy,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    res.json({
+      trades: page.items,
+      total: page.total,
+      page: page.page,
+      pageSize: page.pageSize,
+      pageCount: page.pageCount,
+    });
+  }),
+);
+
+router.get(
+  '/trades/export',
+  wrap(async (req, res) => {
+    const { where, orderBy } = tradesListWhere({ query: req.query as Record<string, unknown> });
+    await streamCsvExport<
+      Prisma.TradeGetPayload<{ include: { user: { select: { email: true; name: true } } } }>
+    >(
+      res,
+      'trades.csv',
+      [
+        'Trader',
+        'Symbol',
+        'Direction',
+        'Account',
+        'Stake (USD)',
+        'Payout %',
+        'Status',
+        'Profit (USD)',
+        'Opened',
+        'Settled',
+      ],
+      (trade) => [
+        trade.user.email,
+        trade.symbol,
+        trade.direction,
+        trade.accountType,
+        (trade.stake / 100).toFixed(2),
+        String(trade.payoutPct),
+        trade.status,
+        (trade.profit / 100).toFixed(2),
+        trade.openedAt.toISOString(),
+        trade.settledAt?.toISOString() ?? '',
+      ],
+      (skip, take) =>
+        prisma.trade.findMany({
+          where: where as Prisma.TradeWhereInput,
+          orderBy: orderBy as Prisma.TradeOrderByWithRelationInput[],
+          skip,
+          take,
+          include: { user: { select: { email: true, name: true } } },
+        }),
+    );
+  }),
+);
+
+/* --------------------------------- ledger ----------------------------------- */
+
+const LEDGER_SEARCH_FIELDS = ['user.email', 'user.name', 'note', 'refId'] as const;
+const LEDGER_SORT_FIELDS = ['createdAt', 'amount'] as const;
+const LEDGER_FILTERS = {
+  type: { type: 'enum', values: TX_TYPES },
+  accountType: { type: 'enum', values: ['DEMO', 'REAL'] },
+  createdAt: { type: 'dateRange' },
+} as const;
+
+function ledgerListWhere(req: { query: Record<string, unknown> }) {
+  const query = listQuerySchema.parse(req.query);
+  return {
+    query,
+    where: combineWhere(
+      buildSearchWhere(query.search, LEDGER_SEARCH_FIELDS),
+      buildFilterWhere(LEDGER_FILTERS, req.query as Record<string, string | undefined>),
+    ),
+    orderBy: buildOrderBy(query.sort, LEDGER_SORT_FIELDS, { createdAt: 'desc' }),
+  };
+}
+
+router.get(
+  '/transactions',
+  wrap(async (req, res) => {
+    const { query, where, orderBy } = ledgerListWhere({ query: req.query as Record<string, unknown> });
+    const page = await paginateOffset({
+      findMany: (args) =>
+        prisma.transaction.findMany({
+          ...(args as {
+            where: Prisma.TransactionWhereInput;
+            orderBy: Prisma.TransactionOrderByWithRelationInput[];
+            skip: number;
+            take: number;
+          }),
+          include: { user: { select: { email: true, name: true } } },
+        }),
+      count: (args) => prisma.transaction.count(args as { where: Prisma.TransactionWhereInput }),
+      where,
+      orderBy,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    res.json({
+      transactions: page.items,
+      total: page.total,
+      page: page.page,
+      pageSize: page.pageSize,
+      pageCount: page.pageCount,
+    });
+  }),
+);
+
+router.get(
+  '/transactions/export',
+  wrap(async (req, res) => {
+    const { where, orderBy } = ledgerListWhere({ query: req.query as Record<string, unknown> });
+    await streamCsvExport<
+      Prisma.TransactionGetPayload<{ include: { user: { select: { email: true; name: true } } } }>
+    >(
+      res,
+      'ledger.csv',
+      ['Trader', 'Account', 'Type', 'Amount (USD)', 'Balance after (USD)', 'Note', 'When'],
+      (tx) => [
+        tx.user.email,
+        tx.accountType,
+        tx.type,
+        (tx.amount / 100).toFixed(2),
+        (tx.balanceAfter / 100).toFixed(2),
+        tx.note ?? '',
+        tx.createdAt.toISOString(),
+      ],
+      (skip, take) =>
+        prisma.transaction.findMany({
+          where: where as Prisma.TransactionWhereInput,
+          orderBy: orderBy as Prisma.TransactionOrderByWithRelationInput[],
+          skip,
+          take,
+          include: { user: { select: { email: true, name: true } } },
+        }),
+    );
+  }),
+);
+
+/* -------------------------------- referrals --------------------------------- */
+
+const REFERRAL_SEARCH_FIELDS = [
+  'referrer.email',
+  'referrer.name',
+  'referred.email',
+  'referred.name',
+] as const;
+const REFERRAL_SORT_FIELDS = ['createdAt', 'amount'] as const;
+const REFERRAL_FILTERS = { createdAt: { type: 'dateRange' } } as const;
+
+function referralsListWhere(req: { query: Record<string, unknown> }) {
+  const query = listQuerySchema.parse(req.query);
+  return {
+    query,
+    where: combineWhere(
+      buildSearchWhere(query.search, REFERRAL_SEARCH_FIELDS),
+      buildFilterWhere(REFERRAL_FILTERS, req.query as Record<string, string | undefined>),
+    ),
+    orderBy: buildOrderBy(query.sort, REFERRAL_SORT_FIELDS, { createdAt: 'desc' }),
+  };
+}
+
+const referralInclude = {
+  referrer: { select: { email: true, name: true } },
+  referred: { select: { email: true, name: true } },
+} as const;
+
+router.get(
+  '/referrals',
+  wrap(async (req, res) => {
+    const { query, where, orderBy } = referralsListWhere({ query: req.query as Record<string, unknown> });
+    const page = await paginateOffset({
+      findMany: (args) =>
+        prisma.referralCommission.findMany({
+          ...(args as {
+            where: Prisma.ReferralCommissionWhereInput;
+            orderBy: Prisma.ReferralCommissionOrderByWithRelationInput[];
+            skip: number;
+            take: number;
+          }),
+          include: referralInclude,
+        }),
+      count: (args) =>
+        prisma.referralCommission.count(args as { where: Prisma.ReferralCommissionWhereInput }),
+      where,
+      orderBy,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    res.json({
+      commissions: page.items,
+      total: page.total,
+      page: page.page,
+      pageSize: page.pageSize,
+      pageCount: page.pageCount,
+    });
+  }),
+);
+
+router.get(
+  '/referrals/export',
+  wrap(async (req, res) => {
+    const { where, orderBy } = referralsListWhere({ query: req.query as Record<string, unknown> });
+    await streamCsvExport<Prisma.ReferralCommissionGetPayload<{ include: typeof referralInclude }>>(
+      res,
+      'referral-commissions.csv',
+      ['Referrer', 'Referred trader', 'Amount (USD)', 'Rate %', 'When'],
+      (row) => [
+        row.referrer.email,
+        row.referred.email,
+        (row.amount / 100).toFixed(2),
+        (row.rate * 100).toFixed(1),
+        row.createdAt.toISOString(),
+      ],
+      (skip, take) =>
+        prisma.referralCommission.findMany({
+          where: where as Prisma.ReferralCommissionWhereInput,
+          orderBy: orderBy as Prisma.ReferralCommissionOrderByWithRelationInput[],
+          skip,
+          take,
+          include: referralInclude,
+        }),
+    );
   }),
 );
 
@@ -1425,33 +1695,89 @@ router.delete(
   }),
 );
 
+const ORDER_SEARCH_FIELDS = ['user.email', 'user.name', 'item.name', 'item.key'] as const;
+const ORDER_SORT_FIELDS = ['createdAt', 'paidCents'] as const;
+const ORDER_FILTERS = {
+  status: { type: 'enum', values: ['OWNED', 'ACTIVE', 'USED', 'EXPIRED'] },
+  createdAt: { type: 'dateRange' },
+} as const;
+
+const orderInclude = {
+  item: { select: { key: true, name: true, kind: true } },
+  user: { select: { email: true, name: true } },
+} as const;
+
+function ordersListWhere(req: { query: Record<string, unknown> }) {
+  const query = listQuerySchema.parse(req.query);
+  return {
+    query,
+    where: combineWhere(
+      buildSearchWhere(query.search, ORDER_SEARCH_FIELDS),
+      buildFilterWhere(ORDER_FILTERS, req.query as Record<string, string | undefined>),
+    ),
+    orderBy: buildOrderBy(query.sort, ORDER_SORT_FIELDS, { createdAt: 'desc' }),
+  };
+}
+
 /** What has been bought, for support and for seeing whether the shop works. */
 router.get(
   '/marketplace/orders',
   wrap(async (req, res) => {
-    const query = z
-      .object({
-        status: z.enum(['OWNED', 'ACTIVE', 'USED', 'EXPIRED']).optional(),
-        page: z.coerce.number().int().min(1).default(1),
-        pageSize: z.coerce.number().int().min(5).max(100).default(25),
-      })
-      .parse(req.query);
-    const where = query.status ? { status: query.status } : {};
+    const { query, where, orderBy } = ordersListWhere({ query: req.query as Record<string, unknown> });
+    const page = await paginateOffset({
+      findMany: (args) =>
+        prisma.inventoryItem.findMany({
+          ...(args as {
+            where: Prisma.InventoryItemWhereInput;
+            orderBy: Prisma.InventoryItemOrderByWithRelationInput[];
+            skip: number;
+            take: number;
+          }),
+          include: orderInclude,
+        }),
+      count: (args) => prisma.inventoryItem.count(args as { where: Prisma.InventoryItemWhereInput }),
+      where,
+      orderBy,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    res.json({
+      orders: page.items,
+      total: page.total,
+      page: page.page,
+      pageSize: page.pageSize,
+      pageCount: page.pageCount,
+    });
+  }),
+);
 
-    const [orders, total] = await Promise.all([
-      prisma.inventoryItem.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
-        include: {
-          item: { select: { key: true, name: true, kind: true } },
-          user: { select: { email: true, name: true } },
-        },
-      }),
-      prisma.inventoryItem.count({ where }),
-    ]);
-    res.json({ orders, total, page: query.page, pageSize: query.pageSize });
+router.get(
+  '/marketplace/orders/export',
+  wrap(async (req, res) => {
+    const { where, orderBy } = ordersListWhere({ query: req.query as Record<string, unknown> });
+    await streamCsvExport<Prisma.InventoryItemGetPayload<{ include: typeof orderInclude }>>(
+      res,
+      'marketplace-orders.csv',
+      ['Trader', 'Item', 'Kind', 'Status', 'Paid (USD)', 'Paid (points)', 'Uses left', 'Bought'],
+      (order) => [
+        order.user.email,
+        order.item.name,
+        order.item.kind,
+        order.status,
+        (order.paidCents / 100).toFixed(2),
+        String(order.paidPoints),
+        String(order.usesLeft),
+        order.createdAt.toISOString(),
+      ],
+      (skip, take) =>
+        prisma.inventoryItem.findMany({
+          where: where as Prisma.InventoryItemWhereInput,
+          orderBy: orderBy as Prisma.InventoryItemOrderByWithRelationInput[],
+          skip,
+          take,
+          include: orderInclude,
+        }),
+    );
   }),
 );
 

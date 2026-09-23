@@ -795,6 +795,116 @@ const ASSET_FILTERS = [
   },
 ];
 
+interface MarketplaceOrder {
+  id: string;
+  status: 'OWNED' | 'ACTIVE' | 'USED' | 'EXPIRED';
+  paidCents: number;
+  paidPoints: number;
+  usesLeft: number;
+  activatedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  item: { key: string; name: string; kind: string };
+  user: { email: string; name: string };
+}
+
+const ORDER_FILTERS = [
+  {
+    key: 'status',
+    label: 'Status',
+    type: 'enum' as const,
+    options: [
+      { value: 'OWNED', label: 'Owned' },
+      { value: 'ACTIVE', label: 'Active' },
+      { value: 'USED', label: 'Used' },
+      { value: 'EXPIRED', label: 'Expired' },
+    ],
+  },
+  { key: 'createdAt', label: 'Bought', type: 'dateRange' as const },
+];
+
+/** Every marketplace purchase, for support and for seeing whether the shop works. */
+export function AdminMarketplaceOrders() {
+  const columns: DataTableColumn<MarketplaceOrder>[] = [
+    {
+      key: 'user',
+      label: 'Trader',
+      render: (o) => (
+        <>
+          <span className="block text-xs font-semibold">{o.user.name}</span>
+          <span className="block text-[11px] text-slate-500">{o.user.email}</span>
+        </>
+      ),
+    },
+    {
+      key: 'item',
+      label: 'Item',
+      render: (o) => (
+        <>
+          <span className="block text-xs font-semibold">{o.item.name}</span>
+          <span className="block text-[11px] text-slate-500">
+            {o.item.kind.replace(/_/g, ' ').toLowerCase()}
+          </span>
+        </>
+      ),
+    },
+    {
+      key: 'paidCents',
+      label: 'Cost',
+      sortable: true,
+      render: (o) => (
+        <span className="tabular text-xs">
+          {o.paidCents > 0 && <span className="block font-semibold">{money(o.paidCents)}</span>}
+          {o.paidPoints > 0 && <span className="block text-[11px] text-slate-500">{o.paidPoints} pts</span>}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (o) => (
+        <>
+          <StatusPill status={o.status} />
+          {o.usesLeft > 0 && (
+            <span className="mt-1 block text-[10px] text-slate-500">{o.usesLeft} uses left</span>
+          )}
+          {o.expiresAt && (
+            <span className="block text-[10px] text-slate-500">expires {dateTime(o.expiresAt)}</span>
+          )}
+        </>
+      ),
+    },
+    {
+      key: 'createdAt',
+      label: 'Bought',
+      sortable: true,
+      align: 'right',
+      render: (o) => <span className="text-[11px] text-slate-500">{dateTime(o.createdAt)}</span>,
+    },
+  ];
+
+  return (
+    <DataTable<MarketplaceOrder>
+      title="Marketplace orders"
+      columns={columns}
+      filters={ORDER_FILTERS}
+      searchPlaceholder="Search trader or item"
+      rowKey={(o) => o.id}
+      fetchPage={async (state) => {
+        const params = new URLSearchParams({ page: String(state.page), pageSize: String(state.pageSize) });
+        if (state.sort) params.set('sort', state.sort);
+        if (state.search) params.set('search', state.search);
+        for (const [key, value] of Object.entries(state.filters)) params.set(key, value);
+        const data = await api.get<{ orders: MarketplaceOrder[]; total: number; pageCount: number }>(
+          `/admin/marketplace/orders?${params.toString()}`,
+        );
+        return { items: data.orders, total: data.total, pageCount: data.pageCount };
+      }}
+      exportPath={(params) => `/admin/marketplace/orders/export?${params.toString()}`}
+    />
+  );
+}
+
 export function AdminAssets() {
   const [reloadToken, setReloadToken] = useState(0);
   const reload = useCallback(() => setReloadToken((n) => n + 1), []);

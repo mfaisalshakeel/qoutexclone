@@ -96,7 +96,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 ### Data tables — one reusable, server-driven `DataTable`
 - [x] **Server:** a generic list endpoint helper with pagination (page + pageSize + total, and cursor for huge tables), multi-column sort, text search across configured fields, typed filters (enum multi-select, date range, number range, boolean), and CSV export of the full filtered result (streamed). Indexed queries only. Add the DB indexes needed.
 - [x] **Client:** search box with debounce, filter bar with chips, column show/hide, sortable headers, page size selector, page numbers, sticky header, row selection with bulk actions, and a row click that opens a detail drawer. State is synced to the URL (shareable, back button works), with skeleton rows while loading, and empty and error states. Cards on phones.
-- [ ] **Applied to every admin list:** users, trades, deposits, withdrawals, ledger transactions, KYC submissions, support tickets, tournaments and entries, promo codes and redemptions, referrals/commissions, marketplace orders, assets, and the audit log.
+- [x] **Applied to every admin list:** users, trades, deposits, withdrawals, ledger transactions, KYC submissions, support tickets, tournaments and entries, promo codes and redemptions, referrals/commissions, marketplace orders, assets, and the audit log.
 
 ### Management
 - [ ] **User 360 page.** Profile, balances per account, status, KYC, devices/sessions, trades, deposits, withdrawals, ledger, bonuses, referrals, tickets, notes, and audit trail. Actions: suspend, force logout, reset 2FA, adjust balance (with reason, audited), change status level, and send email.

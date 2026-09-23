@@ -172,8 +172,12 @@ test.describe('admin', () => {
       ['/admin/users', 'Traders'],
       ['/admin/kyc', 'Identity verification'],
       ['/admin/support', 'Support desk'],
+      ['/admin/trades', 'Trades'],
+      ['/admin/ledger', 'Ledger'],
+      ['/admin/referrals', 'Referrals'],
       ['/admin/tournaments', 'Tournaments'],
       ['/admin/promos', 'Promo codes'],
+      ['/admin/marketplace-orders', 'Marketplace orders'],
       ['/admin/assets', 'Markets'],
       ['/admin/email', 'Email'],
       ['/admin/audit', 'Audit log'],
@@ -482,6 +486,57 @@ test.describe('admin', () => {
     await standardContext.close();
     await proContext.close();
     await adminContext.close();
+  });
+
+  test('trades, ledger and marketplace order lists search, filter and sort', async ({ page }) => {
+    const errors = failOnPageErrors(page);
+    await login(page, ADMIN);
+
+    // trades: the seeded trader has real trade history to search and filter
+    await page.goto('/admin/trades');
+    await page.getByPlaceholder('Search trader or symbol').fill('trader@quotexclone.dev');
+    await expect(page).toHaveURL(/search=/);
+    const tradeRow = page.getByRole('row', { name: /trader@quotexclone\.dev/ }).first();
+    await expect(tradeRow).toBeVisible();
+    await page.locator('summary').filter({ hasText: 'Status' }).click();
+    await page.getByLabel('Won', { exact: true }).click();
+    await expect(page).toHaveURL(/status=WON/);
+    await expect(page.getByRole('table')).toBeVisible();
+    await page.getByRole('columnheader', { name: 'Stake' }).getByRole('button').click();
+    await expect(page).toHaveURL(/sort=stake/);
+
+    // ledger: every account here has at least one DEPOSIT entry from fundAccount
+    await page.goto('/admin/ledger');
+    await page.locator('summary').filter({ hasText: 'Type' }).click();
+    const depositOption = page.getByLabel('deposit', { exact: true });
+    await depositOption.click();
+    await expect(depositOption).toBeChecked();
+    await expect(page).toHaveURL(/type=DEPOSIT/);
+    await expect(page.getByRole('table')).toBeVisible();
+    await expect(page.getByRole('row', { name: /DEPOSIT/ }).first()).toBeVisible();
+    await page.getByRole('columnheader', { name: 'Amount' }).getByRole('button').click();
+    await expect(page).toHaveURL(/sort=amount/);
+
+    // referrals: currently no seeded commissions, so this checks the search
+    // box and empty state work rather than that a row narrows correctly
+    await page.goto('/admin/referrals');
+    await page.getByPlaceholder('Search by trader email or name').fill('nobody-matches-this@example.test');
+    await expect(page).toHaveURL(/search=/);
+    await expect(page.getByText('Nothing matches')).toBeVisible();
+
+    // marketplace orders: seeded purchases include an expired payout booster
+    await page.goto('/admin/marketplace-orders');
+    await page.getByPlaceholder('Search trader or item').fill('Payout booster');
+    await expect(page).toHaveURL(/search=/);
+    await expect(page.getByRole('table')).toBeVisible();
+    await page.locator('summary').filter({ hasText: 'Status' }).click();
+    const expiredOption = page.getByLabel('Expired', { exact: true });
+    await expiredOption.click();
+    await expect(expiredOption).toBeChecked();
+    await expect(page).toHaveURL(/status=EXPIRED/);
+    await expect(page.getByRole('row', { name: /Payout booster/ }).first()).toBeVisible();
+
+    expect(errors).toEqual([]);
   });
 
   test('a trader cannot reach the back office', async ({ page }) => {
