@@ -1,7 +1,13 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ApiError, api } from '../../lib/api';
-import { parseTableState, sortDirection, sortField, tableStateToParams, toggleSort } from '../../lib/table-query';
+import {
+  parseTableState,
+  sortDirection,
+  sortField,
+  tableStateToParams,
+  toggleSort,
+} from '../../lib/table-query';
 import { toast } from '../../store/toast';
 import { TableSkeleton } from '../Skeleton';
 
@@ -125,7 +131,9 @@ export function DataTable<T>({
 
   const visibleColumns = columns.filter((c) => !hiddenColumns.has(c.key));
 
-  const allSelected = page ? page.items.length > 0 && page.items.every((row) => selected.has(rowKey(row))) : false;
+  const allSelected = page
+    ? page.items.length > 0 && page.items.every((row) => selected.has(rowKey(row)))
+    : false;
   const toggleAll = () => {
     if (!page) return;
     setSelected(allSelected ? new Set() : new Set(page.items.map(rowKey)));
@@ -352,7 +360,9 @@ export function DataTable<T>({
       )}
 
       {renderDrawer && drawerRow && (
-        <Drawer onClose={() => setDrawerRow(null)}>{renderDrawer(drawerRow, () => setDrawerRow(null))}</Drawer>
+        <Drawer onClose={() => setDrawerRow(null)}>
+          {renderDrawer(drawerRow, () => setDrawerRow(null))}
+        </Drawer>
       )}
     </div>
   );
@@ -398,7 +408,10 @@ function ColumnPicker<T>({
           />
           <div className="absolute right-0 top-full z-30 mt-1.5 w-48 rounded-lg border border-ink-600 bg-ink-800 p-2 shadow-lg">
             {columns.map((col) => (
-              <label key={col.key} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-ink-700">
+              <label
+                key={col.key}
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-ink-700"
+              >
                 <input
                   type="checkbox"
                   checked={!hidden.has(col.key)}
@@ -420,7 +433,8 @@ function ColumnPicker<T>({
   );
 }
 
-function FilterChip({
+/** Exported so a bespoke list layout (e.g. the support inbox) can reuse the same filter UI as DataTable. */
+export function FilterChip({
   filter,
   value,
   onChange,
@@ -468,7 +482,9 @@ function FilterChip({
   const [from, to] = (value ?? '..').split('..');
   return (
     <details className="relative">
-      <summary className={`chip cursor-pointer select-none ${value ? 'bg-accent-soft text-accent' : 'bg-ink-700 text-slate-400'}`}>
+      <summary
+        className={`chip cursor-pointer select-none ${value ? 'bg-accent-soft text-accent' : 'bg-ink-700 text-slate-400'}`}
+      >
         {filter.label}
       </summary>
       <div className="absolute left-0 top-full z-30 mt-1.5 flex items-center gap-1.5 rounded-lg border border-ink-600 bg-ink-800 p-2 shadow-lg">
@@ -490,7 +506,8 @@ function FilterChip({
   );
 }
 
-function Pager({
+/** Exported so a bespoke list layout (e.g. the support inbox) can reuse the same pager as DataTable. */
+export function Pager({
   page,
   pageCount,
   pageSize,

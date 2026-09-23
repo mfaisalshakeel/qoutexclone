@@ -89,18 +89,6 @@ export async function readTicket(ticketId: string, userId: string, isAgent: bool
   return ticket;
 }
 
-export function listAllTickets(status?: string) {
-  return prisma.supportTicket.findMany({
-    where: status ? { status } : undefined,
-    orderBy: [{ unreadByAgent: 'desc' }, { lastMessageAt: 'desc' }],
-    take: 100,
-    include: {
-      user: { select: { email: true, name: true, realBalance: true } },
-      messages: { orderBy: { createdAt: 'asc' }, take: 100 },
-    },
-  });
-}
-
 export async function setTicketStatus(ticketId: string, status: 'OPEN' | 'ANSWERED' | 'CLOSED') {
   const ticket = await prisma.supportTicket.update({ where: { id: ticketId }, data: { status } });
   supportEvents.emit('ticket', ticket);

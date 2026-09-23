@@ -48,6 +48,18 @@ describe('buildOrderBy', () => {
   it('refuses a column that was not offered', () => {
     expect(() => buildOrderBy('password', ['email'], { createdAt: 'desc' })).toThrow(/Cannot sort/);
   });
+
+  it('accepts a multi-clause fallback for a standing priority order', () => {
+    const fallback = [{ unreadByAgent: 'desc' }, { lastMessageAt: 'desc' }] as const;
+    expect(buildOrderBy(undefined, ['lastMessageAt'], [...fallback])).toEqual(fallback);
+  });
+
+  it('an explicit sort replaces a multi-clause fallback entirely', () => {
+    const fallback = [{ unreadByAgent: 'desc' }, { lastMessageAt: 'desc' }] as const;
+    expect(buildOrderBy('lastMessageAt', ['lastMessageAt'], [...fallback])).toEqual([
+      { lastMessageAt: 'asc' },
+    ]);
+  });
 });
 
 describe('buildSearchWhere', () => {

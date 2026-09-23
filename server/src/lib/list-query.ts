@@ -25,18 +25,25 @@ export type SortOrder = { [field: string]: 'asc' | 'desc' };
  * the order given (the first is the primary sort). Only fields the caller
  * named are eligible — a client cannot sort by a column the endpoint never
  * offered, indexed or not.
+ *
+ * `fallback` may be more than one clause — a list with a standing priority
+ * order (support tickets unread-first, withdrawals by trader status level)
+ * needs that priority to survive as the *default*, not disappear the moment
+ * this helper is introduced. An explicit `sort` still overrides it entirely:
+ * once an admin picks a column, they get exactly that order.
  */
 export function buildOrderBy(
   sort: string | undefined,
   allowed: readonly string[],
-  fallback: SortOrder,
+  fallback: SortOrder | SortOrder[],
 ): SortOrder[] {
-  if (!sort) return [fallback];
+  const fallbackClauses = Array.isArray(fallback) ? fallback : [fallback];
+  if (!sort) return fallbackClauses;
   const clauses = sort
     .split(',')
     .map((raw) => raw.trim())
     .filter(Boolean);
-  if (clauses.length === 0) return [fallback];
+  if (clauses.length === 0) return fallbackClauses;
   return clauses.map((raw) => {
     const desc = raw.startsWith('-');
     const field = desc ? raw.slice(1) : raw;

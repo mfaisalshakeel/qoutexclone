@@ -21,7 +21,7 @@ import { marketFeed } from '../engine/feed.js';
 import { reviewKyc } from '../services/kyc.js';
 import { PROMO_KINDS, describe } from '../services/promos.js';
 import { finishTournament, leaderboard, startTournament } from '../services/tournaments.js';
-import { listAllTickets, postMessage, readTicket, setTicketStatus } from '../services/support.js';
+import { postMessage, readTicket, setTicketStatus } from '../services/support.js';
 import { SETTINGS, settings } from '../services/settings.js';
 import { mailTransportName, sendTestEmail, smtpReady } from '../services/mailer.js';
 import { previewAll } from '../services/email-preview.js';
@@ -241,7 +241,12 @@ router.get(
     const page = await paginateOffset({
       findMany: (args) =>
         prisma.deposit.findMany({
-          ...(args as { where: Prisma.DepositWhereInput; orderBy: Prisma.DepositOrderByWithRelationInput[]; skip: number; take: number }),
+          ...(args as {
+            where: Prisma.DepositWhereInput;
+            orderBy: Prisma.DepositOrderByWithRelationInput[];
+            skip: number;
+            take: number;
+          }),
           include: { user: { select: { email: true, name: true } } },
         }),
       count: (args) => prisma.deposit.count(args as { where: Prisma.DepositWhereInput }),
@@ -565,11 +570,54 @@ router.post(
 
 /* --------------------------------- support -------------------------------- */
 
+const SUPPORT_SEARCH_FIELDS = ['subject', 'user.email', 'user.name'] as const;
+const SUPPORT_SORT_FIELDS = ['lastMessageAt', 'createdAt'] as const;
+const SUPPORT_FILTERS = {
+  status: { type: 'enum', values: ['OPEN', 'ANSWERED', 'CLOSED'] },
+} as const;
+
 router.get(
   '/support',
   wrap(async (req, res) => {
-    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
-    res.json({ tickets: await listAllTickets(status) });
+    const query = listQuerySchema.parse(req.query);
+    const where = combineWhere(
+      buildSearchWhere(query.search, SUPPORT_SEARCH_FIELDS),
+      buildFilterWhere(SUPPORT_FILTERS, req.query as Record<string, string | undefined>),
+    );
+    // the pending-first queue (unread-by-agent, then most recently active) is the
+    // standing default so nothing urgent slides off page one; an explicit sort
+    // still overrides it completely.
+    const orderBy = buildOrderBy(query.sort, SUPPORT_SORT_FIELDS, [
+      { unreadByAgent: 'desc' },
+      { lastMessageAt: 'desc' },
+    ]);
+    const page = await paginateOffset({
+      findMany: (args) =>
+        prisma.supportTicket.findMany({
+          ...(args as {
+            where: Prisma.SupportTicketWhereInput;
+            orderBy: Prisma.SupportTicketOrderByWithRelationInput[];
+            skip: number;
+            take: number;
+          }),
+          include: {
+            user: { select: { email: true, name: true, realBalance: true } },
+            messages: { orderBy: { createdAt: 'asc' }, take: 100 },
+          },
+        }),
+      count: (args) => prisma.supportTicket.count(args as { where: Prisma.SupportTicketWhereInput }),
+      where,
+      orderBy,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    res.json({
+      tickets: page.items,
+      total: page.total,
+      page: page.page,
+      pageSize: page.pageSize,
+      pageCount: page.pageCount,
+    });
   }),
 );
 

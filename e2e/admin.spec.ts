@@ -185,6 +185,56 @@ test.describe('admin', () => {
     expect(errors).toEqual([]);
   });
 
+  test('support desk searches and filters the ticket list', async ({ browser }) => {
+    const traderContext = await browser.newContext();
+    const trader = await traderContext.newPage();
+    const traderErrors = failOnPageErrors(trader);
+    const creds = await register(trader, newCredentials('support'));
+    const marker = creds.email.split('@')[0];
+
+    await trader.getByRole('button', { name: 'Support chat' }).click();
+    await trader.getByPlaceholder('Subject (optional)').fill(`${marker} deposit question`);
+    await trader.getByPlaceholder('Write a message…').fill('How long does a deposit take to confirm?');
+    await trader.getByRole('button', { name: 'Send' }).click();
+    await expect(trader.getByText(`${marker} deposit question`)).toBeVisible();
+
+    await trader.getByRole('button', { name: 'New' }).click();
+    await trader.getByPlaceholder('Subject (optional)').fill(`${marker} withdrawal question`);
+    await trader.getByPlaceholder('Write a message…').fill('Why is my withdrawal still pending?');
+    await trader.getByRole('button', { name: 'Send' }).click();
+    await expect(trader.getByText(`${marker} withdrawal question`)).toBeVisible();
+    expect(traderErrors).toEqual([]);
+    await traderContext.close();
+
+    const adminContext = await browser.newContext();
+    const admin = await adminContext.newPage();
+    const errors = failOnPageErrors(admin);
+    await login(admin, ADMIN);
+    await admin.goto('/admin/support');
+    // the active thread's own header repeats the subject, so list-row matches
+    // are not unique on the page — .first() is enough to prove the row is there
+    await expect(admin.getByText(`${marker} deposit question`).first()).toBeVisible();
+    await expect(admin.getByText(`${marker} withdrawal question`).first()).toBeVisible();
+
+    // search narrows the list to the matching conversation only
+    await admin.getByPlaceholder('Search subject or trader').fill(`${marker} deposit`);
+    await expect(admin.getByText(`${marker} deposit question`).first()).toBeVisible();
+    await expect(admin.getByText(`${marker} withdrawal question`)).toHaveCount(0);
+    await admin.getByPlaceholder('Search subject or trader').fill('');
+    await expect(admin.getByText(`${marker} withdrawal question`).first()).toBeVisible();
+
+    // both new conversations are OPEN, so filtering to CLOSED hides them
+    await admin.getByText('Status', { exact: true }).click();
+    await admin.getByLabel('Closed', { exact: true }).click();
+    await expect(admin.getByText(`${marker} deposit question`)).toHaveCount(0);
+    await expect(admin.getByText(`${marker} withdrawal question`)).toHaveCount(0);
+    await admin.getByText('Clear filters ✕').click();
+    await expect(admin.getByText(`${marker} deposit question`).first()).toBeVisible();
+
+    expect(errors).toEqual([]);
+    await adminContext.close();
+  });
+
   test('a trader cannot reach the back office', async ({ page }) => {
     await register(page, newCredentials('guard'));
     await page.goto('/admin');
