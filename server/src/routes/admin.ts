@@ -1080,15 +1080,103 @@ router.patch(
   }),
 );
 
+const AUDIT_SEARCH_FIELDS = ['action', 'targetType', 'targetId', 'detail', 'actor.email'] as const;
+const AUDIT_SORT_FIELDS = ['createdAt', 'action'] as const;
+const AUDIT_FILTERS = {
+  targetType: {
+    type: 'enum',
+    // every literal used as a targetType across the admin routes — not a
+    // clean enum (case is inconsistent, e.g. "user" and "User"), but a filter
+    // has to offer exactly what a row can actually hold
+    values: [
+      'user',
+      'User',
+      'kyc',
+      'deposit',
+      'withdrawal',
+      'tournament',
+      'promo',
+      'asset',
+      'schedule',
+      'setting',
+      'payoutRule',
+      'BonusOffer',
+      'EmailMessage',
+      'MarketplaceItem',
+      'PaymentMethod',
+    ],
+  },
+  createdAt: { type: 'dateRange' },
+} as const;
+
+function auditListWhere(req: { query: Record<string, unknown> }) {
+  const query = listQuerySchema.parse(req.query);
+  return {
+    query,
+    where: combineWhere(
+      buildSearchWhere(query.search, AUDIT_SEARCH_FIELDS),
+      buildFilterWhere(AUDIT_FILTERS, req.query as Record<string, string | undefined>),
+    ),
+    orderBy: buildOrderBy(query.sort, AUDIT_SORT_FIELDS, { createdAt: 'desc' }),
+  };
+}
+
 router.get(
   '/audit',
-  wrap(async (_req, res) => {
-    const logs = await prisma.auditLog.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-      include: { actor: { select: { email: true } } },
+  wrap(async (req, res) => {
+    const { query, where, orderBy } = auditListWhere({ query: req.query as Record<string, unknown> });
+    const page = await paginateOffset({
+      findMany: (args) =>
+        prisma.auditLog.findMany({
+          ...(args as {
+            where: Prisma.AuditLogWhereInput;
+            orderBy: Prisma.AuditLogOrderByWithRelationInput[];
+            skip: number;
+            take: number;
+          }),
+          include: { actor: { select: { email: true } } },
+        }),
+      count: (args) => prisma.auditLog.count(args as { where: Prisma.AuditLogWhereInput }),
+      where,
+      orderBy,
+      page: query.page,
+      pageSize: query.pageSize,
     });
-    res.json({ logs });
+    res.json({
+      logs: page.items,
+      total: page.total,
+      page: page.page,
+      pageSize: page.pageSize,
+      pageCount: page.pageCount,
+    });
+  }),
+);
+
+router.get(
+  '/audit/export',
+  wrap(async (req, res) => {
+    const { where, orderBy } = auditListWhere({ query: req.query as Record<string, unknown> });
+    await streamCsvExport<Prisma.AuditLogGetPayload<{ include: { actor: { select: { email: true } } } }>>(
+      res,
+      'audit-log.csv',
+      ['When', 'Action', 'Target type', 'Target id', 'Detail', 'Administrator'],
+      (log) => [
+        log.createdAt.toISOString(),
+        log.action,
+        log.targetType ?? '',
+        log.targetId ?? '',
+        log.detail ?? '',
+        log.actor?.email ?? 'system',
+      ],
+      (skip, take) =>
+        prisma.auditLog.findMany({
+          where: where as Prisma.AuditLogWhereInput,
+          orderBy: orderBy as Prisma.AuditLogOrderByWithRelationInput[],
+          skip,
+          take,
+          include: { actor: { select: { email: true } } },
+        }),
+    );
   }),
 );
 

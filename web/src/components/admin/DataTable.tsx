@@ -385,8 +385,11 @@ function MobileFallbackCard<T>({ row, columns }: { row: T; columns: DataTableCol
     <dl className="space-y-1.5">
       {columns.map((col) => (
         <div key={col.key} className="flex items-baseline justify-between gap-3 text-xs">
-          <dt className="text-slate-500">{col.label}</dt>
-          <dd className="text-right">{col.render(row)}</dd>
+          <dt className="shrink-0 text-slate-500">{col.label}</dt>
+          {/* min-w-0 lets this shrink inside the flex row, so a long unbroken
+              value (raw JSON in an audit detail, say) wraps instead of
+              pushing the row past the viewport */}
+          <dd className="min-w-0 break-words text-right">{col.render(row)}</dd>
         </div>
       ))}
     </dl>

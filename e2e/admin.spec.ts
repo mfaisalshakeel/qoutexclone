@@ -354,6 +354,46 @@ test.describe('admin', () => {
     expect(errors).toEqual([]);
   });
 
+  test('audit log searches and filters by target', async ({ page }) => {
+    const errors = failOnPageErrors(page);
+    await login(page, ADMIN);
+
+    // creating a promo code writes an audit row whose detail is the code
+    // itself, a unique marker to find in the audit log below
+    const code = `E2EAUDIT${Date.now()}`;
+    await page.goto('/admin/promos');
+    await page.fill('#p-code', code);
+    await page.fill('#p-value', '10');
+    await page.fill('#p-min', '0');
+    await page.fill('#p-cap', '0');
+    await page.click('button:has-text("Create")');
+    await expect(page.getByText('Promo code created')).toBeVisible();
+
+    await page.goto('/admin/audit');
+    await page.getByPlaceholder('Search action, target or admin').fill(code);
+    await expect(page).toHaveURL(/search=/);
+    const row = page.getByRole('row', { name: new RegExp(code) }).first();
+    await expect(row).toBeVisible();
+    await expect(row).toContainText('promo.create');
+
+    // the target filter narrows it too: this row's target is a promo, not a user
+    const targetFilter = page.locator('summary').filter({ hasText: 'Target' });
+    await targetFilter.click();
+    const userOption = page.getByLabel('user', { exact: true });
+    await userOption.click();
+    await expect(userOption).toBeChecked();
+    await expect(row).toHaveCount(0);
+    await page.getByText('Clear filters ✕').click();
+    await expect(row).toBeVisible();
+
+    // the sortable When header reorders the list without erroring
+    await page.getByRole('columnheader', { name: 'When' }).getByRole('button').click();
+    await expect(page).toHaveURL(/sort=/);
+    await expect(page.getByRole('table')).toBeVisible();
+
+    expect(errors).toEqual([]);
+  });
+
   test('a trader cannot reach the back office', async ({ page }) => {
     await register(page, newCredentials('guard'));
     await page.goto('/admin');

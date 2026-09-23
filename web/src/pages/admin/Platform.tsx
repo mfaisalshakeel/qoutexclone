@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ApiError, api } from '../../lib/api';
 import { dateTime, money } from '../../lib/format';
 import { toast } from '../../store/toast';
-import { Empty, Loading, PageHead, StatusPill, Table, Td } from '../../components/admin/ui';
+import { Loading, PageHead, StatusPill } from '../../components/admin/ui';
 import { DataTable, type DataTableColumn } from '../../components/admin/DataTable';
 import type { Asset, LeaderboardRow } from '../../lib/types';
 
@@ -1125,52 +1125,97 @@ export function AdminSchedules() {
   );
 }
 
+interface AuditLog {
+  id: string;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  detail: string | null;
+  createdAt: string;
+  actor?: { email: string };
+}
+
+const AUDIT_FILTERS = [
+  {
+    key: 'targetType',
+    label: 'Target',
+    type: 'enum' as const,
+    options: [
+      { value: 'user', label: 'user' },
+      { value: 'User', label: 'User' },
+      { value: 'kyc', label: 'kyc' },
+      { value: 'deposit', label: 'deposit' },
+      { value: 'withdrawal', label: 'withdrawal' },
+      { value: 'tournament', label: 'tournament' },
+      { value: 'promo', label: 'promo' },
+      { value: 'asset', label: 'asset' },
+      { value: 'schedule', label: 'schedule' },
+      { value: 'setting', label: 'setting' },
+      { value: 'payoutRule', label: 'payoutRule' },
+      { value: 'BonusOffer', label: 'BonusOffer' },
+      { value: 'EmailMessage', label: 'EmailMessage' },
+      { value: 'MarketplaceItem', label: 'MarketplaceItem' },
+      { value: 'PaymentMethod', label: 'PaymentMethod' },
+    ],
+  },
+  { key: 'createdAt', label: 'When', type: 'dateRange' as const },
+];
+
 export function AdminAudit() {
-  const [logs, setLogs] = useState<
-    | {
-        id: string;
-        action: string;
-        targetType: string | null;
-        targetId: string | null;
-        detail: string | null;
-        createdAt: string;
-        actor?: { email: string };
-      }[]
-    | null
-  >(null);
-
-  useEffect(() => {
-    api
-      .get<{ logs: NonNullable<typeof logs> }>('/admin/audit')
-      .then(({ logs: list }) => setLogs(list))
-      .catch(() => setLogs([]));
-  }, []);
-
-  if (!logs) return <Loading />;
+  const columns: DataTableColumn<AuditLog>[] = [
+    {
+      key: 'action',
+      label: 'Action',
+      sortable: true,
+      render: (log) => <span className="font-mono text-[11px] text-accent">{log.action}</span>,
+    },
+    {
+      key: 'target',
+      label: 'Target',
+      render: (log) => (
+        <span className="text-[11px] text-slate-400">
+          {log.targetType}
+          <span className="block font-mono text-[10px] text-slate-500">{log.targetId?.slice(0, 12)}</span>
+        </span>
+      ),
+    },
+    {
+      key: 'detail',
+      label: 'Detail',
+      render: (log) => <span className="text-[11px] text-slate-400">{log.detail ?? '—'}</span>,
+    },
+    {
+      key: 'actor',
+      label: 'Administrator',
+      render: (log) => <span className="text-[11px] text-slate-500">{log.actor?.email ?? 'system'}</span>,
+    },
+    {
+      key: 'createdAt',
+      label: 'When',
+      sortable: true,
+      align: 'right',
+      render: (log) => <span className="text-[11px] text-slate-500">{dateTime(log.createdAt)}</span>,
+    },
+  ];
 
   return (
-    <>
-      <PageHead title="Audit log" subtitle="Every administrative action, newest first" />
-      {logs.length === 0 ? (
-        <Empty text="Nothing logged yet" />
-      ) : (
-        <Table head={['Action', 'Target', 'Detail', 'Administrator', 'When']}>
-          {logs.map((log) => (
-            <tr key={log.id}>
-              <Td className="font-mono text-[11px] text-accent">{log.action}</Td>
-              <Td className="text-[11px] text-slate-400">
-                {log.targetType}
-                <span className="block font-mono text-[10px] text-slate-500">
-                  {log.targetId?.slice(0, 12)}
-                </span>
-              </Td>
-              <Td className="text-[11px] text-slate-400">{log.detail ?? '—'}</Td>
-              <Td className="text-[11px] text-slate-500">{log.actor?.email ?? 'system'}</Td>
-              <Td className="text-right text-[11px] text-slate-500">{dateTime(log.createdAt)}</Td>
-            </tr>
-          ))}
-        </Table>
-      )}
-    </>
+    <DataTable<AuditLog>
+      title="Audit log"
+      columns={columns}
+      filters={AUDIT_FILTERS}
+      searchPlaceholder="Search action, target or admin"
+      rowKey={(log) => log.id}
+      fetchPage={async (state) => {
+        const params = new URLSearchParams({ page: String(state.page), pageSize: String(state.pageSize) });
+        if (state.sort) params.set('sort', state.sort);
+        if (state.search) params.set('search', state.search);
+        for (const [key, value] of Object.entries(state.filters)) params.set(key, value);
+        const data = await api.get<{ logs: AuditLog[]; total: number; pageCount: number }>(
+          `/admin/audit?${params.toString()}`,
+        );
+        return { items: data.logs, total: data.total, pageCount: data.pageCount };
+      }}
+      exportPath={(params) => `/admin/audit/export?${params.toString()}`}
+    />
   );
 }
