@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ApiError, api } from '../../lib/api';
 import {
@@ -99,14 +99,26 @@ export function DataTable<T>({
     setParams(tableStateToParams({ ...state, ...patch }), { replace: true });
   };
 
+  // a ref, not the `state` closure: a filter or sort click can land in the
+  // 300ms window while a search edit is still debouncing, and firing this
+  // timeout against the state it was *scheduled* with would clobber that
+  // click's change the moment it goes off. Reading the latest state instead
+  // means the debounced search merges onto whatever is current when it fires.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
   // the search box debounces locally; every other control updates the URL immediately
   useEffect(() => {
     const id = window.setTimeout(() => {
-      if (searchInput !== (state.search ?? '')) update({ search: searchInput || undefined, page: 1 });
+      const current = stateRef.current;
+      if (searchInput !== (current.search ?? '')) {
+        setParams(tableStateToParams({ ...current, search: searchInput || undefined, page: 1 }), {
+          replace: true,
+        });
+      }
     }, 300);
     return () => window.clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInput]);
+  }, [searchInput, setParams]);
 
   const filtersKey = JSON.stringify(state.filters);
 
