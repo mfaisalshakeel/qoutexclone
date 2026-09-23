@@ -284,6 +284,46 @@ test.describe('admin', () => {
     expect(errors).toEqual([]);
   });
 
+  test('promo code list searches, filters and shows a redemptions drawer', async ({ page }) => {
+    const errors = failOnPageErrors(page);
+    await login(page, ADMIN);
+    await page.goto('/admin/promos');
+
+    const code = `E2ESEARCH${Date.now()}`;
+    await page.fill('#p-code', code);
+    await page.fill('#p-value', '15');
+    await page.fill('#p-min', '0');
+    await page.fill('#p-cap', '0');
+    await page.click('button:has-text("Create")');
+    await expect(page.getByText('Promo code created')).toBeVisible();
+
+    // search narrows the list to just this code — wait for it to actually land
+    // in the URL before touching another control, the same hazard the
+    // tournament list's filter race turned out to be
+    await page.getByPlaceholder('Search by code').fill(code);
+    await expect(page).toHaveURL(/search=/);
+    const row = page.getByRole('row', { name: new RegExp(code) }).first();
+    await expect(row).toBeVisible();
+
+    // the kind filter narrows it too: this one is a deposit-bonus code, not a fixed credit
+    await page.getByText('Kind', { exact: true }).click();
+    const fixedCreditOption = page.getByLabel('Fixed credit', { exact: true });
+    await fixedCreditOption.click();
+    await expect(fixedCreditOption).toBeChecked();
+    await expect(row).toHaveCount(0);
+    await page.getByText('Clear filters ✕').click();
+    await expect(row).toBeVisible();
+    // close the still-open filter dropdown, or it overlaps the row below it
+    await page.getByText('Kind', { exact: true }).click();
+
+    // clicking the row opens its redemptions, empty until someone uses the code
+    await row.getByText(code).click();
+    await expect(page.getByText('No redemptions match')).toBeVisible();
+    await page.getByRole('button', { name: 'Close ✕' }).click();
+
+    expect(errors).toEqual([]);
+  });
+
   test('a trader cannot reach the back office', async ({ page }) => {
     await register(page, newCredentials('guard'));
     await page.goto('/admin');

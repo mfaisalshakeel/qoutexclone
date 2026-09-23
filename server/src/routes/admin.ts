@@ -451,11 +451,45 @@ router.post(
 
 /* ------------------------------- promo codes ------------------------------ */
 
+const PROMO_SEARCH_FIELDS = ['code'] as const;
+const PROMO_SORT_FIELDS = ['createdAt', 'redemptions', 'value', 'expiresAt'] as const;
+const PROMO_FILTERS = {
+  kind: { type: 'enum', values: PROMO_KINDS },
+  enabled: { type: 'boolean' },
+} as const;
+
 router.get(
   '/promos',
-  wrap(async (_req, res) => {
-    const promos = await prisma.promoCode.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });
-    res.json({ promos: promos.map((promo) => ({ ...promo, description: describe(promo) })) });
+  wrap(async (req, res) => {
+    const query = listQuerySchema.parse(req.query);
+    const where = combineWhere(
+      buildSearchWhere(query.search, PROMO_SEARCH_FIELDS),
+      buildFilterWhere(PROMO_FILTERS, req.query as Record<string, string | undefined>),
+    );
+    const orderBy = buildOrderBy(query.sort, PROMO_SORT_FIELDS, { createdAt: 'desc' });
+    const page = await paginateOffset({
+      findMany: (args) =>
+        prisma.promoCode.findMany(
+          args as {
+            where: Prisma.PromoCodeWhereInput;
+            orderBy: Prisma.PromoCodeOrderByWithRelationInput[];
+            skip: number;
+            take: number;
+          },
+        ),
+      count: (args) => prisma.promoCode.count(args as { where: Prisma.PromoCodeWhereInput }),
+      where,
+      orderBy,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    res.json({
+      promos: page.items.map((promo) => ({ ...promo, description: describe(promo) })),
+      total: page.total,
+      page: page.page,
+      pageSize: page.pageSize,
+      pageCount: page.pageCount,
+    });
   }),
 );
 
@@ -499,6 +533,43 @@ router.patch(
     const promo = await prisma.promoCode.update({ where: { id: req.params.id }, data: body });
     await audit(req.user!.id, 'promo.update', 'promo', promo.id, JSON.stringify(body));
     res.json({ promo: { ...promo, description: describe(promo) } });
+  }),
+);
+
+const PROMO_REDEMPTION_SEARCH_FIELDS = ['user.email', 'user.name'] as const;
+
+router.get(
+  '/promos/:id/redemptions',
+  wrap(async (req, res) => {
+    const query = listQuerySchema.parse(req.query);
+    const where = combineWhere(
+      { promoCodeId: req.params.id },
+      buildSearchWhere(query.search, PROMO_REDEMPTION_SEARCH_FIELDS),
+    );
+    const page = await paginateOffset({
+      findMany: (args) =>
+        prisma.promoRedemption.findMany({
+          ...(args as {
+            where: Prisma.PromoRedemptionWhereInput;
+            orderBy: Prisma.PromoRedemptionOrderByWithRelationInput[];
+            skip: number;
+            take: number;
+          }),
+          include: { user: { select: { email: true, name: true } } },
+        }),
+      count: (args) => prisma.promoRedemption.count(args as { where: Prisma.PromoRedemptionWhereInput }),
+      where,
+      orderBy: [{ createdAt: 'desc' }],
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    res.json({
+      redemptions: page.items,
+      total: page.total,
+      page: page.page,
+      pageSize: page.pageSize,
+      pageCount: page.pageCount,
+    });
   }),
 );
 

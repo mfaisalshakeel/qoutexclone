@@ -467,18 +467,22 @@ function TournamentLeaderboardDrawer({ tournament }: { tournament: AdminTourname
   );
 }
 
+const PROMO_FILTERS = [
+  {
+    key: 'kind',
+    label: 'Kind',
+    type: 'enum' as const,
+    options: [
+      { value: 'DEPOSIT_BONUS_PCT', label: 'Deposit bonus %' },
+      { value: 'FIXED_CREDIT', label: 'Fixed credit' },
+    ],
+  },
+];
+
 export function AdminPromos() {
-  const [rows, setRows] = useState<Promo[] | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  const reload = useCallback(() => setReloadToken((n) => n + 1), []);
   const [form, setForm] = useState({ code: '', value: 30, minDeposit: 0, maxBonus: 0, maxRedemptions: 0 });
-
-  const load = useCallback(async () => {
-    const { promos } = await api.get<{ promos: Promo[] }>('/admin/promos');
-    setRows(promos);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const create = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -492,7 +496,7 @@ export function AdminPromos() {
         maxRedemptions: form.maxRedemptions,
       });
       setForm({ ...form, code: '' });
-      await load();
+      reload();
       toast.success('Promo code created');
     } catch (err) {
       toast.error('Could not create', err instanceof ApiError ? err.message : undefined);
@@ -502,18 +506,73 @@ export function AdminPromos() {
   const toggle = async (promo: Promo) => {
     try {
       await api.patch(`/admin/promos/${promo.id}`, { enabled: !promo.enabled });
-      await load();
+      reload();
     } catch (err) {
       toast.error('Update failed', err instanceof ApiError ? err.message : undefined);
     }
   };
 
+  const columns: DataTableColumn<Promo>[] = [
+    {
+      key: 'code',
+      label: 'Code',
+      render: (promo) => <span className="font-mono text-xs font-semibold">{promo.code}</span>,
+    },
+    {
+      key: 'description',
+      label: 'Offer',
+      render: (promo) => <span className="text-[11px] text-slate-400">{promo.description}</span>,
+    },
+    {
+      key: 'redemptions',
+      label: 'Redeemed',
+      sortable: true,
+      render: (promo) => (
+        <span className="tabular text-xs">
+          {promo.redemptions}
+          {promo.maxRedemptions > 0 ? ` / ${promo.maxRedemptions}` : ''}
+        </span>
+      ),
+    },
+    {
+      key: 'expiresAt',
+      label: 'Expires',
+      sortable: true,
+      render: (promo) => (
+        <span className="text-[11px] text-slate-500">
+          {promo.expiresAt ? dateTime(promo.expiresAt) : 'no expiry'}
+        </span>
+      ),
+    },
+    {
+      key: 'state',
+      label: 'State',
+      render: (promo) => <StatusPill status={promo.enabled ? 'active' : 'closed'} />,
+    },
+    {
+      key: 'actions',
+      label: 'Action',
+      align: 'right',
+      render: (promo) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            void toggle(promo);
+          }}
+          className="btn-ghost !px-3 !py-1.5 text-xs"
+        >
+          {promo.enabled ? 'Disable' : 'Enable'}
+        </button>
+      ),
+    },
+  ];
+
   return (
     <>
-      <PageHead
-        title="Promo codes"
-        subtitle="Deposit bonuses credited automatically when a payment confirms"
-      />
+      {/* DataTable below owns the page's one heading; this is a lead-in, not a second h1 */}
+      <p className="mb-4 text-xs text-slate-500">
+        Deposit bonuses credited automatically when a payment confirms
+      </p>
 
       <form onSubmit={create} className="card mb-4 grid gap-3 p-4 sm:grid-cols-5">
         <div>
@@ -576,36 +635,148 @@ export function AdminPromos() {
         </div>
       </form>
 
-      {!rows ? (
-        <Loading />
-      ) : rows.length === 0 ? (
-        <Empty text="No promo codes yet" />
-      ) : (
-        <Table head={['Code', 'Offer', 'Redeemed', 'Created', 'State', 'Action']}>
-          {rows.map((promo) => (
-            <tr key={promo.id}>
-              <Td className="font-mono text-xs font-semibold">{promo.code}</Td>
-              <Td className="text-[11px] text-slate-400">{promo.description}</Td>
-              <Td className="tabular text-xs">
-                {promo.redemptions}
-                {promo.maxRedemptions > 0 ? ` / ${promo.maxRedemptions}` : ''}
-              </Td>
-              <Td className="text-[11px] text-slate-500">
-                {promo.expiresAt ? dateTime(promo.expiresAt) : 'no expiry'}
-              </Td>
-              <Td>
-                <StatusPill status={promo.enabled ? 'active' : 'closed'} />
-              </Td>
-              <Td className="text-right">
-                <button onClick={() => void toggle(promo)} className="btn-ghost !px-3 !py-1.5 text-xs">
-                  {promo.enabled ? 'Disable' : 'Enable'}
-                </button>
-              </Td>
-            </tr>
-          ))}
-        </Table>
-      )}
+      <DataTable<Promo>
+        title="Promo codes"
+        columns={columns}
+        filters={PROMO_FILTERS}
+        searchPlaceholder="Search by code"
+        rowKey={(promo) => promo.id}
+        reloadToken={reloadToken}
+        fetchPage={async (state) => {
+          const params = new URLSearchParams({ page: String(state.page), pageSize: String(state.pageSize) });
+          if (state.sort) params.set('sort', state.sort);
+          if (state.search) params.set('search', state.search);
+          for (const [key, value] of Object.entries(state.filters)) params.set(key, value);
+          const data = await api.get<{ promos: Promo[]; total: number; pageCount: number }>(
+            `/admin/promos?${params.toString()}`,
+          );
+          return { items: data.promos, total: data.total, pageCount: data.pageCount };
+        }}
+        renderDrawer={(promo) => <PromoRedemptionsDrawer promo={promo} />}
+      />
     </>
+  );
+}
+
+interface PromoRedemptionRow {
+  id: string;
+  userId: string;
+  depositId: string | null;
+  amount: number;
+  createdAt: string;
+  user: { email: string; name: string };
+}
+
+function PromoRedemptionsDrawer({ promo }: { promo: Promo }) {
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const [result, setResult] = useState<{
+    items: PromoRedemptionRow[];
+    total: number;
+    pageCount: number;
+  } | null>(null);
+  const [error, setError] = useState('');
+
+  // the search box debounces locally; a change resets to the first page
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      if (searchInput !== search) {
+        setSearch(searchInput);
+        setPage(1);
+      }
+    }, 300);
+    return () => window.clearTimeout(id);
+  }, [searchInput, search]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setError('');
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    if (search) params.set('search', search);
+    api
+      .get<{ redemptions: PromoRedemptionRow[]; total: number; pageCount: number }>(
+        `/admin/promos/${promo.id}/redemptions?${params.toString()}`,
+      )
+      .then((data) => {
+        if (!cancelled) setResult({ items: data.redemptions, total: data.total, pageCount: data.pageCount });
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof ApiError ? err.message : 'Could not load redemptions');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [promo.id, page, search]);
+
+  return (
+    <div>
+      <h2 className="pr-16 font-mono text-sm font-bold">{promo.code}</h2>
+      <p className="mt-0.5 text-xs text-slate-500">{promo.description}</p>
+      <p className="mt-1.5 flex items-center gap-2">
+        <StatusPill status={promo.enabled ? 'active' : 'closed'} />
+        <span className="text-[11px] text-slate-500">
+          {promo.redemptions}
+          {promo.maxRedemptions > 0 ? ` / ${promo.maxRedemptions}` : ''} redeemed
+        </span>
+      </p>
+
+      <input
+        value={searchInput}
+        onChange={(e) => setSearchInput(e.target.value)}
+        placeholder="Search by trader name or email"
+        className="field mt-4 !py-2 !text-xs"
+      />
+
+      {error ? (
+        <div className="mt-4 rounded-lg border border-ink-600 p-4 text-center">
+          <p className="text-xs text-slate-400">{error}</p>
+        </div>
+      ) : !result ? (
+        <p className="mt-4 text-center text-xs text-slate-500">Loading…</p>
+      ) : result.items.length === 0 ? (
+        <p className="mt-4 text-center text-xs text-slate-500">No redemptions match</p>
+      ) : (
+        <>
+          <ol className="mt-4 space-y-2">
+            {result.items.map((row) => (
+              <li key={row.id} className="flex items-center gap-3 text-xs">
+                <span className="min-w-0 flex-1 truncate">
+                  {row.user.name}
+                  <span className="block text-[10px] text-slate-500">{row.user.email}</span>
+                </span>
+                <span className="tabular text-up">{money(row.amount)}</span>
+                <span className="w-24 text-right text-[10px] text-slate-500">{dateTime(row.createdAt)}</span>
+              </li>
+            ))}
+          </ol>
+          {result.pageCount > 1 && (
+            <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500">
+              <span>
+                Page {page} of {result.pageCount} · {result.total} redemptions
+              </span>
+              <span className="flex gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="btn-ghost !px-2.5 !py-1 text-xs disabled:opacity-40"
+                >
+                  ‹
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(result.pageCount, p + 1))}
+                  disabled={page >= result.pageCount}
+                  className="btn-ghost !px-2.5 !py-1 text-xs disabled:opacity-40"
+                >
+                  ›
+                </button>
+              </span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
