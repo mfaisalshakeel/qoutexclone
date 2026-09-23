@@ -324,6 +324,36 @@ test.describe('admin', () => {
     expect(errors).toEqual([]);
   });
 
+  test('markets list searches, filters by class and sorts by payout', async ({ page }) => {
+    const errors = failOnPageErrors(page);
+    await login(page, ADMIN);
+    await page.goto('/admin/assets');
+
+    // search narrows the list to the one currency pair used across this suite
+    await page.getByPlaceholder('Search symbol or name').fill('EURUSD_OTC');
+    await expect(page).toHaveURL(/search=/);
+    const row = page.getByRole('row', { name: /EUR\/USD/ }).first();
+    await expect(row).toBeVisible();
+
+    // the class filter narrows it too: EUR/USD is a currency pair, not crypto
+    await page.getByText('Class', { exact: true }).click();
+    const cryptoOption = page.getByLabel('Crypto', { exact: true });
+    await cryptoOption.click();
+    await expect(cryptoOption).toBeChecked();
+    await expect(row).toHaveCount(0);
+    await page.getByText('Clear filters ✕').click();
+    await expect(row).toBeVisible();
+    // close the still-open filter dropdown, or it overlaps the row below it
+    await page.getByText('Class', { exact: true }).click();
+
+    // clicking the sortable Payout header reorders the list without erroring
+    await page.getByRole('columnheader', { name: 'Payout' }).getByRole('button').click();
+    await expect(page).toHaveURL(/sort=payoutPct/);
+    await expect(page.getByRole('table')).toBeVisible();
+
+    expect(errors).toEqual([]);
+  });
+
   test('a trader cannot reach the back office', async ({ page }) => {
     await register(page, newCredentials('guard'));
     await page.goto('/admin');

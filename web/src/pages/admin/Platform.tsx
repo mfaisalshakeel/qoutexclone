@@ -780,142 +780,146 @@ function PromoRedemptionsDrawer({ promo }: { promo: Promo }) {
   );
 }
 
+const ASSET_FILTERS = [
+  {
+    key: 'assetClass',
+    label: 'Class',
+    type: 'enum' as const,
+    options: [
+      { value: 'CURRENCY', label: 'Currency' },
+      { value: 'CRYPTO', label: 'Crypto' },
+      { value: 'COMMODITY', label: 'Commodity' },
+      { value: 'STOCK', label: 'Stock' },
+      { value: 'INDEX', label: 'Index' },
+    ],
+  },
+];
+
 export function AdminAssets() {
-  const [rows, setRows] = useState<AdminAsset[] | null>(null);
-  const [assetClass, setAssetClass] = useState<string>('ALL');
-  const [search, setSearch] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (assetClass !== 'ALL') params.set('assetClass', assetClass);
-      if (search) params.set('search', search);
-      const { assets } = await api.get<{ assets: AdminAsset[] }>(`/admin/assets?${params}`);
-      setRows(assets);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not load markets');
-    }
-  }, [assetClass, search]);
-
-  useEffect(() => {
-    const id = window.setTimeout(() => void load(), 200);
-    return () => window.clearTimeout(id);
-  }, [load]);
+  const [reloadToken, setReloadToken] = useState(0);
+  const reload = useCallback(() => setReloadToken((n) => n + 1), []);
 
   const patch = async (id: string, data: Record<string, unknown>, message: string) => {
     try {
       await api.patch(`/admin/assets/${id}`, data);
-      await load();
+      reload();
       toast.success(message);
     } catch (err) {
       toast.error('Update failed', err instanceof ApiError ? err.message : undefined);
     }
   };
 
-  const CLASSES = ['ALL', 'CURRENCY', 'CRYPTO', 'COMMODITY', 'STOCK', 'INDEX'];
+  const columns: DataTableColumn<AdminAsset>[] = [
+    {
+      key: 'symbol',
+      label: 'Market',
+      sortable: true,
+      render: (asset) => (
+        <>
+          <span className="block text-xs font-semibold">
+            {asset.pair}
+            {asset.isOtc && <span className="chip ml-2 bg-accent-soft text-accent">OTC</span>}
+          </span>
+          <span className="block text-[11px] text-slate-500">
+            {asset.symbol} · {asset.assetClass.toLowerCase()}
+          </span>
+        </>
+      ),
+    },
+    {
+      key: 'price',
+      label: 'Price',
+      render: (asset) => <span className="tabular text-xs">{asset.price?.toLocaleString() ?? '—'}</span>,
+    },
+    {
+      key: 'payoutPct',
+      label: 'Payout',
+      sortable: true,
+      render: (asset) => <span className="tabular text-xs font-semibold text-up">{asset.payoutPct}%</span>,
+    },
+    {
+      key: 'minStake',
+      label: 'Stake range',
+      sortable: true,
+      render: (asset) => (
+        <span className="tabular text-[11px] text-slate-400">
+          {money(asset.minStake)} – {money(asset.maxStake)}
+        </span>
+      ),
+    },
+    {
+      key: 'session',
+      label: 'Session',
+      render: (asset) => (
+        <>
+          <StatusPill status={asset.isOpen ? 'open' : 'closed'} />
+          <span className="mt-1 block text-[10px] text-slate-500">
+            {asset.schedule ? asset.schedule.hours : '24/7'}
+          </span>
+          {!asset.isOpen && asset.nextOpen && (
+            <span className="block text-[10px] text-slate-500">opens {dateTime(asset.nextOpen)}</span>
+          )}
+        </>
+      ),
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      align: 'right',
+      render: (asset) => (
+        <span className="flex justify-end gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const raw = window.prompt(`Payout % for ${asset.pair}`, String(asset.payoutPct));
+              const value = Number(raw);
+              if (raw && Number.isFinite(value)) {
+                void patch(asset.id, { payoutPct: Math.round(value) }, 'Payout updated');
+              }
+            }}
+            className="btn-ghost !px-3 !py-1.5 text-xs"
+          >
+            Payout
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              void patch(
+                asset.id,
+                { enabled: !asset.enabled },
+                asset.enabled ? 'Market delisted' : 'Market listed',
+              );
+            }}
+            className="btn-ghost !px-3 !py-1.5 text-xs"
+          >
+            {asset.enabled ? 'Delist' : 'List'}
+          </button>
+        </span>
+      ),
+    },
+  ];
 
   return (
-    <>
-      <PageHead
-        title="Markets"
-        subtitle={rows ? `${rows.length} markets · payouts, stake limits and sessions` : undefined}
-        action={
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search symbol or name"
-            className="field !w-56 !py-2 !text-xs"
-          />
-        }
-      />
-
-      <div className="mb-3 flex gap-1 overflow-x-auto rounded-lg border border-ink-600 bg-ink-800 p-1">
-        {CLASSES.map((option) => (
-          <button
-            key={option}
-            onClick={() => setAssetClass(option)}
-            className={`whitespace-nowrap rounded-md px-3 py-1.5 text-[11px] font-semibold capitalize transition ${
-              assetClass === option ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            {option.toLowerCase()}
-          </button>
-        ))}
-      </div>
-
-      {error ? (
-        <div className="card p-8 text-center">
-          <p className="text-sm text-slate-300">{error}</p>
-          <button onClick={() => void load()} className="btn-ghost mt-3 text-xs">
-            Try again
-          </button>
-        </div>
-      ) : !rows ? (
-        <Loading />
-      ) : rows.length === 0 ? (
-        <Empty text="No markets match" />
-      ) : (
-        <Table head={['Market', 'Price', 'Payout', 'Stake range', 'Session', 'Actions']}>
-          {rows.map((asset) => (
-            <tr key={asset.id}>
-              <Td>
-                <span className="block text-xs font-semibold">
-                  {asset.pair}
-                  {asset.isOtc && <span className="chip ml-2 bg-accent-soft text-accent">OTC</span>}
-                </span>
-                <span className="block text-[11px] text-slate-500">
-                  {asset.symbol} · {asset.assetClass.toLowerCase()}
-                </span>
-              </Td>
-              <Td className="tabular text-xs">{asset.price?.toLocaleString() ?? '—'}</Td>
-              <Td className="tabular text-xs font-semibold text-up">{asset.payoutPct}%</Td>
-              <Td className="tabular text-[11px] text-slate-400">
-                {money(asset.minStake)} – {money(asset.maxStake)}
-              </Td>
-              <Td>
-                <StatusPill status={asset.isOpen ? 'open' : 'closed'} />
-                <span className="mt-1 block text-[10px] text-slate-500">
-                  {asset.schedule ? asset.schedule.hours : '24/7'}
-                </span>
-                {!asset.isOpen && asset.nextOpen && (
-                  <span className="block text-[10px] text-slate-500">opens {dateTime(asset.nextOpen)}</span>
-                )}
-              </Td>
-              <Td className="text-right">
-                <span className="flex justify-end gap-2">
-                  <button
-                    onClick={() => {
-                      const raw = window.prompt(`Payout % for ${asset.pair}`, String(asset.payoutPct));
-                      const value = Number(raw);
-                      if (raw && Number.isFinite(value)) {
-                        void patch(asset.id, { payoutPct: Math.round(value) }, 'Payout updated');
-                      }
-                    }}
-                    className="btn-ghost !px-3 !py-1.5 text-xs"
-                  >
-                    Payout
-                  </button>
-                  <button
-                    onClick={() =>
-                      void patch(
-                        asset.id,
-                        { enabled: !asset.enabled },
-                        asset.enabled ? 'Market delisted' : 'Market listed',
-                      )
-                    }
-                    className="btn-ghost !px-3 !py-1.5 text-xs"
-                  >
-                    {asset.enabled ? 'Delist' : 'List'}
-                  </button>
-                </span>
-              </Td>
-            </tr>
-          ))}
-        </Table>
-      )}
-    </>
+    <DataTable<AdminAsset>
+      title="Markets"
+      columns={columns}
+      filters={ASSET_FILTERS}
+      searchPlaceholder="Search symbol or name"
+      rowKey={(asset) => asset.id}
+      reloadToken={reloadToken}
+      defaultPageSize={100}
+      pageSizeOptions={[25, 50, 100, 200]}
+      fetchPage={async (state) => {
+        const params = new URLSearchParams({ page: String(state.page), pageSize: String(state.pageSize) });
+        if (state.sort) params.set('sort', state.sort);
+        if (state.search) params.set('search', state.search);
+        for (const [key, value] of Object.entries(state.filters)) params.set(key, value);
+        const data = await api.get<{ assets: AdminAsset[]; total: number; pageCount: number }>(
+          `/admin/assets?${params.toString()}`,
+        );
+        return { items: data.assets, total: data.total, pageCount: data.pageCount };
+      }}
+    />
   );
 }
 

@@ -1008,24 +1008,42 @@ router.post(
 
 /* --------------------------------- assets -------------------------------- */
 
+const ASSET_SEARCH_FIELDS = ['symbol', 'name', 'pair'] as const;
+const ASSET_SORT_FIELDS = ['symbol', 'payoutPct', 'minStake', 'maxStake', 'sortOrder'] as const;
+const ASSET_FILTERS = {
+  assetClass: { type: 'enum', values: ['CURRENCY', 'CRYPTO', 'COMMODITY', 'STOCK', 'INDEX'] },
+} as const;
+
 router.get(
   '/assets',
   wrap(async (req, res) => {
-    const query = z
-      .object({ assetClass: z.string().optional(), search: z.string().max(60).optional() })
-      .parse(req.query);
-
-    const assets = await prisma.asset.findMany({
-      where: {
-        ...(query.assetClass ? { assetClass: query.assetClass } : {}),
-        ...(query.search
-          ? { OR: [{ symbol: { contains: query.search } }, { name: { contains: query.search } }] }
-          : {}),
-      },
-      orderBy: { sortOrder: 'asc' },
+    // pageSize defaults generously — the market catalogue is small and a
+    // caller that never adopts pagination (the OTC engine's market picker)
+    // expects to still get the whole thing back in one page, as it always has
+    const query = listQuerySchema.parse({ pageSize: '200', ...req.query });
+    const where = combineWhere(
+      buildSearchWhere(query.search, ASSET_SEARCH_FIELDS),
+      buildFilterWhere(ASSET_FILTERS, req.query as Record<string, string | undefined>),
+    );
+    const orderBy = buildOrderBy(query.sort, ASSET_SORT_FIELDS, { sortOrder: 'asc' });
+    const page = await paginateOffset({
+      findMany: (args) =>
+        prisma.asset.findMany(
+          args as {
+            where: Prisma.AssetWhereInput;
+            orderBy: Prisma.AssetOrderByWithRelationInput[];
+            skip: number;
+            take: number;
+          },
+        ),
+      count: (args) => prisma.asset.count(args as { where: Prisma.AssetWhereInput }),
+      where,
+      orderBy,
+      page: query.page,
+      pageSize: query.pageSize,
     });
     res.json({
-      assets: assets.map((asset) => {
+      assets: page.items.map((asset) => {
         const session = marketHours.stateFor(asset.scheduleId);
         return {
           ...asset,
@@ -1035,6 +1053,10 @@ router.get(
           schedule: marketHours.describe(asset.scheduleId),
         };
       }),
+      total: page.total,
+      page: page.page,
+      pageSize: page.pageSize,
+      pageCount: page.pageCount,
     });
   }),
 );
