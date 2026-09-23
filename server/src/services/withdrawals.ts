@@ -21,6 +21,7 @@ import {
 } from './payments.js';
 import type { PaymentMethod } from '@prisma/client';
 import { startOfDay } from './responsible.js';
+import { levelFor, statusConfig, type StatusLevel } from './status.js';
 
 export const withdrawalEvents = new EventEmitter();
 
@@ -408,4 +409,21 @@ export function listWithdrawals(userId: string, limit = 50) {
     orderBy: { createdAt: 'desc' },
     take: Math.min(limit, 200),
   });
+}
+
+/**
+ * The pending queue's standing order: a higher trader status level is served
+ * first, and within a level the oldest request goes first. This isn't a
+ * database column — it's derived from the trader's lifetime deposits and the
+ * admin-configurable status thresholds — so it can't be a Prisma `orderBy`
+ * and is computed and sorted here instead. Only ever applied to the pending
+ * queue; a decided withdrawal is history, in the order it happened.
+ */
+export function priorityOrder<T extends { createdAt: Date; user: { totalDeposited: number } }>(
+  rows: T[],
+): (T & { level: StatusLevel })[] {
+  const config = statusConfig();
+  return rows
+    .map((row) => ({ ...row, level: levelFor(row.user.totalDeposited, config) }))
+    .sort((a, b) => b.level.priority - a.level.priority || a.createdAt.getTime() - b.createdAt.getTime());
 }

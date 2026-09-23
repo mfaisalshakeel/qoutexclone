@@ -1,33 +1,51 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ApiError, api } from '../../lib/api';
 import { dateTime, money, shortHash } from '../../lib/format';
 import { toast } from '../../store/toast';
-import { Empty, Loading, PageHead, StatusPill, Table, Td } from '../../components/admin/ui';
+import { StatusPill } from '../../components/admin/ui';
 import { DataTable, type DataTableColumn } from '../../components/admin/DataTable';
 import type { Deposit, Withdrawal } from '../../lib/types';
-
-const FILTERS = ['ALL', 'PENDING', 'COMPLETED', 'REJECTED'] as const;
 
 /** A withdrawal as the back office sees it, with the trader's status level. */
 interface AdminWithdrawal extends Withdrawal {
   level?: { id: string; name: string; priority: number };
 }
 
+const WITHDRAWAL_FILTERS = [
+  {
+    key: 'status',
+    label: 'Status',
+    type: 'enum' as const,
+    options: [
+      { value: 'PENDING', label: 'Pending' },
+      { value: 'APPROVED', label: 'Approved' },
+      { value: 'PROCESSING', label: 'Processing' },
+      { value: 'COMPLETED', label: 'Completed' },
+      { value: 'REJECTED', label: 'Rejected' },
+      { value: 'CANCELLED', label: 'Cancelled' },
+    ],
+  },
+  {
+    key: 'currency',
+    label: 'Currency',
+    type: 'enum' as const,
+    options: [
+      { value: 'BTC', label: 'BTC' },
+      { value: 'ETH', label: 'ETH' },
+      { value: 'USDT', label: 'USDT' },
+      { value: 'USD', label: 'USD' },
+    ],
+  },
+  { key: 'createdAt', label: 'Requested', type: 'dateRange' as const },
+];
+
 export function AdminWithdrawals() {
-  const [rows, setRows] = useState<AdminWithdrawal[] | null>(null);
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]>('ALL');
+  const [reloadToken, setReloadToken] = useState(0);
+  const reload = useCallback(() => setReloadToken((n) => n + 1), []);
+  const [pending, setPending] = useState<{ count: number; amount: number } | null>(null);
   // one free-text note per row, kept until the row is acted on or reloaded —
   // a reviewer types it once and it applies to whichever button they press
   const [notes, setNotes] = useState<Record<string, string>>({});
-
-  const load = useCallback(async () => {
-    const { withdrawals } = await api.get<{ withdrawals: AdminWithdrawal[] }>('/admin/withdrawals');
-    setRows(withdrawals);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const act = async (id: string, action: 'approve' | 'reject') => {
     const note = notes[id]?.trim();
@@ -45,97 +63,138 @@ export function AdminWithdrawals() {
         delete next[id];
         return next;
       });
-      await load();
+      reload();
       toast.success(action === 'approve' ? 'Payout sent' : 'Withdrawal rejected, funds returned');
     } catch (err) {
       toast.error('Action failed', err instanceof ApiError ? err.message : undefined);
     }
   };
 
-  if (!rows) return <Loading />;
-  const visible = filter === 'ALL' ? rows : rows.filter((r) => r.status === filter);
-  const pendingTotal = rows.filter((r) => r.status === 'PENDING').reduce((sum, r) => sum + r.amount, 0);
+  const columns: DataTableColumn<AdminWithdrawal>[] = [
+    {
+      key: 'user',
+      label: 'Trader',
+      render: (w) => (
+        <>
+          <span className="block text-xs font-semibold">{w.user?.name ?? '—'}</span>
+          <span className="block text-[11px] text-slate-500">{w.user?.email}</span>
+          <span className="block text-[11px] text-slate-500">
+            deposited {money(w.user?.totalDeposited ?? 0)}
+          </span>
+          {/* the pending queue is ordered by this, so the reason a row sits
+              where it does is on the row */}
+          {w.level && w.level.priority > 0 && (
+            <span className="chip mt-1 bg-accent/15 text-accent">{w.level.name}</span>
+          )}
+        </>
+      ),
+    },
+    {
+      key: 'amount',
+      label: 'Amount',
+      sortable: true,
+      render: (w) => (
+        <>
+          <span className="tabular block text-xs font-semibold">{money(w.amount)}</span>
+          <span className="tabular block text-[11px] text-slate-500">fee {money(w.fee)}</span>
+        </>
+      ),
+    },
+    {
+      key: 'address',
+      label: 'Destination',
+      render: (w) => (
+        <>
+          <span className="block text-xs">
+            {w.cryptoAmount} {w.currency}
+          </span>
+          <span className="block font-mono text-[10px] text-slate-500">{w.address}</span>
+          <span className="block text-[10px] text-slate-500">{w.networkLabel}</span>
+          {w.txHash && <span className="block font-mono text-[10px] text-accent">{shortHash(w.txHash)}</span>}
+        </>
+      ),
+    },
+    {
+      key: 'createdAt',
+      label: 'Requested',
+      sortable: true,
+      render: (w) => <span className="text-[11px] text-slate-500">{dateTime(w.createdAt)}</span>,
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (w) => (
+        <>
+          <StatusPill status={w.status} />
+          {w.adminNote && <span className="mt-1 block text-[10px] text-slate-500">{w.adminNote}</span>}
+        </>
+      ),
+    },
+    {
+      key: 'actions',
+      label: 'Action',
+      align: 'right',
+      render: (w) =>
+        w.status === 'PENDING' ? (
+          <div className="flex flex-col items-end gap-1.5">
+            <input
+              aria-label={`Note for ${w.user?.name ?? 'this withdrawal'}`}
+              value={notes[w.id] ?? ''}
+              onChange={(e) => setNotes((current) => ({ ...current, [w.id]: e.target.value }))}
+              placeholder="Note (required to reject)"
+              className="field !py-1 !text-[11px]"
+            />
+            <span className="flex justify-end gap-2">
+              <button onClick={() => void act(w.id, 'approve')} className="btn-up !px-3 !py-1.5 text-xs">
+                Approve
+              </button>
+              <button
+                onClick={() => void act(w.id, 'reject')}
+                className="btn-ghost !px-3 !py-1.5 text-xs !text-down"
+              >
+                Reject
+              </button>
+            </span>
+          </div>
+        ) : (
+          <span className="text-[11px] text-slate-500">{w.processedAt ? dateTime(w.processedAt) : '—'}</span>
+        ),
+    },
+  ];
 
   return (
     <>
-      <PageHead
-        title="Withdrawals"
-        subtitle={`${rows.filter((r) => r.status === 'PENDING').length} awaiting review · ${money(pendingTotal)} held`}
-        action={<Filters value={filter} onChange={setFilter} />}
-      />
-
-      {visible.length === 0 ? (
-        <Empty text="Nothing here" />
-      ) : (
-        <Table head={['Trader', 'Amount', 'Destination', 'Requested', 'Status', 'Action']}>
-          {visible.map((w) => (
-            <tr key={w.id}>
-              <Td>
-                <span className="block text-xs font-semibold">{w.user?.name ?? '—'}</span>
-                <span className="block text-[11px] text-slate-500">{w.user?.email}</span>
-                <span className="block text-[11px] text-slate-500">
-                  deposited {money(w.user?.totalDeposited ?? 0)}
-                </span>
-                {/* the pending queue is ordered by this, so the reason a row
-                    sits where it does is on the row */}
-                {w.level && w.level.priority > 0 && (
-                  <span className="chip mt-1 bg-accent/15 text-accent">{w.level.name}</span>
-                )}
-              </Td>
-              <Td>
-                <span className="tabular block text-xs font-semibold">{money(w.amount)}</span>
-                <span className="tabular block text-[11px] text-slate-500">fee {money(w.fee)}</span>
-              </Td>
-              <Td>
-                <span className="block text-xs">
-                  {w.cryptoAmount} {w.currency}
-                </span>
-                <span className="block font-mono text-[10px] text-slate-500">{w.address}</span>
-                <span className="block text-[10px] text-slate-500">{w.networkLabel}</span>
-                {w.txHash && (
-                  <span className="block font-mono text-[10px] text-accent">{shortHash(w.txHash)}</span>
-                )}
-              </Td>
-              <Td className="text-[11px] text-slate-500">{dateTime(w.createdAt)}</Td>
-              <Td>
-                <StatusPill status={w.status} />
-                {w.adminNote && <span className="mt-1 block text-[10px] text-slate-500">{w.adminNote}</span>}
-              </Td>
-              <Td className="text-right">
-                {w.status === 'PENDING' ? (
-                  <div className="flex flex-col items-end gap-1.5">
-                    <input
-                      aria-label={`Note for ${w.user?.name ?? 'this withdrawal'}`}
-                      value={notes[w.id] ?? ''}
-                      onChange={(e) => setNotes((current) => ({ ...current, [w.id]: e.target.value }))}
-                      placeholder="Note (required to reject)"
-                      className="field !py-1 !text-[11px]"
-                    />
-                    <span className="flex justify-end gap-2">
-                      <button
-                        onClick={() => void act(w.id, 'approve')}
-                        className="btn-up !px-3 !py-1.5 text-xs"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => void act(w.id, 'reject')}
-                        className="btn-ghost !px-3 !py-1.5 text-xs !text-down"
-                      >
-                        Reject
-                      </button>
-                    </span>
-                  </div>
-                ) : (
-                  <span className="text-[11px] text-slate-500">
-                    {w.processedAt ? dateTime(w.processedAt) : '—'}
-                  </span>
-                )}
-              </Td>
-            </tr>
-          ))}
-        </Table>
+      {/* DataTable below owns the page's one heading; this is a lead-in, not
+          a second h1. Sourced from the endpoint's own pendingSummary rather
+          than the loaded page, so it stays the true total under search,
+          filters and pagination, not just what is currently on screen. */}
+      {pending && (
+        <p className="mb-4 text-xs text-slate-500">
+          {pending.count} awaiting review · {money(pending.amount)} held
+        </p>
       )}
+      <DataTable<AdminWithdrawal>
+        title="Withdrawals"
+        columns={columns}
+        filters={WITHDRAWAL_FILTERS}
+        searchPlaceholder="Search trader, address or tx hash"
+        rowKey={(w) => w.id}
+        reloadToken={reloadToken}
+        fetchPage={async (state) => {
+          const params = new URLSearchParams({ page: String(state.page), pageSize: String(state.pageSize) });
+          if (state.sort) params.set('sort', state.sort);
+          if (state.search) params.set('search', state.search);
+          for (const [key, value] of Object.entries(state.filters)) params.set(key, value);
+          const data = await api.get<{
+            withdrawals: AdminWithdrawal[];
+            total: number;
+            pageCount: number;
+            pendingSummary: { count: number; amount: number };
+          }>(`/admin/withdrawals?${params.toString()}`);
+          setPending(data.pendingSummary);
+          return { items: data.withdrawals, total: data.total, pageCount: data.pageCount };
+        }}
+      />
     </>
   );
 }
@@ -285,23 +344,5 @@ export function AdminDeposits() {
       }}
       exportPath={(params) => `/admin/deposits/export?${params.toString()}`}
     />
-  );
-}
-
-function Filters<T extends string>({ value, onChange }: { value: T; onChange: (value: T) => void }) {
-  return (
-    <div className="flex gap-1 rounded-lg border border-ink-600 bg-ink-800 p-1">
-      {(FILTERS as readonly string[]).map((option) => (
-        <button
-          key={option}
-          onClick={() => onChange(option as T)}
-          className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold capitalize transition ${
-            value === option ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          {option.toLowerCase()}
-        </button>
-      ))}
-    </div>
   );
 }

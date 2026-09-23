@@ -16,7 +16,7 @@ import { publicDeposit, publicUser, publicWithdrawal } from '../lib/serialize.js
 import { requireAdmin, requireAuth } from '../middleware/auth.js';
 import { applyLedger } from '../services/wallet.js';
 import { completeDeposit, rejectDeposit } from '../services/deposits.js';
-import { approveWithdrawal, rejectWithdrawal } from '../services/withdrawals.js';
+import { approveWithdrawal, priorityOrder, rejectWithdrawal } from '../services/withdrawals.js';
 import { marketFeed } from '../engine/feed.js';
 import { reviewKyc } from '../services/kyc.js';
 import { PROMO_KINDS, describe } from '../services/promos.js';
@@ -331,34 +331,99 @@ router.post(
 
 /* ------------------------------ withdrawals ------------------------------ */
 
+const WITHDRAWAL_SEARCH_FIELDS = ['user.email', 'user.name', 'address', 'txHash'] as const;
+const WITHDRAWAL_SORT_FIELDS = ['createdAt', 'amount', 'processedAt'] as const;
+const WITHDRAWAL_FILTERS = {
+  status: {
+    type: 'enum',
+    values: ['PENDING', 'APPROVED', 'PROCESSING', 'COMPLETED', 'REJECTED', 'CANCELLED'],
+  },
+  currency: { type: 'enum', values: ['BTC', 'ETH', 'USDT', 'USD'] },
+  createdAt: { type: 'dateRange' },
+} as const;
+
+// a hard safety cap on the in-memory priority sort below — a pending queue
+// this deep would itself be an operational emergency long before hitting it
+const PRIORITY_QUEUE_CAP = 2000;
+
 router.get(
   '/withdrawals',
   wrap(async (req, res) => {
-    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
-    const withdrawals = await prisma.withdrawal.findMany({
-      where: status ? { status } : undefined,
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-      include: { user: { select: { email: true, name: true, totalDeposited: true } } },
-    });
+    const query = listQuerySchema.parse(req.query);
+    const where = combineWhere(
+      buildSearchWhere(query.search, WITHDRAWAL_SEARCH_FIELDS),
+      buildFilterWhere(WITHDRAWAL_FILTERS, req.query as Record<string, string | undefined>),
+    );
+    const statusFilter = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const include = { user: { select: { email: true, name: true, totalDeposited: true } } } as const;
 
-    // withdrawal priority is a status perk: a higher level is served first, and
-    // within a level the oldest request still goes first. Only the pending
-    // queue is reordered — history stays in the order things happened.
-    const config = statusConfig();
-    const rows = withdrawals.map((w) => ({
-      ...publicWithdrawal(w),
-      user: w.user,
-      level: levelFor(w.user.totalDeposited, config),
-    }));
-    if (status === 'PENDING') {
-      rows.sort(
-        (a, b) =>
-          b.level.priority - a.level.priority ||
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-      );
+    // the true pending count and amount held, independent of whatever the
+    // admin is currently searching, filtering or paging through — an
+    // operator watching this number needs the real total, not "on this page"
+    const [pendingCount, pendingHeld] = await Promise.all([
+      prisma.withdrawal.count({ where: { status: 'PENDING' } }),
+      prisma.withdrawal.aggregate({ where: { status: 'PENDING' }, _sum: { amount: true } }),
+    ]);
+    const pendingSummary = { count: pendingCount, amount: pendingHeld._sum.amount ?? 0 };
+
+    // the pending queue's priority order isn't a database column (see
+    // `priorityOrder`), so it can't be expressed as a Prisma `orderBy` and is
+    // computed here instead. An explicit sort still overrides it entirely,
+    // the same contract every other list's fallback order follows.
+    if (statusFilter === 'PENDING' && !query.sort) {
+      const [rows, total] = await Promise.all([
+        prisma.withdrawal.findMany({
+          where: where as Prisma.WithdrawalWhereInput,
+          orderBy: { createdAt: 'asc' },
+          take: PRIORITY_QUEUE_CAP,
+          include,
+        }),
+        prisma.withdrawal.count({ where: where as Prisma.WithdrawalWhereInput }),
+      ]);
+      const skip = (query.page - 1) * query.pageSize;
+      const page = priorityOrder(rows).slice(skip, skip + query.pageSize);
+      res.json({
+        withdrawals: page.map((w) => ({ ...publicWithdrawal(w), user: w.user, level: w.level })),
+        total,
+        page: query.page,
+        pageSize: query.pageSize,
+        pageCount: Math.max(1, Math.ceil(total / query.pageSize)),
+        pendingSummary,
+      });
+      return;
     }
-    res.json({ withdrawals: rows });
+
+    const orderBy = buildOrderBy(query.sort, WITHDRAWAL_SORT_FIELDS, { createdAt: 'desc' });
+    const dbPage = await paginateOffset({
+      findMany: (args) =>
+        prisma.withdrawal.findMany({
+          ...(args as {
+            where: Prisma.WithdrawalWhereInput;
+            orderBy: Prisma.WithdrawalOrderByWithRelationInput[];
+            skip: number;
+            take: number;
+          }),
+          include,
+        }),
+      count: (args) => prisma.withdrawal.count(args as { where: Prisma.WithdrawalWhereInput }),
+      where,
+      orderBy,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    const config = statusConfig();
+    res.json({
+      withdrawals: dbPage.items.map((w) => ({
+        ...publicWithdrawal(w),
+        user: w.user,
+        level: levelFor(w.user.totalDeposited, config),
+      })),
+      total: dbPage.total,
+      page: dbPage.page,
+      pageSize: dbPage.pageSize,
+      pageCount: dbPage.pageCount,
+      pendingSummary,
+    });
   }),
 );
 

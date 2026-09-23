@@ -394,6 +394,96 @@ test.describe('admin', () => {
     expect(errors).toEqual([]);
   });
 
+  test('withdrawals queue searches, filters and orders the pending queue by trader status', async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000);
+    const standardContext = await browser.newContext();
+    const proContext = await browser.newContext();
+    const standard = await standardContext.newPage();
+    const pro = await proContext.newPage();
+    const standardErrors = failOnPageErrors(standard);
+    const proErrors = failOnPageErrors(pro);
+
+    // a standard-level trader, funded and withdrawing first
+    const standardCreds = await register(standard, newCredentials('wq-standard'));
+    await fundAccount(standard, '$250');
+    await standard.goto('/wallet?tab=withdraw');
+    await standard.locator('button:has-text("Tether (TRC-20)")').first().click();
+    await standard.fill('#withdraw-address', 'TJRyWwFs9wTFGZg3JbrVriFbNfCug5tDeC');
+    await standard.fill('#withdraw-amount', '40');
+    await expect(standard.getByText('You receive')).toBeVisible();
+    await standard.click('button:has-text("Request withdrawal")');
+    await expect(standard.getByText('In progress')).toBeVisible();
+
+    // a Pro-level trader (crosses the $1,000 lifetime-deposit threshold via a
+    // custom deposit amount, since the deposit panel's presets top out at
+    // $500), funded and withdrawing second — later, but higher priority
+    const proCreds = await register(pro, newCredentials('wq-pro'));
+    await pro.goto('/wallet');
+    await pro.locator('button:has-text("Tether (TRC-20)")').first().click();
+    await pro.fill('#deposit-amount', '1200');
+    await pro.click('button:has-text("Get deposit address")');
+    await expect(pro.getByText('Awaiting deposit')).toBeVisible();
+    await pro.click('text=Simulate the incoming payment');
+    await expect(pro.getByText('Deposit credited')).toBeVisible({ timeout: 120_000 });
+
+    await pro.goto('/wallet?tab=withdraw');
+    await pro.locator('button:has-text("Tether (TRC-20)")').first().click();
+    await pro.fill('#withdraw-address', 'TJRyWwFs9wTFGZg3JbrVriFbNfCug5tDeC');
+    await pro.fill('#withdraw-amount', '40');
+    await expect(pro.getByText('You receive')).toBeVisible();
+    await pro.click('button:has-text("Request withdrawal")');
+    await expect(pro.getByText('In progress')).toBeVisible();
+
+    const adminContext = await browser.newContext();
+    const admin = await adminContext.newPage();
+    const errors = failOnPageErrors(admin);
+    await login(admin, ADMIN);
+    await admin.goto('/admin/withdrawals');
+
+    // search narrows the list to just the standard trader's withdrawal
+    await admin.getByPlaceholder('Search trader, address or tx hash').fill(standardCreds.email);
+    await expect(admin).toHaveURL(/search=/);
+    const standardRow = admin.locator('tr').filter({ hasText: standardCreds.email });
+    await expect(standardRow).toBeVisible();
+    await admin.getByPlaceholder('Search trader, address or tx hash').fill('');
+    await expect(admin.locator('tr').filter({ hasText: proCreds.email })).toHaveCount(0);
+
+    // filtering to PENDING puts the Pro trader ahead of the Standard trader,
+    // even though the Standard trader asked first — priority, not recency
+    await admin.locator('summary').filter({ hasText: 'Status' }).click();
+    const pendingOption = admin.getByLabel('Pending', { exact: true });
+    await pendingOption.click();
+    await expect(pendingOption).toBeChecked();
+    await expect(admin.locator('tr').filter({ hasText: proCreds.email })).toContainText('Pro');
+
+    const rowTexts = await admin.locator('tbody tr').allInnerTexts();
+    const proIndex = rowTexts.findIndex((t) => t.includes(proCreds.email));
+    const standardIndex = rowTexts.findIndex((t) => t.includes(standardCreds.email));
+    expect(proIndex).toBeGreaterThanOrEqual(0);
+    expect(standardIndex).toBeGreaterThanOrEqual(0);
+    expect(proIndex).toBeLessThan(standardIndex);
+
+    // clean up: approve both so no live pending withdrawal is left behind
+    await admin.getByText('Clear filters ✕').click();
+    // close the still-open filter dropdown, or it overlaps the rows below it
+    await admin.locator('summary').filter({ hasText: 'Status' }).click();
+    for (const email of [proCreds.email, standardCreds.email]) {
+      const row = admin.locator('tr').filter({ hasText: email });
+      await row.locator('button:has-text("Approve")').click();
+      await expect(admin.getByText('Payout sent').last()).toBeVisible();
+      await expect(row.getByText('completed')).toBeVisible();
+    }
+
+    expect(errors).toEqual([]);
+    expect(standardErrors).toEqual([]);
+    expect(proErrors).toEqual([]);
+    await standardContext.close();
+    await proContext.close();
+    await adminContext.close();
+  });
+
   test('a trader cannot reach the back office', async ({ page }) => {
     await register(page, newCredentials('guard'));
     await page.goto('/admin');

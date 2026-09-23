@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { quoteWithdrawal } from '../services/withdrawals.js';
+import { priorityOrder, quoteWithdrawal } from '../services/withdrawals.js';
 import { env } from '../env.js';
 
 describe('withdrawal quotes', () => {
@@ -37,5 +37,45 @@ describe('withdrawal quotes', () => {
 
   it('refuses an unsupported currency/network pair', () => {
     expect(() => quoteWithdrawal('USDT', 'BITCOIN', 10000)).toThrow(/Unsupported/);
+  });
+});
+
+describe('priorityOrder', () => {
+  // the default status thresholds: $0 = Standard, $1,000 = Pro, $10,000 = VIP
+  const row = (id: string, totalDeposited: number, createdAt: string) => ({
+    id,
+    createdAt: new Date(createdAt),
+    user: { totalDeposited },
+  });
+
+  it('serves a higher status level first, whatever the request order', () => {
+    const rows = [
+      row('standard', 0, '2026-01-01T00:00:00Z'),
+      row('vip', 1_000_000, '2026-01-03T00:00:00Z'),
+      row('pro', 100_000, '2026-01-02T00:00:00Z'),
+    ];
+    expect(priorityOrder(rows).map((r) => r.id)).toEqual(['vip', 'pro', 'standard']);
+  });
+
+  it('serves the oldest request first within the same level', () => {
+    const rows = [
+      row('newer', 100_000, '2026-01-05T00:00:00Z'),
+      row('oldest', 100_000, '2026-01-01T00:00:00Z'),
+      row('middle', 100_000, '2026-01-03T00:00:00Z'),
+    ];
+    expect(priorityOrder(rows).map((r) => r.id)).toEqual(['oldest', 'middle', 'newer']);
+  });
+
+  it('attaches the level it computed to each row', () => {
+    const [vip] = priorityOrder([row('vip', 1_000_000, '2026-01-01T00:00:00Z')]);
+    expect(vip.level.id).toBe('VIP');
+    expect(vip.level.priority).toBeGreaterThan(0);
+  });
+
+  it('does not mutate the input array', () => {
+    const rows = [row('a', 0, '2026-01-02T00:00:00Z'), row('b', 1_000_000, '2026-01-01T00:00:00Z')];
+    const original = rows.map((r) => r.id);
+    priorityOrder(rows);
+    expect(rows.map((r) => r.id)).toEqual(original);
   });
 });

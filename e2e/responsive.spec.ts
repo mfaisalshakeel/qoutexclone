@@ -52,6 +52,7 @@ test.describe('responsive shell', () => {
     for (const path of [
       '/admin',
       '/admin/users',
+      '/admin/withdrawals',
       '/admin/support',
       '/admin/tournaments',
       '/admin/promos',
