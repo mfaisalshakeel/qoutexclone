@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { ApiError, api } from '../../lib/api';
 import { dateTime, money } from '../../lib/format';
 import { toast } from '../../store/toast';
+import { useAuth } from '../../store/auth';
+import { hasArea } from '../../lib/permissions';
 import { Empty, PageHead, StatCard, StatusPill, Table, Td } from '../../components/admin/ui';
 import { RowSkeletons, Skeleton, SkeletonGroup, StatSkeletons } from '../../components/Skeleton';
 import type { Deposit, Trade, Transaction, User, Withdrawal, SupportTicket } from '../../lib/types';
@@ -131,6 +133,9 @@ async function resetTwoFactor(user: User, reload: () => void) {
 /** Full trader profile: everything about one account in one place, reached from the traders list. */
 export function AdminUserProfile() {
   const { id } = useParams<{ id: string }>();
+  const me = useAuth((s) => s.user);
+  const canFinance = hasArea(me?.permissions, 'users.finance');
+  const canManage = hasArea(me?.permissions, 'users.manage');
   const [data, setData] = useState<ProfileData | null>(null);
   const [error, setError] = useState('');
   const [emailOpen, setEmailOpen] = useState(false);
@@ -259,27 +264,35 @@ export function AdminUserProfile() {
         )}
         <span className="text-[11px] text-slate-500">joined {dateTime(user.createdAt)}</span>
         <span className="ml-auto flex flex-wrap gap-2">
-          <button onClick={() => void adjustBalance(user, load)} className="btn-ghost !px-3 !py-1.5 text-xs">
-            Adjust balance
-          </button>
-          <button onClick={() => void toggleStatus(user, load)} className="btn-ghost !px-3 !py-1.5 text-xs">
-            {user.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
-          </button>
-          <button onClick={() => void forceLogout(user, load)} className="btn-ghost !px-3 !py-1.5 text-xs">
-            Force logout
-          </button>
-          {user.twoFactorEnabled && (
+          {canFinance && (
+            <button onClick={() => void adjustBalance(user, load)} className="btn-ghost !px-3 !py-1.5 text-xs">
+              Adjust balance
+            </button>
+          )}
+          {canManage && (
+            <button onClick={() => void toggleStatus(user, load)} className="btn-ghost !px-3 !py-1.5 text-xs">
+              {user.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
+            </button>
+          )}
+          {canManage && (
+            <button onClick={() => void forceLogout(user, load)} className="btn-ghost !px-3 !py-1.5 text-xs">
+              Force logout
+            </button>
+          )}
+          {canManage && user.twoFactorEnabled && (
             <button onClick={() => void resetTwoFactor(user, load)} className="btn-ghost !px-3 !py-1.5 text-xs">
               Reset 2FA
             </button>
           )}
-          <button onClick={() => setEmailOpen((v) => !v)} className="btn-ghost !px-3 !py-1.5 text-xs">
-            Send email
-          </button>
+          {canManage && (
+            <button onClick={() => setEmailOpen((v) => !v)} className="btn-ghost !px-3 !py-1.5 text-xs">
+              Send email
+            </button>
+          )}
         </span>
       </div>
 
-      {emailOpen && (
+      {canManage && emailOpen && (
         <div className="card mt-3 space-y-3 p-4">
           <p className="text-xs font-semibold text-slate-300">Send an email to {user.email}</p>
           <input
@@ -323,25 +336,29 @@ export function AdminUserProfile() {
           Computed from lifetime deposits, unless pinned. Currently{' '}
           <span className="font-semibold text-slate-200">{user.statusLevel?.name ?? '—'}</span>.
         </p>
-        <select
-          value={levelDraft}
-          onChange={(e) => setLevelDraft(e.target.value)}
-          className="field ml-auto !w-auto text-xs"
-        >
-          <option value="">Computed from deposits (no pin)</option>
-          {STATUS_LEVELS.map((level) => (
-            <option key={level.id} value={level.id}>
-              Pin to {level.label}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={() => void saveLevel()}
-          disabled={savingLevel || levelDraft === (user.statusLevelOverride ?? '')}
-          className="btn-ghost !px-3 !py-1.5 text-xs disabled:opacity-50"
-        >
-          {savingLevel ? 'Saving…' : 'Save'}
-        </button>
+        {canFinance && (
+          <>
+            <select
+              value={levelDraft}
+              onChange={(e) => setLevelDraft(e.target.value)}
+              className="field ml-auto !w-auto text-xs"
+            >
+              <option value="">Computed from deposits (no pin)</option>
+              {STATUS_LEVELS.map((level) => (
+                <option key={level.id} value={level.id}>
+                  Pin to {level.label}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => void saveLevel()}
+              disabled={savingLevel || levelDraft === (user.statusLevelOverride ?? '')}
+              className="btn-ghost !px-3 !py-1.5 text-xs disabled:opacity-50"
+            >
+              {savingLevel ? 'Saving…' : 'Save'}
+            </button>
+          </>
+        )}
       </div>
 
       <h2 className="mb-2 mt-6 text-sm font-semibold">Identity verification</h2>
@@ -549,22 +566,26 @@ export function AdminUserProfile() {
 
       <h2 className="mb-2 mt-6 text-sm font-semibold">Notes</h2>
       <div className="card space-y-3 p-4">
-        <textarea
-          value={noteDraft}
-          onChange={(e) => setNoteDraft(e.target.value)}
-          placeholder="Add a note for the next admin who opens this account…"
-          rows={3}
-          className="field w-full text-xs"
-        />
-        <div className="flex justify-end">
-          <button
-            onClick={() => void addNote()}
-            disabled={savingNote || !noteDraft.trim()}
-            className="btn-ghost !px-3 !py-1.5 text-xs disabled:opacity-50"
-          >
-            {savingNote ? 'Saving…' : 'Add note'}
-          </button>
-        </div>
+        {canManage && (
+          <>
+            <textarea
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              placeholder="Add a note for the next admin who opens this account…"
+              rows={3}
+              className="field w-full text-xs"
+            />
+            <div className="flex justify-end">
+              <button
+                onClick={() => void addNote()}
+                disabled={savingNote || !noteDraft.trim()}
+                className="btn-ghost !px-3 !py-1.5 text-xs disabled:opacity-50"
+              >
+                {savingNote ? 'Saving…' : 'Add note'}
+              </button>
+            </div>
+          </>
+        )}
         {data.notes.length === 0 ? (
           <p className="text-[11px] text-slate-500">No notes yet.</p>
         ) : (

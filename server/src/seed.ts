@@ -68,16 +68,28 @@ async function main() {
 
   const adminEmail = process.env.ADMIN_EMAIL ?? 'admin@quotexclone.dev';
   const adminPassword = process.env.ADMIN_PASSWORD ?? 'Admin123!';
+  // admin access requires a second factor (RBAC's "admin users are managed
+  // with 2FA required"), so the seeded account is enrolled with a fixed
+  // secret rather than left unable to sign in to its own back office. e2e
+  // logs in with the matching code — see ADMIN.twoFactorSecret in e2e/helpers.ts.
   await prisma.user.upsert({
     where: { email: adminEmail },
-    update: { role: 'ADMIN' },
+    update: {
+      role: 'ADMIN',
+      adminRole: 'SUPER_ADMIN',
+      twoFactorSecret: 'JBSWY3DPEHPK3PXP',
+      twoFactorEnabledAt: new Date(),
+    },
     create: {
       email: adminEmail,
       name: 'Platform Admin',
       passwordHash: await bcrypt.hash(adminPassword, 10),
       role: 'ADMIN',
+      adminRole: 'SUPER_ADMIN',
       referralCode: crypto.randomBytes(4).toString('hex').toUpperCase(),
       realBalance: 0,
+      twoFactorSecret: 'JBSWY3DPEHPK3PXP',
+      twoFactorEnabledAt: new Date(),
     },
   });
 

@@ -1,19 +1,12 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
-import { ADMIN, failOnPageErrors, login, newCredentials, register } from './helpers';
-
-/** Admin credentials through the API, so the spec can arrange state directly. */
-async function adminToken(request: APIRequestContext): Promise<string> {
-  const response = await request.post('/api/auth/login', { data: ADMIN });
-  expect(response.ok()).toBeTruthy();
-  return (await response.json()).accessToken;
-}
+import { expect, test } from '@playwright/test';
+import { ADMIN, adminApiToken, failOnPageErrors, login, newCredentials, register } from './helpers';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 test.describe('trading sessions', () => {
   test('a holiday closes the market, and the OTC twin stays open', async ({ page, request }) => {
     const errors = failOnPageErrors(page, [/CERT_AUTHORITY/, /favicon/]);
-    const token = await adminToken(request);
+    const token = await adminApiToken(request);
     const headers = { authorization: `Bearer ${token}` };
 
     const schedules = await request.get('/api/admin/schedules', { headers });

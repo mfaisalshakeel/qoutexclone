@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { failOnPageErrors, newCredentials, register } from './helpers';
+import { adminApiToken, failOnPageErrors, newCredentials, register } from './helpers';
 
 /**
  * The sandbox card and e-wallet providers, through the browser.
@@ -70,13 +70,7 @@ test.describe('sandbox payment methods', () => {
     await page.click('button:has-text("Continue to sandbox checkout")');
     await expect(page.getByText('$60.00 USD')).toBeVisible();
 
-    const adminToken = (
-      await (
-        await request.post('/api/auth/login', {
-          data: { email: 'admin@quotexclone.dev', password: 'Admin123!' },
-        })
-      ).json()
-    ).accessToken as string;
+    const adminToken = await adminApiToken(request);
     const list = await (
       await request.get('/api/admin/deposits?status=AWAITING_PAYMENT', {
         headers: { authorization: `Bearer ${adminToken}` },

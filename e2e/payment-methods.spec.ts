@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ADMIN, failOnPageErrors, newCredentials, register } from './helpers';
+import { adminApiToken, failOnPageErrors, newCredentials, register } from './helpers';
 
 /**
  * The provider framework, end to end.
@@ -9,17 +9,11 @@ import { ADMIN, failOnPageErrors, newCredentials, register } from './helpers';
  * exactly as a future screen would call it, and what is checked is that the
  * edit actually reaches a trader's deposit.
  */
-async function adminToken(page: import('@playwright/test').Page): Promise<string> {
-  const response = await page.request.post('/api/auth/login', { data: ADMIN });
-  const body = await response.json();
-  return body.accessToken as string;
-}
-
 test.describe('payment methods', () => {
   test('an operator-raised minimum refuses a deposit below it, then is restored', async ({ page }) => {
     const errors = failOnPageErrors(page);
     await page.goto('/login');
-    const token = await adminToken(page);
+    const token = await adminApiToken(page.request);
 
     const list = await page.request.get('/api/admin/payment-methods', {
       headers: { authorization: `Bearer ${token}` },
@@ -57,7 +51,7 @@ test.describe('payment methods', () => {
 
   test('a disabled method disappears from the wallet, then reappears', async ({ page }) => {
     await page.goto('/login');
-    const token = await adminToken(page);
+    const token = await adminApiToken(page.request);
 
     const list = await page.request.get('/api/admin/payment-methods', {
       headers: { authorization: `Bearer ${token}` },
@@ -87,7 +81,7 @@ test.describe('payment methods', () => {
 
   test('every field on the structural side is refused as an edit', async ({ page }) => {
     await page.goto('/login');
-    const token = await adminToken(page);
+    const token = await adminApiToken(page.request);
     const list = await page.request.get('/api/admin/payment-methods', {
       headers: { authorization: `Bearer ${token}` },
     });

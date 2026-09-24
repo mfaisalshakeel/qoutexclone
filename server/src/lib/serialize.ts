@@ -11,6 +11,7 @@ import { findNetwork } from './crypto-networks.js';
 import { levelFor, statusConfig } from '../services/status.js';
 import { levelProgress, xpConfig } from '../services/experience.js';
 import { readNotifyPrefs } from './profile.js';
+import { type AdminRole, areasFor } from './permissions.js';
 
 /** The level and the perks that come with it, for the header and the ticket. */
 function statusOf(totalDeposited: number, overrideId?: string | null) {
@@ -39,6 +40,10 @@ export function publicUser(user: User) {
     name: user.name,
     country: user.country,
     role: user.role,
+    // staff sub-role and the areas it grants, so the back office can filter
+    // its own nav and actions without duplicating the role table client-side
+    adminRole: user.adminRole,
+    permissions: user.role === 'ADMIN' ? areasFor(user.adminRole as AdminRole | null) : [],
     status: user.status,
     activeAccount: user.activeAccount,
     demoBalance: user.demoBalance,

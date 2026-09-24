@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { ApiError, api } from '../../lib/api';
 import { dateTime, money } from '../../lib/format';
 import { toast } from '../../store/toast';
+import { useAuth } from '../../store/auth';
+import { hasArea } from '../../lib/permissions';
 import { StatusPill } from '../../components/admin/ui';
 import { DataTable, type DataTableColumn } from '../../components/admin/DataTable';
 import type { User } from '../../lib/types';
@@ -77,6 +79,9 @@ const USER_FILTERS = [
 export function AdminUsers() {
   const [reloadToken, setReloadToken] = useState(0);
   const reload = useCallback(() => setReloadToken((n) => n + 1), []);
+  const me = useAuth((s) => s.user);
+  const canFinance = hasArea(me?.permissions, 'users.finance');
+  const canManage = hasArea(me?.permissions, 'users.manage');
 
   const columns: DataTableColumn<User>[] = [
     {
@@ -144,24 +149,28 @@ export function AdminUsers() {
       align: 'right',
       render: (user) => (
         <span className="flex justify-end gap-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              void adjustBalance(user, reload);
-            }}
-            className="btn-ghost !px-3 !py-1.5 text-xs"
-          >
-            Adjust
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              void toggleStatus(user, reload);
-            }}
-            className="btn-ghost !px-3 !py-1.5 text-xs"
-          >
-            {user.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
-          </button>
+          {canFinance && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void adjustBalance(user, reload);
+              }}
+              className="btn-ghost !px-3 !py-1.5 text-xs"
+            >
+              Adjust
+            </button>
+          )}
+          {canManage && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void toggleStatus(user, reload);
+              }}
+              className="btn-ghost !px-3 !py-1.5 text-xs"
+            >
+              {user.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
+            </button>
+          )}
         </span>
       ),
     },
@@ -186,29 +195,45 @@ export function AdminUsers() {
         return { items: data.users, total: data.total, pageCount: data.pageCount };
       }}
       exportPath={(params) => `/admin/users/export?${params.toString()}`}
-      bulkActions={[
-        {
-          label: 'Suspend selected',
-          tone: 'danger',
-          onClick: async (ids) => {
-            await Promise.all(ids.map((id) => setStatus(id, 'SUSPENDED')));
-            toast.success(`${ids.length} account${ids.length === 1 ? '' : 's'} suspended`);
-          },
-        },
-        {
-          label: 'Activate selected',
-          onClick: async (ids) => {
-            await Promise.all(ids.map((id) => setStatus(id, 'ACTIVE')));
-            toast.success(`${ids.length} account${ids.length === 1 ? '' : 's'} reinstated`);
-          },
-        },
-      ]}
-      renderDrawer={(user) => <UserDrawer user={user} reload={reload} />}
+      bulkActions={
+        canManage
+          ? [
+              {
+                label: 'Suspend selected',
+                tone: 'danger',
+                onClick: async (ids) => {
+                  await Promise.all(ids.map((id) => setStatus(id, 'SUSPENDED')));
+                  toast.success(`${ids.length} account${ids.length === 1 ? '' : 's'} suspended`);
+                },
+              },
+              {
+                label: 'Activate selected',
+                onClick: async (ids) => {
+                  await Promise.all(ids.map((id) => setStatus(id, 'ACTIVE')));
+                  toast.success(`${ids.length} account${ids.length === 1 ? '' : 's'} reinstated`);
+                },
+              },
+            ]
+          : undefined
+      }
+      renderDrawer={(user) => (
+        <UserDrawer user={user} reload={reload} canFinance={canFinance} canManage={canManage} />
+      )}
     />
   );
 }
 
-function UserDrawer({ user, reload }: { user: User; reload: () => void }) {
+function UserDrawer({
+  user,
+  reload,
+  canFinance,
+  canManage,
+}: {
+  user: User;
+  reload: () => void;
+  canFinance: boolean;
+  canManage: boolean;
+}) {
   return (
     <div>
       <h2 className="pr-16 text-sm font-bold">{user.name}</h2>
@@ -243,17 +268,26 @@ function UserDrawer({ user, reload }: { user: User; reload: () => void }) {
         {user.role === 'ADMIN' && <span className="chip bg-accent-soft text-accent">admin</span>}
       </div>
 
-      <div className="mt-5 flex gap-2">
-        <button
-          onClick={() => void adjustBalance(user, reload)}
-          className="btn-ghost flex-1 !py-2 text-xs"
-        >
-          Adjust balance
-        </button>
-        <button onClick={() => void toggleStatus(user, reload)} className="btn-ghost flex-1 !py-2 text-xs">
-          {user.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
-        </button>
-      </div>
+      {(canFinance || canManage) && (
+        <div className="mt-5 flex gap-2">
+          {canFinance && (
+            <button
+              onClick={() => void adjustBalance(user, reload)}
+              className="btn-ghost flex-1 !py-2 text-xs"
+            >
+              Adjust balance
+            </button>
+          )}
+          {canManage && (
+            <button
+              onClick={() => void toggleStatus(user, reload)}
+              className="btn-ghost flex-1 !py-2 text-xs"
+            >
+              {user.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
+            </button>
+          )}
+        </div>
+      )}
 
       <Link to={`/admin/users/${user.id}`} className="btn-primary mt-2 block w-full !py-2 text-center text-xs">
         View full profile →

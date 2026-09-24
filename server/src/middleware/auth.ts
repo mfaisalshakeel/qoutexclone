@@ -4,12 +4,20 @@ import { verifyAccessToken } from '../lib/jwt.js';
 import { prisma } from '../lib/prisma.js';
 import { settings } from '../services/settings.js';
 import { isSessionRevoked } from '../services/revocations.js';
+import { type AdminRole, type PermissionArea, hasPermission } from '../lib/permissions.js';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
-      user?: { id: string; role: string; email: string; sessionId?: string };
+      user?: {
+        id: string;
+        role: string;
+        email: string;
+        sessionId?: string;
+        /** Set by `requireAdmin`, once it has confirmed the account is staff. */
+        adminRole?: AdminRole | null;
+      };
     }
   }
 }
@@ -52,11 +60,46 @@ export const optionalAuth: RequestHandler = (req, _res, next) => {
   next();
 };
 
-export const requireAdmin = (req: Request, _res: Response, next: NextFunction) => {
+/**
+ * Confirms the account is staff, then requires a second factor before letting
+ * it any further in — checked here, live, rather than cached in the access
+ * token, so turning 2FA off (or a role change) takes effect on the very next
+ * request instead of waiting out the token's lifetime, the same reasoning
+ * `requireActiveUser` already follows for suspension.
+ */
+export const requireAdmin: RequestHandler = (req, _res, next) => {
   if (!req.user) return next(unauthorized());
-  if (req.user.role !== 'ADMIN') return next(forbidden('Administrator access required'));
-  next();
+  prisma.user
+    .findUnique({
+      where: { id: req.user.id },
+      select: { role: true, adminRole: true, twoFactorEnabledAt: true },
+    })
+    .then((user) => {
+      if (!user || user.role !== 'ADMIN') return next(forbidden('Administrator access required'));
+      if (!user.twoFactorEnabledAt) {
+        return next(
+          forbidden(
+            'Two-factor authentication is required for admin accounts. Turn it on in Account → Security.',
+            'admin_2fa_required',
+          ),
+        );
+      }
+      req.user!.adminRole = user.adminRole as AdminRole | null;
+      next();
+    })
+    .catch(next);
 };
+
+/** Blocks a route unless the signed-in admin's role holds this area. */
+export function requirePermission(area: PermissionArea): RequestHandler {
+  return (req, _res, next) => {
+    if (!req.user) return next(unauthorized());
+    if (!hasPermission(req.user.adminRole, area)) {
+      return next(forbidden("You don't have permission for this.", 'insufficient_permission'));
+    }
+    next();
+  };
+}
 
 /**
  * Blocks money movement while the address is unproven, when an operator has

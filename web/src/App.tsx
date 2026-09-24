@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import { AdminLayout } from './components/admin/AdminLayout';
+import { RequireArea } from './components/admin/RequireArea';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -24,6 +25,7 @@ import { AdminSettings } from './pages/admin/Settings';
 import { AdminSupport } from './pages/admin/Support';
 import { AdminKyc, AdminUsers } from './pages/admin/Traders';
 import { AdminUserProfile } from './pages/admin/UserProfile';
+import { AdminStaff } from './pages/admin/Staff';
 import { History } from './pages/History';
 import { Leaderboard } from './pages/Leaderboard';
 import { Landing } from './pages/Landing';
@@ -92,27 +94,43 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<AdminDashboard />} />
-            <Route path="withdrawals" element={<AdminWithdrawals />} />
-            <Route path="deposits" element={<AdminDeposits />} />
-            <Route path="users" element={<AdminUsers />} />
-            <Route path="users/:id" element={<AdminUserProfile />} />
-            <Route path="kyc" element={<AdminKyc />} />
-            <Route path="trades" element={<AdminTrades />} />
-            <Route path="ledger" element={<AdminLedger />} />
-            <Route path="referrals" element={<AdminReferrals />} />
-            <Route path="support" element={<AdminSupport />} />
-            <Route path="tournaments" element={<AdminTournaments />} />
-            <Route path="promos" element={<AdminPromos />} />
-            <Route path="marketplace-orders" element={<AdminMarketplaceOrders />} />
-            <Route path="assets" element={<AdminAssets />} />
-            <Route path="schedules" element={<AdminSchedules />} />
-            <Route path="price-engine" element={<AdminOtcEngine />} />
-            <Route path="payouts" element={<AdminPayouts />} />
-            <Route path="risk" element={<AdminRisk />} />
-            <Route path="email" element={<AdminEmail />} />
-            <Route path="settings" element={<AdminSettings />} />
-            <Route path="audit" element={<AdminAudit />} />
+            <Route index element={<RequireArea area="dashboard"><AdminDashboard /></RequireArea>} />
+            <Route
+              path="withdrawals"
+              element={<RequireArea area="finance"><AdminWithdrawals /></RequireArea>}
+            />
+            <Route path="deposits" element={<RequireArea area="finance"><AdminDeposits /></RequireArea>} />
+            <Route path="users" element={<RequireArea area="users.view"><AdminUsers /></RequireArea>} />
+            <Route
+              path="users/:id"
+              element={<RequireArea area="users.view"><AdminUserProfile /></RequireArea>}
+            />
+            <Route path="kyc" element={<RequireArea area="support"><AdminKyc /></RequireArea>} />
+            <Route path="trades" element={<RequireArea area="risk"><AdminTrades /></RequireArea>} />
+            <Route path="ledger" element={<RequireArea area="finance"><AdminLedger /></RequireArea>} />
+            <Route path="referrals" element={<RequireArea area="finance"><AdminReferrals /></RequireArea>} />
+            <Route path="support" element={<RequireArea area="support"><AdminSupport /></RequireArea>} />
+            <Route
+              path="tournaments"
+              element={<RequireArea area="content"><AdminTournaments /></RequireArea>}
+            />
+            <Route path="promos" element={<RequireArea area="content"><AdminPromos /></RequireArea>} />
+            <Route
+              path="marketplace-orders"
+              element={<RequireArea area="finance"><AdminMarketplaceOrders /></RequireArea>}
+            />
+            <Route path="assets" element={<RequireArea area="risk"><AdminAssets /></RequireArea>} />
+            <Route path="schedules" element={<RequireArea area="risk"><AdminSchedules /></RequireArea>} />
+            <Route
+              path="price-engine"
+              element={<RequireArea area="risk"><AdminOtcEngine /></RequireArea>}
+            />
+            <Route path="payouts" element={<RequireArea area="risk"><AdminPayouts /></RequireArea>} />
+            <Route path="risk" element={<RequireArea area="risk"><AdminRisk /></RequireArea>} />
+            <Route path="email" element={<RequireArea area="content"><AdminEmail /></RequireArea>} />
+            <Route path="staff" element={<RequireArea area="settings"><AdminStaff /></RequireArea>} />
+            <Route path="settings" element={<RequireArea area="settings"><AdminSettings /></RequireArea>} />
+            <Route path="audit" element={<RequireArea area="settings"><AdminAudit /></RequireArea>} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

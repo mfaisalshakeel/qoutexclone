@@ -15,6 +15,9 @@ model User {
   name             String
   country          String?
   role             String    @default("USER") // USER | ADMIN
+  /// A back-office role, meaningful only when `role` is ADMIN: SUPER_ADMIN |
+  /// FINANCE | RISK | SUPPORT | CONTENT. Null on every trader.
+  adminRole        String?
   status           String    @default("ACTIVE") // ACTIVE | SUSPENDED
   // money is stored in integer minor units (cents) to avoid float drift
   demoBalance      Int       @default(1000000) // $10,000.00 demo

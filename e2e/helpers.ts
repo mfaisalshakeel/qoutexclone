@@ -1,6 +1,14 @@
-import { expect, request as apiRequest, type Page } from '@playwright/test';
+import { expect, request as apiRequest, type APIRequestContext, type Page } from '@playwright/test';
+import { totp } from '../server/src/lib/totp.js';
 
-export const ADMIN = { email: 'admin@quotexclone.dev', password: 'Admin123!' };
+// the seeded admin carries a fixed 2FA secret (server/src/seed.ts) since
+// admin access requires a second factor; `login` completes the challenge
+// automatically whenever credentials carry one, admin or not.
+export const ADMIN = {
+  email: 'admin@quotexclone.dev',
+  password: 'Admin123!',
+  twoFactorSecret: 'JBSWY3DPEHPK3PXP',
+};
 export const TRADER = { email: 'trader@quotexclone.dev', password: 'Trader123!' };
 
 export interface Credentials {
@@ -28,12 +36,36 @@ export async function register(page: Page, credentials = newCredentials()): Prom
   return credentials;
 }
 
-export async function login(page: Page, credentials: { email: string; password: string }): Promise<void> {
+export async function login(
+  page: Page,
+  credentials: { email: string; password: string; twoFactorSecret?: string },
+): Promise<void> {
   await page.goto('/login');
   await page.fill('#email', credentials.email);
   await page.fill('#password', credentials.password);
   await page.click('button[type=submit]');
+  if (credentials.twoFactorSecret) {
+    await page.getByRole('heading', { name: 'One more step' }).waitFor();
+    await page.fill('#code', totp(credentials.twoFactorSecret));
+    await page.getByRole('button', { name: 'Confirm' }).click();
+  }
   await page.waitForURL('**/trade');
+}
+
+/**
+ * The admin's access token straight from the API, for specs that arrange
+ * state through requests rather than the browser. Completes the 2FA
+ * challenge the same way `login` does, since the seeded admin always carries
+ * one now.
+ */
+export async function adminApiToken(request: APIRequestContext): Promise<string> {
+  const first = await request.post('/api/auth/login', { data: ADMIN });
+  const body = await first.json();
+  if (!body.twoFactorRequired) return body.accessToken;
+  const second = await request.post('/api/auth/2fa', {
+    data: { challengeToken: body.challengeToken, code: totp(ADMIN.twoFactorSecret) },
+  });
+  return (await second.json()).accessToken;
 }
 
 /**
@@ -181,8 +213,7 @@ export async function latestEmail(
 ): Promise<{ subject: string; html: string; text: string }> {
   const context = await apiRequest.newContext({ baseURL: base });
   try {
-    const signIn = await context.post('/api/auth/login', { data: ADMIN });
-    const { accessToken } = (await signIn.json()) as { accessToken: string };
+    const accessToken = await adminApiToken(context);
     const headers = { authorization: `Bearer ${accessToken}` };
 
     const params = new URLSearchParams({ search: options.to, pageSize: '5' });

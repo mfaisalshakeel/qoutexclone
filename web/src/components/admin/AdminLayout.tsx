@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { api } from '../../lib/api';
+import { ApiError, api } from '../../lib/api';
 import { realtime } from '../../lib/ws';
 import { useAuth } from '../../store/auth';
 import { useRealtime } from '../../hooks/useRealtime';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { Toasts } from '../Toasts';
 import { IconLogo } from '../Icons';
+import { hasArea, type PermissionArea } from '../../lib/permissions';
 
 export interface AdminCounts {
   pendingWithdrawals: number;
@@ -16,43 +17,47 @@ export interface AdminCounts {
   liveTournaments: number;
 }
 
-const SECTIONS: { label: string; items: { to: string; label: string; badge?: keyof AdminCounts }[] }[] = [
+const SECTIONS: {
+  label: string;
+  items: { to: string; label: string; area: PermissionArea; badge?: keyof AdminCounts }[];
+}[] = [
   {
     label: 'Overview',
-    items: [{ to: '/admin', label: 'Dashboard' }],
+    items: [{ to: '/admin', label: 'Dashboard', area: 'dashboard' }],
   },
   {
     label: 'Money',
     items: [
-      { to: '/admin/withdrawals', label: 'Withdrawals', badge: 'pendingWithdrawals' },
-      { to: '/admin/deposits', label: 'Deposits', badge: 'pendingDeposits' },
-      { to: '/admin/ledger', label: 'Ledger' },
-      { to: '/admin/referrals', label: 'Referrals' },
+      { to: '/admin/withdrawals', label: 'Withdrawals', area: 'finance', badge: 'pendingWithdrawals' },
+      { to: '/admin/deposits', label: 'Deposits', area: 'finance', badge: 'pendingDeposits' },
+      { to: '/admin/ledger', label: 'Ledger', area: 'finance' },
+      { to: '/admin/referrals', label: 'Referrals', area: 'finance' },
     ],
   },
   {
     label: 'Traders',
     items: [
-      { to: '/admin/users', label: 'Users' },
-      { to: '/admin/kyc', label: 'Verification', badge: 'pendingKyc' },
-      { to: '/admin/trades', label: 'Trades' },
-      { to: '/admin/support', label: 'Support', badge: 'openTickets' },
+      { to: '/admin/users', label: 'Users', area: 'users.view' },
+      { to: '/admin/kyc', label: 'Verification', area: 'support', badge: 'pendingKyc' },
+      { to: '/admin/trades', label: 'Trades', area: 'risk' },
+      { to: '/admin/support', label: 'Support', area: 'support', badge: 'openTickets' },
     ],
   },
   {
     label: 'Platform',
     items: [
-      { to: '/admin/tournaments', label: 'Tournaments', badge: 'liveTournaments' },
-      { to: '/admin/promos', label: 'Promo codes' },
-      { to: '/admin/marketplace-orders', label: 'Marketplace orders' },
-      { to: '/admin/assets', label: 'Markets' },
-      { to: '/admin/schedules', label: 'Sessions' },
-      { to: '/admin/price-engine', label: 'Price engine' },
-      { to: '/admin/payouts', label: 'Payouts' },
-      { to: '/admin/risk', label: 'Risk' },
-      { to: '/admin/email', label: 'Email' },
-      { to: '/admin/settings', label: 'Settings' },
-      { to: '/admin/audit', label: 'Audit log' },
+      { to: '/admin/tournaments', label: 'Tournaments', area: 'content', badge: 'liveTournaments' },
+      { to: '/admin/promos', label: 'Promo codes', area: 'content' },
+      { to: '/admin/marketplace-orders', label: 'Marketplace orders', area: 'finance' },
+      { to: '/admin/assets', label: 'Markets', area: 'risk' },
+      { to: '/admin/schedules', label: 'Sessions', area: 'risk' },
+      { to: '/admin/price-engine', label: 'Price engine', area: 'risk' },
+      { to: '/admin/payouts', label: 'Payouts', area: 'risk' },
+      { to: '/admin/risk', label: 'Risk', area: 'risk' },
+      { to: '/admin/email', label: 'Email', area: 'content' },
+      { to: '/admin/staff', label: 'Admin users', area: 'settings' },
+      { to: '/admin/settings', label: 'Settings', area: 'settings' },
+      { to: '/admin/audit', label: 'Audit log', area: 'settings' },
     ],
   },
 ];
@@ -66,14 +71,20 @@ export function AdminLayout() {
   const location = useLocation();
   const [counts, setCounts] = useState<AdminCounts | null>(null);
   const [drawer, setDrawer] = useState(false);
+  const [needsTwoFactor, setNeedsTwoFactor] = useState(false);
 
   useRealtime();
 
   const loadCounts = () =>
     api
       .get<{ snapshot: AdminCounts }>('/admin/overview')
-      .then((data) => setCounts(data.snapshot))
-      .catch(() => undefined);
+      .then((data) => {
+        setCounts(data.snapshot);
+        setNeedsTwoFactor(false);
+      })
+      .catch((err) => {
+        if (err instanceof ApiError && err.code === 'admin_2fa_required') setNeedsTwoFactor(true);
+      });
 
   useEffect(() => {
     void loadCounts();
@@ -103,6 +114,14 @@ export function AdminLayout() {
     return () => window.removeEventListener('keydown', onKey);
   }, [drawer]);
 
+  // a role only sees the sections and links its own areas cover; an empty
+  // section (every link in it hidden) is dropped rather than shown as a
+  // heading over nothing
+  const visibleSections = SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => hasArea(user?.permissions, item.area)),
+  })).filter((section) => section.items.length > 0);
+
   const nav = (
     <nav className="flex h-full flex-col">
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-ink-700 px-4">
@@ -112,7 +131,7 @@ export function AdminLayout() {
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto p-3">
-        {SECTIONS.map((section) => (
+        {visibleSections.map((section) => (
           <div key={section.label}>
             <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
               {section.label}
@@ -161,6 +180,23 @@ export function AdminLayout() {
       </div>
     </nav>
   );
+
+  if (needsTwoFactor) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-ink-900 p-4">
+        <div className="card max-w-sm space-y-3 p-6 text-center">
+          <p className="text-sm font-semibold text-slate-100">Turn on two-factor to continue</p>
+          <p className="text-xs text-slate-400">
+            Admin accounts need a second factor before they can open the back office. Set it up from
+            Account → Security, then come back here.
+          </p>
+          <Link to="/account/security" className="btn-primary block w-full !py-2 text-xs">
+            Go to Account → Security
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-dvh bg-ink-900">

@@ -622,7 +622,8 @@ test.describe('admin', () => {
     // force logout asks for confirmation, then reports what it did
     admin.once('dialog', (dialog) => void dialog.accept());
     await admin.getByRole('button', { name: 'Force logout' }).click();
-    await expect(admin.getByText(/Signed out of|No active sessions/)).toBeVisible();
+    // the trader is signed in via this very browser, so at least one session is always found
+    await expect(admin.getByText(/^Signed out of \d+ session/)).toBeVisible();
 
     // compose and send a one-off email
     await admin.getByRole('button', { name: 'Send email' }).click();

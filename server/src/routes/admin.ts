@@ -1,7 +1,10 @@
+import crypto from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { ADMIN_ROLES } from '../lib/permissions.js';
 import { badRequest, notFound, wrap } from '../lib/errors.js';
 import {
   buildFilterWhere,
@@ -13,7 +16,7 @@ import {
   streamCsvExport,
 } from '../lib/list-query.js';
 import { publicDeposit, publicUser, publicWithdrawal } from '../lib/serialize.js';
-import { requireAdmin, requireAuth } from '../middleware/auth.js';
+import { requireAdmin, requireAuth, requirePermission } from '../middleware/auth.js';
 import { TX_TYPES, applyLedger } from '../services/wallet.js';
 import { completeDeposit, rejectDeposit } from '../services/deposits.js';
 import { approveWithdrawal, priorityOrder, rejectWithdrawal } from '../services/withdrawals.js';
@@ -27,7 +30,12 @@ import { mailTransportName, sendMail, sendTestEmail, smtpReady } from '../servic
 import { adminMessage } from '../services/email-templates.js';
 import { previewAll } from '../services/email-preview.js';
 import { levelFor, statusConfig } from '../services/status.js';
-import { adminResetTwoFactor, listSessions, revokeOtherSessions } from '../services/security.js';
+import {
+  adminResetTwoFactor,
+  assertPasswordAllowed,
+  listSessions,
+  revokeOtherSessions,
+} from '../services/security.js';
 import * as marketplace from '../services/marketplace.js';
 import { forfeitAll, listOffers } from '../services/bonuses.js';
 import * as paymentsService from '../services/payments.js';
@@ -43,6 +51,40 @@ import { dashboardCharts } from '../services/admin-charts.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
+
+/**
+ * One area per resource, checked by path prefix rather than on each route —
+ * a mutation nested under `/users/:id/...` that needs a *narrower* area than
+ * the rest of that resource (adjusting a balance, say) adds its own stricter
+ * `requirePermission` directly on that route, on top of the broad gate here.
+ */
+router.use('/overview', requirePermission('dashboard'));
+router.use('/charts', requirePermission('dashboard'));
+router.use('/users', requirePermission('users.view'));
+router.use('/deposits', requirePermission('finance'));
+router.use('/withdrawals', requirePermission('finance'));
+router.use('/transactions', requirePermission('finance'));
+router.use('/referrals', requirePermission('finance'));
+router.use('/payment-methods', requirePermission('finance'));
+router.use('/marketplace/orders', requirePermission('finance'));
+router.use('/bonuses', requirePermission('finance'));
+router.use('/kyc', requirePermission('support'));
+router.use('/support', requirePermission('support'));
+router.use('/trades', requirePermission('risk'));
+router.use('/assets', requirePermission('risk'));
+router.use('/schedules', requirePermission('risk'));
+router.use('/otc', requirePermission('risk'));
+router.use('/payout-rules', requirePermission('risk'));
+router.use('/risk', requirePermission('risk'));
+router.use('/promos', requirePermission('content'));
+router.use('/tournaments', requirePermission('content'));
+router.use('/marketplace/items', requirePermission('content'));
+router.use('/bonus-offers', requirePermission('content'));
+router.use('/emails', requirePermission('content'));
+router.use('/email-templates', requirePermission('content'));
+router.use('/settings', requirePermission('settings'));
+router.use('/audit', requirePermission('settings'));
+router.use('/staff', requirePermission('settings'));
 
 async function audit(actorId: string, action: string, targetType: string, targetId: string, detail?: string) {
   await prisma.auditLog.create({ data: { actorId, action, targetType, targetId, detail } });
@@ -90,7 +132,9 @@ function usersListWhere(req: { query: Record<string, unknown> }) {
   const query = listQuerySchema.parse(req.query);
   return {
     query,
+    // staff accounts have their own list at /staff now that one exists
     where: combineWhere(
+      { role: 'USER' },
       buildSearchWhere(query.search, USER_SEARCH_FIELDS),
       buildFilterWhere(USER_FILTERS, req.query as Record<string, string | undefined>),
     ),
@@ -230,6 +274,7 @@ router.get(
 
 router.post(
   '/users/:id/force-logout',
+  requirePermission('users.manage'),
   wrap(async (req, res) => {
     const count = await revokeOtherSessions(req.params.id, null);
     await audit(req.user!.id, 'user.force-logout', 'user', req.params.id, `${count} session(s) revoked`);
@@ -239,6 +284,7 @@ router.post(
 
 router.post(
   '/users/:id/reset-2fa',
+  requirePermission('users.manage'),
   wrap(async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!user) throw notFound('User not found');
@@ -250,6 +296,7 @@ router.post(
 
 router.post(
   '/users/:id/email',
+  requirePermission('users.manage'),
   wrap(async (req, res) => {
     const body = z
       .object({ subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(5000) })
@@ -269,6 +316,7 @@ router.post(
 
 router.post(
   '/users/:id/status-level',
+  requirePermission('users.finance'),
   wrap(async (req, res) => {
     const body = z.object({ levelId: z.string().max(40).nullable() }).parse(req.body);
     if (body.levelId) {
@@ -288,6 +336,7 @@ router.post(
 
 router.get(
   '/users/:id/notes',
+  requirePermission('users.manage'),
   wrap(async (req, res) => {
     const notes = await prisma.userNote.findMany({
       where: { userId: req.params.id },
@@ -300,6 +349,7 @@ router.get(
 
 router.post(
   '/users/:id/notes',
+  requirePermission('users.manage'),
   wrap(async (req, res) => {
     const body = z.object({ body: z.string().trim().min(1).max(2000) }).parse(req.body);
     const note = await prisma.userNote.create({
@@ -313,6 +363,7 @@ router.post(
 
 router.post(
   '/users/:id/status',
+  requirePermission('users.manage'),
   wrap(async (req, res) => {
     const body = z.object({ status: z.enum(['ACTIVE', 'SUSPENDED']) }).parse(req.body);
     const user = await prisma.user.update({ where: { id: req.params.id }, data: { status: body.status } });
@@ -323,6 +374,7 @@ router.post(
 
 router.post(
   '/users/:id/adjust',
+  requirePermission('users.finance'),
   wrap(async (req, res) => {
     const body = z
       .object({
@@ -344,6 +396,112 @@ router.post(
     await audit(req.user!.id, 'user.adjust', 'user', req.params.id, `${body.accountType} ${cents}`);
     const user = await prisma.user.findUnique({ where: { id: req.params.id } });
     res.json({ user: publicUser(user!) });
+  }),
+);
+
+/* ---------------------------------- staff --------------------------------- */
+
+/**
+ * The back office's own accounts. Separate from `/users` (traders) rather
+ * than a role filter on it, so a super admin manages the team on a page
+ * built for that job — assign a role, watch for one still missing its
+ * mandatory second factor, suspend a departing colleague — instead of one
+ * built for balances and KYC.
+ */
+router.get(
+  '/staff',
+  wrap(async (_req, res) => {
+    const staff = await prisma.user.findMany({
+      where: { role: 'ADMIN' },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        adminRole: true,
+        status: true,
+        twoFactorEnabledAt: true,
+        lastLoginAt: true,
+        createdAt: true,
+      },
+    });
+    res.json({
+      staff: staff.map((s) => ({ ...s, twoFactorEnabled: s.twoFactorEnabledAt !== null })),
+      roles: ADMIN_ROLES,
+    });
+  }),
+);
+
+router.post(
+  '/staff',
+  wrap(async (req, res) => {
+    const body = z
+      .object({
+        email: z.string().email().max(160),
+        name: z.string().min(2).max(60),
+        password: z.string().min(8).max(128),
+        adminRole: z.enum(ADMIN_ROLES),
+      })
+      .parse(req.body);
+    const email = body.email.toLowerCase().trim();
+    if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) {
+      throw badRequest('That email is already in use', 'email_taken');
+    }
+    assertPasswordAllowed(body.password, { email, name: body.name });
+
+    const created = await prisma.user.create({
+      data: {
+        email,
+        name: body.name.trim(),
+        passwordHash: await bcrypt.hash(body.password, 10),
+        role: 'ADMIN',
+        adminRole: body.adminRole,
+        referralCode: crypto.randomBytes(4).toString('hex').toUpperCase(),
+        realBalance: 0,
+      },
+    });
+    await audit(req.user!.id, 'staff.create', 'user', created.id, body.adminRole);
+    res.status(201).json({ user: publicUser(created) });
+  }),
+);
+
+router.patch(
+  '/staff/:id',
+  wrap(async (req, res) => {
+    const body = z.object({ adminRole: z.enum(ADMIN_ROLES) }).parse(req.body);
+    if (req.params.id === req.user!.id) {
+      throw badRequest("You can't change your own role. Ask another super admin.", 'not_self');
+    }
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target || target.role !== 'ADMIN') throw notFound('Staff account not found');
+
+    if (target.adminRole === 'SUPER_ADMIN' && body.adminRole !== 'SUPER_ADMIN') {
+      const otherSuperAdmins = await prisma.user.count({
+        where: { role: 'ADMIN', adminRole: 'SUPER_ADMIN', id: { not: target.id } },
+      });
+      if (otherSuperAdmins === 0) {
+        throw badRequest('There has to be at least one super admin', 'last_super_admin');
+      }
+    }
+
+    const user = await prisma.user.update({ where: { id: target.id }, data: { adminRole: body.adminRole } });
+    await audit(req.user!.id, 'staff.role', 'user', user.id, body.adminRole);
+    res.json({ user: publicUser(user) });
+  }),
+);
+
+router.post(
+  '/staff/:id/status',
+  wrap(async (req, res) => {
+    const body = z.object({ status: z.enum(['ACTIVE', 'SUSPENDED']) }).parse(req.body);
+    if (req.params.id === req.user!.id) {
+      throw badRequest("You can't suspend your own account.", 'not_self');
+    }
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target || target.role !== 'ADMIN') throw notFound('Staff account not found');
+    const user = await prisma.user.update({ where: { id: target.id }, data: { status: body.status } });
+    await audit(req.user!.id, 'staff.status', 'user', user.id, body.status);
+    res.json({ user: publicUser(user) });
   }),
 );
 
@@ -2001,6 +2159,7 @@ router.get(
  */
 router.post(
   '/users/:id/bonuses/forfeit',
+  requirePermission('users.finance'),
   wrap(async (req, res) => {
     const id = z.string().min(1).max(40).parse(req.params.id);
     const total = await prisma.$transaction((tx) => forfeitAll(tx, id));

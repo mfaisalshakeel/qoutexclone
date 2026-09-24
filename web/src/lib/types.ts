@@ -4,6 +4,10 @@ export interface User {
   name: string;
   country?: string | null;
   role: 'USER' | 'ADMIN';
+  /** Back-office sub-role; set only when `role` is ADMIN. */
+  adminRole?: string | null;
+  /** The permission areas `adminRole` grants — see `lib/permissions.ts`. */
+  permissions?: string[];
   status: 'ACTIVE' | 'SUSPENDED';
   activeAccount: AccountType;
   demoBalance: number;
