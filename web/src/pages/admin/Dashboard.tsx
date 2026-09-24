@@ -4,8 +4,9 @@ import { api, ApiError } from '../../lib/api';
 import { dateTime, money } from '../../lib/format';
 import { Empty, Loading, PageHead, StatCard, StatusPill, Table, Td } from '../../components/admin/ui';
 import type { ChartsData } from '../../components/admin/Charts';
-import type { Deposit, Withdrawal } from '../../lib/types';
+import type { Deposit, Trade, Withdrawal } from '../../lib/types';
 import { Skeleton, StatSkeletons } from '../../components/Skeleton';
+import { realtime, type ProviderHealth } from '../../lib/ws';
 
 // recharts pulls in d3 and is sizeable; traders never hit this bundle, only
 // admins landing on the dashboard, so it is worth the extra request.
@@ -41,7 +42,26 @@ interface Overview {
     liveTournaments: number;
   };
   feedProvider: string;
-  providers: { name: string; status: string; symbols: number; lastTickAt: number | null; detail?: string }[];
+  providers: ProviderHealth[];
+}
+
+interface SystemHealth {
+  feedProvider: string;
+  providers: ProviderHealth[];
+  settlement: { lastTickAt: number | null; lastTickMs: number; lagMs: number };
+  ws: { connections: number; onlineUsers: number };
+}
+
+/** A settled trade keeps its `opened` row's place in the feed rather than duplicating it. */
+interface LiveTrade {
+  id: string;
+  symbol: string;
+  direction: 'UP' | 'DOWN';
+  stake: number;
+  status: Trade['status'];
+  profit: number;
+  user: { email: string; name: string } | null;
+  at: number;
 }
 
 type Preset = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'custom';
@@ -91,13 +111,18 @@ export function AdminDashboard() {
   const [chartDays, setChartDays] = useState<(typeof CHART_WINDOWS)[number]>(30);
   const [charts, setCharts] = useState<ChartsData | null>(null);
   const [chartsError, setChartsError] = useState('');
+  const [liveTrades, setLiveTrades] = useState<LiveTrade[]>([]);
+  const [health, setHealth] = useState<SystemHealth | null>(null);
 
   const range = useMemo(() => presetRange(preset, custom), [preset, custom]);
 
   useEffect(() => {
     const params = new URLSearchParams({ from: range.from.toISOString(), to: range.to.toISOString() });
     setOverview(null);
-    void api.get<Overview>(`/admin/overview?${params.toString()}`).then(setOverview).catch(() => undefined);
+    void api
+      .get<Overview>(`/admin/overview?${params.toString()}`)
+      .then(setOverview)
+      .catch(() => undefined);
   }, [range]);
 
   const loadCharts = () => {
@@ -123,6 +148,49 @@ export function AdminDashboard() {
     ]).catch(() => undefined);
   }, []);
 
+  // the live panels: a trade feed, and deposits/withdrawals updated in place
+  // as they arrive rather than only on the page's first load
+  useEffect(() => {
+    const MAX_LIVE_TRADES = 12;
+    const offTrade = realtime.on('admin:trade', ({ trade, user }) => {
+      setLiveTrades((current) => {
+        const row: LiveTrade = {
+          id: trade.id,
+          symbol: trade.symbol,
+          direction: trade.direction,
+          stake: trade.stake,
+          status: trade.status,
+          profit: trade.profit,
+          user,
+          at: Date.now(),
+        };
+        // a settled trade replaces its own `opened` row rather than duplicating it
+        const withoutThis = current.filter((t) => t.id !== trade.id);
+        return [row, ...withoutThis].slice(0, MAX_LIVE_TRADES);
+      });
+    });
+
+    const upsert = <T extends { id: string }>(list: T[], row: T, cap: number): T[] =>
+      [row, ...list.filter((existing) => existing.id !== row.id)].slice(0, cap);
+
+    const offDeposit = realtime.on('admin:deposit', ({ deposit, user }) => {
+      setDeposits((current) => upsert(current, { ...deposit, user: user ?? deposit.user }, 6));
+    });
+    const offWithdrawal = realtime.on('admin:withdrawal', ({ withdrawal, user }) => {
+      setWithdrawals((current) => upsert(current, { ...withdrawal, user: user ?? withdrawal.user }, 6));
+    });
+    const offHealth = realtime.on('admin:health', ({ feedProvider, providers, settlement, ws }) => {
+      setHealth({ feedProvider, providers, settlement, ws });
+    });
+
+    return () => {
+      offTrade();
+      offDeposit();
+      offWithdrawal();
+      offHealth();
+    };
+  }, []);
+
   if (!overview) {
     return (
       <>
@@ -142,6 +210,8 @@ export function AdminDashboard() {
   }
 
   const { current, previous, snapshot } = overview;
+  // the live feed replaces the one-time snapshot the moment the first admin:health tick arrives
+  const displayProviders = health?.providers ?? overview.providers;
 
   return (
     <>
@@ -225,6 +295,11 @@ export function AdminDashboard() {
       <h2 className="mb-2 text-sm font-semibold">Right now</h2>
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Total traders" value={String(snapshot.users)} hint="all time" />
+        <StatCard
+          label="Online now"
+          value={health ? String(health.ws.onlineUsers) : '—'}
+          hint={health ? `${health.ws.connections} connections` : 'connecting…'}
+        />
         <StatCard label="Live tournaments" value={String(snapshot.liveTournaments)} />
         <StatCard
           label="Needs attention"
@@ -275,14 +350,20 @@ export function AdminDashboard() {
         )}
       </div>
 
-      <h2 className="mb-2 mt-6 text-sm font-semibold">Market data</h2>
+      <h2 className="mb-2 mt-6 flex items-center gap-2 text-sm font-semibold">
+        System health
+        <span
+          className={`h-1.5 w-1.5 rounded-full ${health ? 'bg-up' : 'bg-ink-600'}`}
+          title={health ? 'Live' : 'Connecting…'}
+        />
+      </h2>
       <div className="card mb-4 divide-y divide-ink-700">
-        {(overview.providers ?? []).length === 0 && (
+        {(displayProviders ?? []).length === 0 && (
           <p className="p-4 text-xs text-slate-500">
             Every market is priced by the broker engine. Set FEED_PROVIDER to enable live data.
           </p>
         )}
-        {(overview.providers ?? []).map((provider) => (
+        {(displayProviders ?? []).map((provider) => (
           <div key={provider.name} className="flex flex-wrap items-center gap-3 p-3.5">
             <span className="min-w-0 flex-1">
               <span className="block text-xs font-semibold">{provider.name}</span>
@@ -295,7 +376,59 @@ export function AdminDashboard() {
             <StatusPill status={provider.status} />
           </div>
         ))}
+        <div className="flex flex-wrap items-center gap-3 p-3.5">
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-semibold">Settlement</span>
+            <span className="block text-[11px] text-slate-500">
+              {health
+                ? health.settlement.lastTickAt
+                  ? `swept ${dateTime(new Date(health.settlement.lastTickAt))} in ${health.settlement.lastTickMs}ms`
+                  : 'no pass yet'
+                : 'connecting…'}
+            </span>
+          </span>
+          <StatusPill
+            status={!health ? 'connecting' : health.settlement.lagMs > 0 ? 'degraded' : 'caught up'}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-3 p-3.5">
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-semibold">Realtime connections</span>
+            <span className="block text-[11px] text-slate-500">
+              {health ? `${health.ws.connections} sockets · ${health.ws.onlineUsers} signed-in traders` : '—'}
+            </span>
+          </span>
+        </div>
       </div>
+
+      <h2 className="mb-2 mt-6 text-sm font-semibold">Latest trades</h2>
+      {liveTrades.length === 0 ? (
+        <Empty text="Waiting for the first trade…" />
+      ) : (
+        <Table head={['Trader', 'Market', 'Stake', 'Result', 'When']}>
+          {liveTrades.map((t) => (
+            <tr key={t.id}>
+              <Td className="text-xs">{t.user?.email ?? '—'}</Td>
+              <Td className="text-xs">
+                {t.symbol}
+                <span className={`ml-2 ${t.direction === 'UP' ? 'text-up' : 'text-down'}`}>
+                  {t.direction === 'UP' ? '▲' : '▼'}
+                </span>
+              </Td>
+              <Td className="tabular text-xs font-semibold">{money(t.stake)}</Td>
+              <Td className="text-right">
+                <StatusPill status={t.status} />
+                {t.status !== 'OPEN' && (
+                  <span className={`tabular ml-2 text-[11px] ${t.profit >= 0 ? 'text-up' : 'text-down'}`}>
+                    {money(t.profit, { sign: true })}
+                  </span>
+                )}
+              </Td>
+              <Td className="text-[11px] text-slate-500">{dateTime(new Date(t.at))}</Td>
+            </tr>
+          ))}
+        </Table>
+      )}
 
       <h2 className="mb-2 mt-6 text-sm font-semibold">Latest withdrawals</h2>
       {withdrawals.length === 0 ? (

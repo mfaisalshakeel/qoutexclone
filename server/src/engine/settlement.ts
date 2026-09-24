@@ -15,6 +15,8 @@ export class SettlementEngine {
   private timer: NodeJS.Timeout | null = null;
   private busy = false;
   private lastTournamentSweep = 0;
+  private lastTickAt: number | null = null;
+  private lastTickMs = 0;
 
   start(): void {
     if (this.timer) return;
@@ -40,6 +42,7 @@ export class SettlementEngine {
   async tick(): Promise<number> {
     if (this.busy) return 0;
     this.busy = true;
+    const startedAt = Date.now();
     try {
       const due = await prisma.trade.findMany({
         where: { status: 'OPEN', expiresAt: { lte: new Date() } },
@@ -68,7 +71,28 @@ export class SettlementEngine {
       return 0;
     } finally {
       this.busy = false;
+      this.lastTickAt = startedAt;
+      this.lastTickMs = Date.now() - startedAt;
     }
+  }
+
+  /**
+   * How far behind the sweeper is right now, for the admin dashboard: the
+   * oldest position still open past its expiry, in milliseconds. 0 means
+   * fully caught up. A real lag here (rather than the loop just not having
+   * ticked yet) means settlement itself cannot keep pace with expiries.
+   */
+  async health(): Promise<{ lastTickAt: number | null; lastTickMs: number; lagMs: number }> {
+    const oldest = await prisma.trade.findFirst({
+      where: { status: 'OPEN', expiresAt: { lte: new Date() } },
+      orderBy: { expiresAt: 'asc' },
+      select: { expiresAt: true },
+    });
+    return {
+      lastTickAt: this.lastTickAt,
+      lastTickMs: this.lastTickMs,
+      lagMs: oldest ? Date.now() - oldest.expiresAt.getTime() : 0,
+    };
   }
 }
 

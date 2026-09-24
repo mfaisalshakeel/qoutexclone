@@ -14,6 +14,16 @@ import type {
 
 type Handler = (payload: never) => void;
 
+type TraderIdentity = { email: string; name: string; totalDeposited: number } | null;
+
+export interface ProviderHealth {
+  name: string;
+  status: string;
+  symbols: number;
+  lastTickAt: number | null;
+  detail?: string;
+}
+
 export interface RealtimeEvents {
   quotes: { prices: Record<string, number>; ts: number };
   /** The whole sentiment book; small enough to send rather than diff. */
@@ -41,6 +51,17 @@ export interface RealtimeEvents {
   'support:ticket': { ticket: SupportTicket };
   'tournament:updated': { tournament: { id: string; name: string; status: string } };
   'settings:changed': { key: string; value: unknown };
+  /** The back office's live feed — every market's trades, not just this socket's own. */
+  'admin:trade': { event: 'opened' | 'settled'; trade: Trade; user: TraderIdentity };
+  'admin:deposit': { event: 'created' | 'updated'; deposit: Deposit; user: TraderIdentity };
+  'admin:withdrawal': { event: 'created' | 'updated'; withdrawal: Withdrawal; user: TraderIdentity };
+  'admin:health': {
+    feedProvider: string;
+    providers: ProviderHealth[];
+    settlement: { lastTickAt: number | null; lastTickMs: number; lagMs: number };
+    ws: { connections: number; onlineUsers: number };
+    ts: number;
+  };
   status: { connected: boolean };
 }
 

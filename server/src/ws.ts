@@ -1,6 +1,7 @@
 import type { Server } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { marketFeed } from './engine/feed.js';
+import { settlementEngine } from './engine/settlement.js';
 import { candleStore } from './services/candles.js';
 import { verifyAccessToken } from './lib/jwt.js';
 import { tradeEvents } from './services/trading.js';
@@ -51,6 +52,8 @@ const HEARTBEAT_MS = 30000;
  * a slower loop and only the markets whose figure actually changed are sent.
  */
 const PAYOUT_MS = 10_000;
+/** How often the back office's live system-health panel refreshes. */
+const ADMIN_HEALTH_MS = 5_000;
 
 /**
  * Realtime channel for the terminal: batched quotes + the subscribed candle for
@@ -88,6 +91,21 @@ export function attachWebsocket(server: Server) {
   const toEveryone = (payload: unknown) => {
     for (const socket of clients.keys()) send(socket, payload);
   };
+
+  /** Skips the enrichment lookups below when no back-office tab is even open. */
+  const hasAdmins = () => {
+    for (const state of clients.values()) if (state.isAdmin) return true;
+    return false;
+  };
+
+  /**
+   * The trader identity the live admin panels show next to an event.
+   * `totalDeposited` rides along even for trade/deposit events, unused
+   * there, so the withdrawal panel's row shape matches the same one the
+   * paginated `/admin/withdrawals` list already sends.
+   */
+  const traderIdentity = (userId: string) =>
+    prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true, totalDeposited: true } });
 
   wss.on('connection', (socket, req) => {
     const state: ClientState = { channels: new Map(), alive: true };
@@ -263,6 +281,28 @@ export function attachWebsocket(server: Server) {
   }, HEARTBEAT_MS);
   heartbeat.unref?.();
 
+  // the back office's "system health" panel: feed status per provider,
+  // settlement lag, and connection counts. Gated on hasAdmins() the same way
+  // the payout loop gates its own work — nobody pays for this when no
+  // back-office tab is open.
+  const adminHealthLoop = setInterval(() => {
+    if (!hasAdmins()) return;
+    void settlementEngine
+      .health()
+      .then((settlement) => {
+        toAdmins({
+          type: 'admin:health',
+          feedProvider: marketFeed.provider,
+          providers: marketFeed.providerHealth(),
+          settlement,
+          ws: { connections: clients.size, onlineUsers: byUser.size },
+          ts: Date.now(),
+        });
+      })
+      .catch((err) => log.ws.error({ err }, 'admin health broadcast failed'));
+  }, ADMIN_HEALTH_MS);
+  adminHealthLoop.unref?.();
+
   tradeEvents.on('settled', ({ trade, balance }) => {
     toUser(trade.userId, {
       type: 'trade:settled',
@@ -270,9 +310,19 @@ export function attachWebsocket(server: Server) {
       balance,
       accountType: trade.accountType,
     });
+    if (hasAdmins()) {
+      void traderIdentity(trade.userId).then((user) => {
+        toAdmins({ type: 'admin:trade', event: 'settled', trade: publicTrade(trade), user });
+      });
+    }
   });
   tradeEvents.on('opened', (trade) => {
     toUser(trade.userId, { type: 'trade:opened', trade: publicTrade(trade) });
+    if (hasAdmins()) {
+      void traderIdentity(trade.userId).then((user) => {
+        toAdmins({ type: 'admin:trade', event: 'opened', trade: publicTrade(trade), user });
+      });
+    }
   });
 
   // a pending order changes state without the trader doing anything, so every
@@ -297,14 +347,47 @@ export function attachWebsocket(server: Server) {
     toUser(order.userId, { type: 'order:failed', order: publicOrder(order) });
   });
   depositEvents.on('updated', (deposit) => {
-    if (deposit) toUser(deposit.userId, { type: 'deposit:updated', deposit: publicDeposit(deposit) });
+    if (!deposit) return;
+    toUser(deposit.userId, { type: 'deposit:updated', deposit: publicDeposit(deposit) });
+    if (hasAdmins()) {
+      void traderIdentity(deposit.userId).then((user) => {
+        toAdmins({ type: 'admin:deposit', event: 'updated', deposit: publicDeposit(deposit), user });
+      });
+    }
   });
   depositEvents.on('created', (deposit) => {
-    if (deposit) toUser(deposit.userId, { type: 'deposit:created', deposit: publicDeposit(deposit) });
+    if (!deposit) return;
+    toUser(deposit.userId, { type: 'deposit:created', deposit: publicDeposit(deposit) });
+    if (hasAdmins()) {
+      void traderIdentity(deposit.userId).then((user) => {
+        toAdmins({ type: 'admin:deposit', event: 'created', deposit: publicDeposit(deposit), user });
+      });
+    }
+  });
+  withdrawalEvents.on('created', (withdrawal) => {
+    if (!withdrawal || !hasAdmins()) return;
+    void traderIdentity(withdrawal.userId).then((user) => {
+      toAdmins({
+        type: 'admin:withdrawal',
+        event: 'created',
+        withdrawal: publicWithdrawal(withdrawal),
+        user,
+      });
+    });
   });
   withdrawalEvents.on('updated', (withdrawal) => {
-    if (withdrawal)
-      toUser(withdrawal.userId, { type: 'withdrawal:updated', withdrawal: publicWithdrawal(withdrawal) });
+    if (!withdrawal) return;
+    toUser(withdrawal.userId, { type: 'withdrawal:updated', withdrawal: publicWithdrawal(withdrawal) });
+    if (hasAdmins()) {
+      void traderIdentity(withdrawal.userId).then((user) => {
+        toAdmins({
+          type: 'admin:withdrawal',
+          event: 'updated',
+          withdrawal: publicWithdrawal(withdrawal),
+          user,
+        });
+      });
+    }
   });
 
   // the centre updates itself: a notification written server-side arrives at
@@ -340,6 +423,7 @@ export function attachWebsocket(server: Server) {
       clearInterval(broadcast);
       clearInterval(payoutLoop);
       clearInterval(heartbeat);
+      clearInterval(adminHealthLoop);
       wss.close();
     },
   };

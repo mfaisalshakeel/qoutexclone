@@ -1,5 +1,14 @@
 import { expect, test } from '@playwright/test';
-import { ADMIN, failOnPageErrors, fundAccount, login, newCredentials, register } from './helpers';
+import {
+  ADMIN,
+  failOnPageErrors,
+  fundAccount,
+  login,
+  newCredentials,
+  openMarket,
+  placeTrade,
+  register,
+} from './helpers';
 
 test.describe('admin', () => {
   // this spec drives two complete journeys (fund, request, approve) back to back
@@ -159,6 +168,43 @@ test.describe('admin', () => {
     await expect(page.getByText('Deposits vs withdrawals · last 90 days')).toBeVisible();
 
     expect(errors).toEqual([]);
+  });
+
+  test('dashboard live panels update without a reload', async ({ browser }) => {
+    const adminContext = await browser.newContext();
+    const traderContext = await browser.newContext();
+    const admin = await adminContext.newPage();
+    const trader = await traderContext.newPage();
+    const adminErrors = failOnPageErrors(admin);
+    const traderErrors = failOnPageErrors(trader);
+
+    await login(admin, ADMIN);
+    await admin.goto('/admin');
+    await expect(admin.getByText('System health')).toBeVisible();
+    await expect(admin.getByText('Latest trades')).toBeVisible();
+
+    // the health panel starts in a "connecting…" state and switches to a
+    // live reading once the server's first admin:health tick lands
+    await expect(admin.getByText(/sockets ·/)).toBeVisible({ timeout: 10_000 });
+
+    // funding an account is a deposit event; the row should appear on the
+    // dashboard's existing "Latest deposits" panel without a page reload
+    const credentials = await register(trader, newCredentials('livepanel'));
+    await fundAccount(trader, '$250');
+    await expect(admin.getByText(credentials.email).first()).toBeVisible({ timeout: 15_000 });
+
+    // a trade opened by that same trader reaches the "Latest trades" panel too
+    await trader.goto('/trade');
+    await openMarket(trader, 'EURUSD_OTC', 'EUR/USD (OTC)');
+    await placeTrade(trader, 'Higher', '30s');
+    const tradeRow = admin.getByRole('row', { name: new RegExp(credentials.email) }).first();
+    await expect(tradeRow).toBeVisible({ timeout: 15_000 });
+    await expect(tradeRow).toContainText('EURUSD_OTC');
+
+    expect(adminErrors).toEqual([]);
+    expect(traderErrors).toEqual([]);
+    await adminContext.close();
+    await traderContext.close();
   });
 
   test('back office sections all load', async ({ page }) => {
