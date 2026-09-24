@@ -1693,15 +1693,32 @@ router.patch(
   wrap(async (req, res) => {
     const body = z
       .object({
+        // descriptive and pricing fields an operator tunes day to day; the
+        // identity fields a live feed matches on (symbol, base, quote,
+        // feedSymbol, isOtc, assetClass) are deliberately not editable here —
+        // changing them would silently break feed routing
+        name: z.string().trim().min(1).max(80).optional(),
+        pair: z.string().trim().min(1).max(40).optional(),
+        icon: z.string().trim().max(8).nullable().optional(),
         payoutPct: z.number().int().min(10).max(500).optional(),
         minStake: z.number().int().min(1).optional(),
         maxStake: z.number().int().min(100).optional(),
+        basePrice: z.number().positive().optional(),
+        volatility: z.number().positive().optional(),
+        precision: z.number().int().min(0).max(8).optional(),
+        pipSize: z.number().positive().optional(),
+        // narrows the platform's duration list; null (not omitted) clears
+        // the narrowing and falls back to it — see durationsFor()
+        durations: z.array(z.number().int().positive()).nullable().optional(),
         enabled: z.boolean().optional(),
         sortOrder: z.number().int().optional(),
         scheduleId: z.string().nullable().optional(),
       })
       .parse(req.body);
-    const asset = await prisma.asset.update({ where: { id: req.params.id }, data: body });
+    const asset = await prisma.asset.update({
+      where: { id: req.params.id },
+      data: body as Prisma.AssetUpdateInput,
+    });
     await audit(req.user!.id, 'asset.update', 'asset', asset.id, JSON.stringify(body));
     res.json({ asset });
   }),

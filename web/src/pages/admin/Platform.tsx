@@ -11,6 +11,9 @@ type AdminAsset = Asset & {
   minStake: number;
   maxStake: number;
   scheduleId: string | null;
+  basePrice: number;
+  volatility: number;
+  sortOrder: number;
 };
 
 interface AdminTournament {
@@ -908,6 +911,14 @@ export function AdminMarketplaceOrders() {
 export function AdminAssets() {
   const [reloadToken, setReloadToken] = useState(0);
   const reload = useCallback(() => setReloadToken((n) => n + 1), []);
+  const [schedules, setSchedules] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    api
+      .get<{ schedules: { id: string; name: string }[] }>('/admin/schedules')
+      .then((data) => setSchedules(data.schedules))
+      .catch(() => undefined);
+  }, []);
 
   const patch = async (id: string, data: Record<string, unknown>, message: string) => {
     try {
@@ -1029,7 +1040,268 @@ export function AdminAssets() {
         );
         return { items: data.assets, total: data.total, pageCount: data.pageCount };
       }}
+      renderDrawer={(asset, close) => (
+        <AssetDrawer asset={asset} schedules={schedules} reload={reload} close={close} />
+      )}
     />
+  );
+}
+
+function AssetDrawer({
+  asset,
+  schedules,
+  reload,
+  close,
+}: {
+  asset: AdminAsset;
+  schedules: { id: string; name: string }[];
+  reload: () => void;
+  close: () => void;
+}) {
+  const [form, setForm] = useState({
+    name: asset.name,
+    pair: asset.pair,
+    icon: asset.icon ?? '',
+    payoutPct: asset.payoutPct,
+    minStake: asset.minStake / 100,
+    maxStake: asset.maxStake / 100,
+    basePrice: asset.basePrice,
+    volatility: asset.volatility,
+    precision: asset.precision,
+    pipSize: asset.pipSize,
+    durations: asset.durations?.join(', ') ?? '',
+    sortOrder: asset.sortOrder,
+    scheduleId: asset.scheduleId ?? '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const durations = form.durations.trim()
+      ? form.durations
+          .split(',')
+          .map((part) => Number(part.trim()))
+          .filter((n) => Number.isFinite(n) && n > 0)
+      : null;
+    setSaving(true);
+    try {
+      await api.patch(`/admin/assets/${asset.id}`, {
+        name: form.name.trim(),
+        pair: form.pair.trim(),
+        icon: form.icon.trim() || null,
+        payoutPct: Math.round(form.payoutPct),
+        minStake: Math.round(form.minStake * 100),
+        maxStake: Math.round(form.maxStake * 100),
+        basePrice: form.basePrice,
+        volatility: form.volatility,
+        precision: Math.round(form.precision),
+        pipSize: form.pipSize,
+        durations,
+        sortOrder: Math.round(form.sortOrder),
+        scheduleId: form.scheduleId || null,
+      });
+      reload();
+      toast.success(`${form.pair} updated`);
+      close();
+    } catch (err) {
+      toast.error('Update failed', err instanceof ApiError ? err.message : undefined);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={save}>
+      <h2 className="pr-16 text-sm font-bold">{asset.pair}</h2>
+      <p className="mt-0.5 text-xs text-slate-500">
+        {asset.symbol} · {asset.assetClass.toLowerCase()}
+        {asset.isOtc && <span className="chip ml-2 bg-accent-soft text-accent">OTC</span>}
+      </p>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div>
+          <label className="label" htmlFor="a-name">
+            Name
+          </label>
+          <input
+            id="a-name"
+            required
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            className="field !text-xs"
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="a-pair">
+            Display pair
+          </label>
+          <input
+            id="a-pair"
+            required
+            value={form.pair}
+            onChange={(e) => setForm({ ...form, pair: e.target.value })}
+            className="field !text-xs"
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="a-icon">
+            Icon
+          </label>
+          <input
+            id="a-icon"
+            value={form.icon}
+            onChange={(e) => setForm({ ...form, icon: e.target.value })}
+            placeholder="Short label or emoji"
+            className="field !text-xs"
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="a-sort">
+            Sort order
+          </label>
+          <input
+            id="a-sort"
+            type="number"
+            value={form.sortOrder}
+            onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) })}
+            className="field !text-xs"
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="a-payout">
+            Payout %
+          </label>
+          <input
+            id="a-payout"
+            type="number"
+            min={10}
+            max={500}
+            value={form.payoutPct}
+            onChange={(e) => setForm({ ...form, payoutPct: Number(e.target.value) })}
+            className="field !text-xs"
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="a-precision">
+            Decimals shown
+          </label>
+          <input
+            id="a-precision"
+            type="number"
+            min={0}
+            max={8}
+            value={form.precision}
+            onChange={(e) => setForm({ ...form, precision: Number(e.target.value) })}
+            className="field !text-xs"
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="a-min">
+            Min stake $
+          </label>
+          <input
+            id="a-min"
+            type="number"
+            min={0.01}
+            step={0.01}
+            value={form.minStake}
+            onChange={(e) => setForm({ ...form, minStake: Number(e.target.value) })}
+            className="field !text-xs"
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="a-max">
+            Max stake $
+          </label>
+          <input
+            id="a-max"
+            type="number"
+            min={1}
+            step={0.01}
+            value={form.maxStake}
+            onChange={(e) => setForm({ ...form, maxStake: Number(e.target.value) })}
+            className="field !text-xs"
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="a-price">
+            Base price
+          </label>
+          <input
+            id="a-price"
+            type="number"
+            step="any"
+            value={form.basePrice}
+            onChange={(e) => setForm({ ...form, basePrice: Number(e.target.value) })}
+            className="field !text-xs"
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="a-pip">
+            Pip size
+          </label>
+          <input
+            id="a-pip"
+            type="number"
+            step="any"
+            value={form.pipSize}
+            onChange={(e) => setForm({ ...form, pipSize: Number(e.target.value) })}
+            className="field !text-xs"
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="a-vol">
+            Volatility (per-minute σ)
+          </label>
+          <input
+            id="a-vol"
+            type="number"
+            step="any"
+            value={form.volatility}
+            onChange={(e) => setForm({ ...form, volatility: Number(e.target.value) })}
+            className="field !text-xs"
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="a-schedule">
+            Trading hours
+          </label>
+          <select
+            id="a-schedule"
+            value={form.scheduleId}
+            onChange={(e) => setForm({ ...form, scheduleId: e.target.value })}
+            className="field !text-xs"
+          >
+            <option value="">Always open</option>
+            {schedules.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="col-span-2">
+          <label className="label" htmlFor="a-durations">
+            Expiry durations (seconds, comma-separated)
+          </label>
+          <input
+            id="a-durations"
+            value={form.durations}
+            onChange={(e) => setForm({ ...form, durations: e.target.value })}
+            placeholder="Blank uses the platform list"
+            className="field !text-xs"
+          />
+          <p className="mt-1 text-[10px] text-slate-500">
+            Narrows the platform's own duration list — it can leave options out, never add ones the
+            platform doesn't offer.
+          </p>
+        </div>
+      </div>
+
+      <button type="submit" disabled={saving} className="btn-primary mt-5 w-full !py-2 text-xs disabled:opacity-50">
+        {saving ? 'Saving…' : 'Save changes'}
+      </button>
+    </form>
   );
 }
 

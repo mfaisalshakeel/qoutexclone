@@ -405,6 +405,44 @@ test.describe('admin', () => {
     expect(errors).toEqual([]);
   });
 
+  test('a market\'s full details can be edited from its drawer, not just payout and delist', async ({
+    page,
+  }) => {
+    const errors = failOnPageErrors(page);
+    await login(page, ADMIN);
+    await page.goto('/admin/assets');
+
+    // a market no other spec touches, so editing it here can't disturb them
+    await page.getByPlaceholder('Search symbol or name').fill('MSFT');
+    await expect(page).toHaveURL(/search=/);
+    const row = page.getByRole('row', { name: /MSFT/ }).first();
+    await expect(row).toBeVisible();
+    await row.click();
+
+    await expect(page.getByRole('heading', { name: 'Microsoft', level: 2 })).toBeVisible();
+    await page.fill('#a-payout', '77');
+    await page.fill('#a-min', '2.50');
+    await page.fill('#a-max', '750');
+    await page.fill('#a-price', '412.5');
+    await page.fill('#a-pip', '0.05');
+    await page.fill('#a-sort', '42');
+    await page.fill('#a-durations', '60, 300, 900');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByText('Microsoft updated')).toBeVisible();
+
+    // the list reflects the save without a manual reload
+    await expect(row.getByText('77%')).toBeVisible();
+    await expect(row.getByText('$2.50')).toBeVisible();
+
+    // reopening shows exactly what was saved, proving it round-tripped through the server
+    await row.click();
+    await expect(page.locator('#a-payout')).toHaveValue('77');
+    await expect(page.locator('#a-price')).toHaveValue('412.5');
+    await expect(page.locator('#a-durations')).toHaveValue('60, 300, 900');
+
+    expect(errors).toEqual([]);
+  });
+
   test('audit log searches and filters by target', async ({ page }) => {
     const errors = failOnPageErrors(page);
     await login(page, ADMIN);
