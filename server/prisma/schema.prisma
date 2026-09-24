@@ -51,6 +51,11 @@ model User {
   /// The day (YYYY-MM-DD, UTC) the daily activity bonus was last paid.
   xpLastDay          String?
 
+  /// Pins this trader's status level (STANDARD/PRO/VIP, or an operator's own
+  /// id) regardless of lifetime deposits. Null means the level is computed
+  /// from `totalDeposited` as usual. Set from the back office only.
+  statusLevelOverride String?
+
   /// Set the first time the address is confirmed from a link we emailed.
   emailVerifiedAt    DateTime?
   /// The confirmed TOTP secret. Null means no second factor on the account.
@@ -96,6 +101,8 @@ model User {
   bonuses            Bonus[]
   limits             ResponsibleLimits?
   emails             EmailMessage[]
+  notes              UserNote[]         @relation("UserNoteSubject")
+  notesWritten       UserNote[]         @relation("UserNoteAuthor")
 
   @@index([referredById])
   /// admin dashboard: registrations within a period
@@ -589,6 +596,21 @@ model AuditLog {
   actor User? @relation("AuditActor", fields: [actorId], references: [id])
 
   @@index([createdAt])
+}
+
+/// A back-office note pinned to a trader, for context the next admin who
+/// opens the account should have. Never shown to the trader themselves.
+model UserNote {
+  id        String   @id @default(cuid())
+  userId    String
+  authorId  String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  user   User @relation("UserNoteSubject", fields: [userId], references: [id], onDelete: Cascade)
+  author User @relation("UserNoteAuthor", fields: [authorId], references: [id])
+
+  @@index([userId, createdAt])
 }
 
 model Setting {

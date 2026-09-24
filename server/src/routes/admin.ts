@@ -18,14 +18,16 @@ import { TX_TYPES, applyLedger } from '../services/wallet.js';
 import { completeDeposit, rejectDeposit } from '../services/deposits.js';
 import { approveWithdrawal, priorityOrder, rejectWithdrawal } from '../services/withdrawals.js';
 import { marketFeed } from '../engine/feed.js';
-import { reviewKyc } from '../services/kyc.js';
+import { latestKycSubmission, reviewKyc } from '../services/kyc.js';
 import { PROMO_KINDS, describe } from '../services/promos.js';
 import { adminLeaderboardPage, finishTournament, startTournament } from '../services/tournaments.js';
 import { postMessage, readTicket, setTicketStatus } from '../services/support.js';
 import { SETTINGS, settings } from '../services/settings.js';
-import { mailTransportName, sendTestEmail, smtpReady } from '../services/mailer.js';
+import { mailTransportName, sendMail, sendTestEmail, smtpReady } from '../services/mailer.js';
+import { adminMessage } from '../services/email-templates.js';
 import { previewAll } from '../services/email-preview.js';
 import { levelFor, statusConfig } from '../services/status.js';
+import { adminResetTwoFactor, listSessions, revokeOtherSessions } from '../services/security.js';
 import * as marketplace from '../services/marketplace.js';
 import { forfeitAll, listOffers } from '../services/bonuses.js';
 import * as paymentsService from '../services/payments.js';
@@ -163,11 +165,51 @@ router.get(
   wrap(async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!user) throw notFound('User not found');
-    const [trades, transactions, deposits, withdrawals] = await Promise.all([
+    const [
+      trades,
+      transactions,
+      deposits,
+      withdrawals,
+      kyc,
+      sessions,
+      bonuses,
+      referred,
+      commissions,
+      tickets,
+      notes,
+      auditLog,
+    ] = await Promise.all([
       prisma.trade.findMany({ where: { userId: user.id }, orderBy: { openedAt: 'desc' }, take: 25 }),
       prisma.transaction.findMany({ where: { userId: user.id }, orderBy: { createdAt: 'desc' }, take: 25 }),
       prisma.deposit.findMany({ where: { userId: user.id }, orderBy: { createdAt: 'desc' }, take: 25 }),
       prisma.withdrawal.findMany({ where: { userId: user.id }, orderBy: { createdAt: 'desc' }, take: 25 }),
+      latestKycSubmission(user.id),
+      listSessions(user.id, null),
+      prisma.bonus.findMany({ where: { userId: user.id }, orderBy: { createdAt: 'desc' }, take: 25 }),
+      prisma.user.findMany({
+        where: { referredById: user.id },
+        orderBy: { createdAt: 'desc' },
+        take: 25,
+        select: { id: true, email: true, name: true, createdAt: true, totalDeposited: true },
+      }),
+      prisma.referralCommission.findMany({
+        where: { referrerId: user.id },
+        orderBy: { createdAt: 'desc' },
+        take: 25,
+        include: { referred: { select: { email: true, name: true } } },
+      }),
+      prisma.supportTicket.findMany({ where: { userId: user.id }, orderBy: { lastMessageAt: 'desc' }, take: 25 }),
+      prisma.userNote.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: 'desc' },
+        include: { author: { select: { name: true, email: true } } },
+      }),
+      prisma.auditLog.findMany({
+        where: { targetType: { in: ['user', 'User'] }, targetId: user.id },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        include: { actor: { select: { name: true, email: true } } },
+      }),
     ]);
     res.json({
       user: publicUser(user),
@@ -175,7 +217,97 @@ router.get(
       transactions,
       deposits: deposits.map(publicDeposit),
       withdrawals: withdrawals.map(publicWithdrawal),
+      kyc,
+      sessions,
+      bonuses,
+      referrals: { referred, commissions },
+      tickets,
+      notes,
+      auditLog,
     });
+  }),
+);
+
+router.post(
+  '/users/:id/force-logout',
+  wrap(async (req, res) => {
+    const count = await revokeOtherSessions(req.params.id, null);
+    await audit(req.user!.id, 'user.force-logout', 'user', req.params.id, `${count} session(s) revoked`);
+    res.json({ revoked: count });
+  }),
+);
+
+router.post(
+  '/users/:id/reset-2fa',
+  wrap(async (req, res) => {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) throw notFound('User not found');
+    await adminResetTwoFactor(user);
+    await audit(req.user!.id, 'user.reset-2fa', 'user', req.params.id);
+    res.json({ ok: true });
+  }),
+);
+
+router.post(
+  '/users/:id/email',
+  wrap(async (req, res) => {
+    const body = z
+      .object({ subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(5000) })
+      .parse(req.body);
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) throw notFound('User not found');
+    await sendMail({
+      ...adminMessage({ name: user.name, subject: body.subject, body: body.body }),
+      to: user.email,
+      template: 'admin-message',
+      userId: user.id,
+    });
+    await audit(req.user!.id, 'user.email', 'user', req.params.id, body.subject);
+    res.json({ ok: true });
+  }),
+);
+
+router.post(
+  '/users/:id/status-level',
+  wrap(async (req, res) => {
+    const body = z.object({ levelId: z.string().max(40).nullable() }).parse(req.body);
+    if (body.levelId) {
+      const config = statusConfig();
+      if (!config.levels.some((level) => level.id === body.levelId)) {
+        throw badRequest('That status level does not exist', 'unknown_level');
+      }
+    }
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { statusLevelOverride: body.levelId },
+    });
+    await audit(req.user!.id, 'user.status-level', 'user', req.params.id, body.levelId ?? 'cleared');
+    res.json({ user: publicUser(user) });
+  }),
+);
+
+router.get(
+  '/users/:id/notes',
+  wrap(async (req, res) => {
+    const notes = await prisma.userNote.findMany({
+      where: { userId: req.params.id },
+      orderBy: { createdAt: 'desc' },
+      include: { author: { select: { name: true, email: true } } },
+    });
+    res.json({ notes });
+  }),
+);
+
+router.post(
+  '/users/:id/notes',
+  wrap(async (req, res) => {
+    const body = z.object({ body: z.string().trim().min(1).max(2000) }).parse(req.body);
+    const note = await prisma.userNote.create({
+      data: { userId: req.params.id, authorId: req.user!.id, body: body.body },
+      include: { author: { select: { name: true, email: true } } },
+    });
+    await audit(req.user!.id, 'user.note', 'user', req.params.id);
+    res.status(201).json({ note });
   }),
 );
 
@@ -355,7 +487,9 @@ router.get(
       buildFilterWhere(WITHDRAWAL_FILTERS, req.query as Record<string, string | undefined>),
     );
     const statusFilter = typeof req.query.status === 'string' ? req.query.status : undefined;
-    const include = { user: { select: { email: true, name: true, totalDeposited: true } } } as const;
+    const include = {
+      user: { select: { email: true, name: true, totalDeposited: true, statusLevelOverride: true } },
+    } as const;
 
     // the true pending count and amount held, independent of whatever the
     // admin is currently searching, filtering or paging through — an
@@ -416,7 +550,7 @@ router.get(
       withdrawals: dbPage.items.map((w) => ({
         ...publicWithdrawal(w),
         user: w.user,
-        level: levelFor(w.user.totalDeposited, config),
+        level: levelFor(w.user.totalDeposited, config, w.user.statusLevelOverride),
       })),
       total: dbPage.total,
       page: dbPage.page,

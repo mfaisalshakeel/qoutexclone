@@ -6,6 +6,7 @@ import {
   login,
   newCredentials,
   openMarket,
+  openTraderProfile,
   placeTrade,
   register,
 } from './helpers';
@@ -583,6 +584,63 @@ test.describe('admin', () => {
     await expect(page.getByRole('row', { name: /Payout booster/ }).first()).toBeVisible();
 
     expect(errors).toEqual([]);
+  });
+
+  test('trader profile: reached from the list, shows every section and its actions work', async ({
+    browser,
+  }) => {
+    const traderContext = await browser.newContext();
+    const trader = await traderContext.newPage();
+    const credentials = await register(trader, newCredentials('profile'));
+    await fundAccount(trader, '$250');
+
+    const adminContext = await browser.newContext();
+    const admin = await adminContext.newPage();
+    const errors = failOnPageErrors(admin, [/CERT_AUTHORITY/, /favicon/]);
+    await login(admin, ADMIN);
+
+    // reached from the list's drawer, not typed in directly
+    await openTraderProfile(admin, credentials.email);
+
+    await expect(admin.getByRole('heading', { name: credentials.name, level: 1 })).toBeVisible();
+    await expect(admin.getByText(credentials.email)).toBeVisible();
+    // the funded deposit shows up in the balance and in the deposits section
+    await expect(admin.getByText('$250.00').first()).toBeVisible();
+    await expect(admin.getByRole('heading', { name: 'Recent deposits' })).toBeVisible();
+    await expect(admin.getByRole('row', { name: /completed/i }).first()).toBeVisible();
+
+    // pin the status level and see it reflected immediately
+    await admin.getByRole('combobox').selectOption('VIP');
+    await admin.getByRole('button', { name: 'Save' }).click();
+    await expect(admin.getByText('pinned: VIP')).toBeVisible();
+
+    // a note is written and shows up in the list below the form
+    await admin.getByPlaceholder('Add a note for the next admin who opens this account…').fill('Called about a large deposit; identity confirmed by phone.');
+    await admin.getByRole('button', { name: 'Add note' }).click();
+    await expect(admin.getByText('Called about a large deposit; identity confirmed by phone.')).toBeVisible();
+
+    // force logout asks for confirmation, then reports what it did
+    admin.once('dialog', (dialog) => void dialog.accept());
+    await admin.getByRole('button', { name: 'Force logout' }).click();
+    await expect(admin.getByText(/Signed out of|No active sessions/)).toBeVisible();
+
+    // compose and send a one-off email
+    await admin.getByRole('button', { name: 'Send email' }).click();
+    await admin.getByPlaceholder('Subject').fill('About your account');
+    await admin.getByPlaceholder('Message').fill('Everything looks good on our end.');
+    await admin.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(admin.getByText('Email sent')).toBeVisible();
+
+    // every action above wrote an audit row, visible without leaving the page
+    await admin.reload();
+    await expect(admin.getByRole('heading', { name: 'Audit trail' })).toBeVisible();
+    await expect(admin.getByRole('row', { name: /user\.status-level/ })).toBeVisible();
+    await expect(admin.getByRole('row', { name: /user\.force-logout/ })).toBeVisible();
+    await expect(admin.getByRole('row', { name: /user\.email/ })).toBeVisible();
+
+    expect(errors).toEqual([]);
+    await traderContext.close();
+    await adminContext.close();
   });
 
   test('a trader cannot reach the back office', async ({ page }) => {

@@ -179,6 +179,58 @@ suite('status levels', () => {
     expect(rows[0].amount).toBe(expected);
   });
 
+  it("an admin's status-level pin overrides deposits for the payout bonus", async () => {
+    const asset = await makeAsset(80);
+    const pinned = await makeUser(0);
+    await prisma.user.update({ where: { id: pinned.id }, data: { statusLevelOverride: 'VIP' } });
+
+    const trade = await trading.placeTrade({
+      userId: pinned.id,
+      symbol: asset.symbol,
+      accountType: 'REAL',
+      direction: 'UP',
+      stake: 1_000,
+      durationSec: 60,
+    });
+    // zero lifetime deposits, but the pin reads as VIP
+    expect(trade.payoutPct).toBe(84);
+  });
+
+  it("a status-level pin is left out of a tournament chip trade, like deposits always are", async () => {
+    const asset = await makeAsset(80);
+    const pinned = await makeUser(0);
+    await prisma.user.update({ where: { id: pinned.id }, data: { statusLevelOverride: 'VIP' } });
+
+    const tournament = await prisma.tournament.create({
+      data: {
+        name: `Status Pin Cup ${Date.now()}`,
+        status: 'RUNNING',
+        entryFee: 0,
+        prizePool: 0,
+        startingBalance: 100_000,
+        maxEntries: 10,
+        prizeSplit: '100',
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 3_600_000),
+      },
+    });
+    made.tournaments.push(tournament.id);
+    await prisma.tournamentEntry.create({
+      data: { tournamentId: tournament.id, userId: pinned.id, balance: 100_000, startingBalance: 100_000 },
+    });
+
+    const chips = await trading.placeTrade({
+      userId: pinned.id,
+      symbol: asset.symbol,
+      accountType: 'TOURNAMENT',
+      tournamentId: tournament.id,
+      direction: 'UP',
+      stake: 1_000,
+      durationSec: 60,
+    });
+    expect(chips.payoutPct).toBe(80);
+  });
+
   it('leaves tournament positions on the same terms for everyone', async () => {
     // a contest where the biggest depositor is paid more is not a contest
     const asset = await makeAsset(80);

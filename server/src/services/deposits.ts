@@ -170,7 +170,7 @@ export async function completeDeposit(
     // the level they held when they made it, not the one it earns them
     const before = await tx.user.findUniqueOrThrow({
       where: { id: deposit.userId },
-      select: { totalDeposited: true },
+      select: { totalDeposited: true, statusLevelOverride: true },
     });
 
     await applyLedger(tx, {
@@ -190,7 +190,7 @@ export async function completeDeposit(
     // every bonus and the partner commission ride on the same transaction as
     // the credit, so a deposit is whole or it did not happen
     const config = statusConfig();
-    const level = levelFor(before.totalDeposited, config);
+    const level = levelFor(before.totalDeposited, config, before.statusLevelOverride);
     const statusBonus = depositBonusFor(credited, level, config);
     if (statusBonus > 0) {
       await applyLedger(tx, {

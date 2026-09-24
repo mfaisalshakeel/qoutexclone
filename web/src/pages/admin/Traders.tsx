@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ApiError, api } from '../../lib/api';
 import { dateTime, money } from '../../lib/format';
 import { toast } from '../../store/toast';
@@ -6,7 +7,7 @@ import { StatusPill } from '../../components/admin/ui';
 import { DataTable, type DataTableColumn } from '../../components/admin/DataTable';
 import type { User } from '../../lib/types';
 
-interface KycSubmission {
+export interface KycSubmission {
   id: string;
   fullName: string;
   dateOfBirth: string;
@@ -253,6 +254,10 @@ function UserDrawer({ user, reload }: { user: User; reload: () => void }) {
           {user.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
         </button>
       </div>
+
+      <Link to={`/admin/users/${user.id}`} className="btn-primary mt-2 block w-full !py-2 text-center text-xs">
+        View full profile →
+      </Link>
     </div>
   );
 }

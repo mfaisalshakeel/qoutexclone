@@ -37,6 +37,28 @@ export async function login(page: Page, credentials: { email: string; password: 
 }
 
 /**
+ * From the admin traders list, searches for a trader and opens their full
+ * profile page. Works at both the desktop (table rows) and mobile (stacked
+ * cards, with their own "View details" button) layouts, since the caller
+ * does not know which one is rendered.
+ */
+export async function openTraderProfile(page: Page, email: string): Promise<void> {
+  await page.goto('/admin/users');
+  await page.getByPlaceholder('Search name or email').fill(email);
+  await expect(page).toHaveURL(/search=/);
+  const pattern = new RegExp(email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const row = page.locator('tr:visible, li:visible').filter({ hasText: pattern }).first();
+  const detailsButton = row.getByRole('button', { name: 'View details' });
+  if (await detailsButton.isVisible().catch(() => false)) {
+    await detailsButton.click();
+  } else {
+    await row.click();
+  }
+  await page.getByRole('link', { name: 'View full profile →' }).click();
+  await page.waitForURL(/\/admin\/users\/.+/);
+}
+
+/**
  * Puts the terminal on a named market.
  *
  * The workspace is saved on the account, so the seeded trader opens on whatever

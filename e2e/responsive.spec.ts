@@ -1,10 +1,12 @@
 import { expect, test } from '@playwright/test';
 import {
   ADMIN,
+  TRADER,
   expectNoHorizontalScroll,
   failOnPageErrors,
   login,
   newCredentials,
+  openTraderProfile,
   register,
 } from './helpers';
 
@@ -74,6 +76,11 @@ test.describe('responsive shell', () => {
     // checked open rather than only collapsed
     await page.getByRole('button', { name: 'New rule' }).click();
     await expect(page.getByLabel('Name')).toBeVisible();
+    await expectNoHorizontalScroll(page);
+
+    // the trader profile has the most sections of any page in the back office
+    await openTraderProfile(page, TRADER.email);
+    await page.waitForLoadState('networkidle');
     await expectNoHorizontalScroll(page);
 
     expect(errors).toEqual([]);

@@ -224,6 +224,21 @@ export function tournamentResult(options: {
   };
 }
 
+/** A one-off message an admin composes for a single trader, from User 360. */
+export function adminMessage(options: { name: string; subject: string; body: string }): RenderedEmail {
+  // the admin's own line breaks are the only structure this message has, so
+  // they are kept rather than collapsed into one paragraph
+  const paragraphs = options.body
+    .split(/\n{2,}/)
+    .map((p) => `<p>${escape(p).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+  return {
+    subject: options.subject,
+    html: layout({ title: `Hello ${options.name},`, body: paragraphs }),
+    text: `Hello ${options.name},\n\n${options.body}`,
+  };
+}
+
 /** 1st, 2nd, 3rd, 4th — including the teens, which break the pattern. */
 export function ordinalOf(place: number): string {
   const tens = place % 100;

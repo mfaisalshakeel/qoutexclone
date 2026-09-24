@@ -419,11 +419,11 @@ export function listWithdrawals(userId: string, limit = 50) {
  * and is computed and sorted here instead. Only ever applied to the pending
  * queue; a decided withdrawal is history, in the order it happened.
  */
-export function priorityOrder<T extends { createdAt: Date; user: { totalDeposited: number } }>(
-  rows: T[],
-): (T & { level: StatusLevel })[] {
+export function priorityOrder<
+  T extends { createdAt: Date; user: { totalDeposited: number; statusLevelOverride?: string | null } },
+>(rows: T[]): (T & { level: StatusLevel })[] {
   const config = statusConfig();
   return rows
-    .map((row) => ({ ...row, level: levelFor(row.user.totalDeposited, config) }))
+    .map((row) => ({ ...row, level: levelFor(row.user.totalDeposited, config, row.user.statusLevelOverride) }))
     .sort((a, b) => b.level.priority - a.level.priority || a.createdAt.getTime() - b.createdAt.getTime());
 }

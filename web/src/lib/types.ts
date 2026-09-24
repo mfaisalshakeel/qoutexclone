@@ -33,6 +33,8 @@ export interface User {
     /** Percentage added to their deposits. */
     depositBonus: number;
   };
+  /** An admin's pin on the level above, set from the back office. Null is normal. */
+  statusLevelOverride?: string | null;
   /** The trader's experience level, for the header. */
   experience?: { enabled: boolean; xp: number; level: number; percent: number };
   /** Loyalty points. Never money: they buy marketplace items and nothing else. */

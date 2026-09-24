@@ -157,6 +157,23 @@ suite('account security', () => {
     expect(await prisma.backupCode.count({ where: { userId: user.id } })).toBe(0);
   });
 
+  it('an admin reset turns two-factor off with no password or code, for a trader locked out of both', async () => {
+    const user = await makeUser();
+    const { secret } = await security.startTwoFactor(user);
+    await security.enableTwoFactor(await reload(user.id), totp(secret));
+
+    await security.adminResetTwoFactor(await reload(user.id));
+    const off = await reload(user.id);
+    expect(off.twoFactorEnabledAt).toBeNull();
+    expect(off.twoFactorSecret).toBeNull();
+    expect(await prisma.backupCode.count({ where: { userId: user.id } })).toBe(0);
+  });
+
+  it('refuses an admin reset when two-factor was never on', async () => {
+    const user = await makeUser();
+    await expect(security.adminResetTwoFactor(user)).rejects.toThrow();
+  });
+
   it('calls a device new once and familiar afterwards', async () => {
     const user = await makeUser();
     const context = { ip: '81.2.69.142', userAgent: 'Mozilla/5.0 (Windows NT 10.0) Chrome/131.0.0.0' };

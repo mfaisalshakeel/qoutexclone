@@ -115,7 +115,7 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
   // is read on this path
   const trader = await prisma.user.findUnique({
     where: { id: input.userId },
-    select: { totalDeposited: true },
+    select: { totalDeposited: true, statusLevelOverride: true },
   });
   if (!trader) throw notFound('Account not found');
 
@@ -170,7 +170,7 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
   // inside a contest trades on the same terms.
   const config = statusConfig();
   const chips = input.accountType === 'TOURNAMENT';
-  const level = levelFor(chips ? 0 : trader.totalDeposited, config);
+  const level = levelFor(chips ? 0 : trader.totalDeposited, config, chips ? null : trader.statusLevelOverride);
   // a booster bought in the marketplace stacks on the status bonus under the
   // same ceiling. Like status, it reads nothing but what this trader holds —
   // never a position, an exposure or a result.

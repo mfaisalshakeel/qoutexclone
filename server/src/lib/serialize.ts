@@ -13,9 +13,9 @@ import { levelProgress, xpConfig } from '../services/experience.js';
 import { readNotifyPrefs } from './profile.js';
 
 /** The level and the perks that come with it, for the header and the ticket. */
-function statusOf(totalDeposited: number) {
+function statusOf(totalDeposited: number, overrideId?: string | null) {
   const config = statusConfig();
-  const level = levelFor(totalDeposited, config);
+  const level = levelFor(totalDeposited, config, overrideId);
   return {
     enabled: config.enabled,
     id: level.id,
@@ -62,7 +62,9 @@ export function publicUser(user: User) {
     twoFactorEnabled: user.twoFactorEnabledAt !== null,
     // the level itself, so the header and the ticket can show it without a
     // second request; the full progress lives at /me/status
-    statusLevel: statusOf(user.totalDeposited),
+    statusLevel: statusOf(user.totalDeposited, user.statusLevelOverride),
+    // set only from the back office; null means the level above is computed
+    statusLevelOverride: user.statusLevelOverride,
     // the level is in the header; the ladder and the badges are a page away
     experience: experienceOf(user.xp),
     /** Loyalty points. Never money: they buy marketplace items and nothing else. */

@@ -74,9 +74,22 @@ export function statusConfig(): StatusConfig {
  * Thresholds are read in order and the highest one met wins, so an operator
  * who sets them out of order (a VIP threshold below Pro's) still gets a
  * sensible answer rather than a gap.
+ *
+ * `overrideId` is an admin's pin (`User.statusLevelOverride`): when it names
+ * a level that exists, it wins outright over the deposit total. An unknown
+ * id (a level since renamed or removed) is ignored rather than thrown, so a
+ * stale pin degrades to the computed level instead of breaking every read.
  */
-export function levelFor(totalDeposited: number, config: StatusConfig): StatusLevel {
+export function levelFor(
+  totalDeposited: number,
+  config: StatusConfig,
+  overrideId?: string | null,
+): StatusLevel {
   if (!config.enabled) return config.levels[0];
+  if (overrideId) {
+    const pinned = config.levels.find((level) => level.id === overrideId);
+    if (pinned) return pinned;
+  }
   let reached = config.levels[0];
   for (const level of config.levels) {
     if (totalDeposited >= level.threshold && level.priority >= reached.priority) reached = level;

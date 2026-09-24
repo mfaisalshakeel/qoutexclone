@@ -23,6 +23,7 @@ import { AdminRisk } from './pages/admin/Risk';
 import { AdminSettings } from './pages/admin/Settings';
 import { AdminSupport } from './pages/admin/Support';
 import { AdminKyc, AdminUsers } from './pages/admin/Traders';
+import { AdminUserProfile } from './pages/admin/UserProfile';
 import { History } from './pages/History';
 import { Leaderboard } from './pages/Leaderboard';
 import { Landing } from './pages/Landing';
@@ -95,6 +96,7 @@ export default function App() {
             <Route path="withdrawals" element={<AdminWithdrawals />} />
             <Route path="deposits" element={<AdminDeposits />} />
             <Route path="users" element={<AdminUsers />} />
+            <Route path="users/:id" element={<AdminUserProfile />} />
             <Route path="kyc" element={<AdminKyc />} />
             <Route path="trades" element={<AdminTrades />} />
             <Route path="ledger" element={<AdminLedger />} />

@@ -43,6 +43,25 @@ describe('levelFor', () => {
     expect(levelFor(1_500_000, muddled).id).toBe('VIP');
     expect(levelFor(500_000, muddled).id).toBe('STANDARD');
   });
+
+  it('an admin pin wins outright over the computed level', () => {
+    expect(levelFor(0, CONFIG, 'VIP').id).toBe('VIP');
+    expect(levelFor(5_000_000, CONFIG, 'STANDARD').id).toBe('STANDARD');
+  });
+
+  it('ignores a pin naming a level that no longer exists', () => {
+    expect(levelFor(0, CONFIG, 'RETIRED_TIER').id).toBe('STANDARD');
+    expect(levelFor(5_000_000, CONFIG, 'RETIRED_TIER').id).toBe('VIP');
+  });
+
+  it('a null or missing pin is the same as none at all', () => {
+    expect(levelFor(0, CONFIG, null).id).toBe('STANDARD');
+    expect(levelFor(0, CONFIG, undefined).id).toBe('STANDARD');
+  });
+
+  it('a pin never revives status perks while the feature is off', () => {
+    expect(levelFor(0, { ...CONFIG, enabled: false }, 'VIP').id).toBe('STANDARD');
+  });
 });
 
 describe('progressFor', () => {

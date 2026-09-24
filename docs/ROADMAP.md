@@ -99,7 +99,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **Applied to every admin list:** users, trades, deposits, withdrawals, ledger transactions, KYC submissions, support tickets, tournaments and entries, promo codes and redemptions, referrals/commissions, marketplace orders, assets, and the audit log.
 
 ### Management
-- [ ] **User 360 page.** Profile, balances per account, status, KYC, devices/sessions, trades, deposits, withdrawals, ledger, bonuses, referrals, tickets, notes, and audit trail. Actions: suspend, force logout, reset 2FA, adjust balance (with reason, audited), change status level, and send email.
+- [x] **User 360 page.** Profile, balances per account, status, KYC, devices/sessions, trades, deposits, withdrawals, ledger, bonuses, referrals, tickets, notes, and audit trail. Actions: suspend, force logout, reset 2FA, adjust balance (with reason, audited), change status level, and send email.
 - [ ] **Roles and permissions (RBAC).** Super admin, finance, risk, support and content roles, with permission checks on every admin route and hidden UI for disallowed actions. Admin users are managed with 2FA required.
 - [ ] **Assets and risk.** Edit assets, sessions, payout rules, OTC engine parameters (with a live preview chart of the generated feed), and risk limits.
 - [ ] **Tournaments.** Create/edit with rules (entry fee, rebuys, prize distribution table, starting balance, allowed assets), monitor the leaderboard live, and cancel with refunds.

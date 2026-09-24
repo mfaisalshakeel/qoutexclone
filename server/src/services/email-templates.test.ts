@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  adminMessage,
   depositCredited,
   kycResult,
   newDeviceAlert,
@@ -118,5 +119,26 @@ describe('templates', () => {
     expect(won.text).toContain('$100.00');
     expect(lost.subject).toBe('Sprint has finished');
     expect(lost.text).toContain('9th');
+  });
+});
+
+describe('adminMessage', () => {
+  it('carries the subject and body an admin wrote, verbatim in the text version', () => {
+    const message = adminMessage({ name: 'Amelia', subject: 'About your account', body: 'Everything checks out.' });
+    expect(message.subject).toBe('About your account');
+    expect(message.html).toContain('<html');
+    expect(message.text).toContain('Everything checks out.');
+    expect(message.html).toContain('you can lose the money');
+  });
+
+  it('keeps paragraph breaks and escapes what the admin typed', () => {
+    const message = adminMessage({
+      name: 'Amelia',
+      subject: 'Note',
+      body: 'First line.\n\n<script>alert(1)</script>',
+    });
+    expect(message.html).not.toContain('<script>');
+    expect(message.html).toContain('&lt;script&gt;');
+    expect(message.html).toContain('First line.');
   });
 });

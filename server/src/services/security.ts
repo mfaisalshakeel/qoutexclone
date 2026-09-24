@@ -346,6 +346,31 @@ export async function disableTwoFactor(user: User, password: string, code: strin
   });
 }
 
+/**
+ * Turns two-factor off from the back office, with no password or code —
+ * for a trader who has lost both their authenticator and their backup codes.
+ * The same "it changed" email goes out either way, so a trader who did not
+ * ask for this still finds out.
+ */
+export async function adminResetTwoFactor(user: User): Promise<void> {
+  if (!user.twoFactorEnabledAt) throw badRequest('Two-factor is not on', 'not_enabled');
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: user.id },
+      data: { twoFactorSecret: null, twoFactorPending: null, twoFactorEnabledAt: null },
+    }),
+    prisma.backupCode.deleteMany({ where: { userId: user.id } }),
+  ]);
+
+  await sendMail({
+    ...twoFactorChanged({ name: user.name, enabled: false, url: siteUrl('/account/security') }),
+    to: user.email,
+    template: 'two-factor-off',
+    userId: user.id,
+  });
+}
+
 /** A fresh set of backup codes, which invalidates the old set. */
 export async function regenerateBackupCodes(user: User, code: string): Promise<string[]> {
   if (!user.twoFactorEnabledAt) throw badRequest('Two-factor is not on', 'not_enabled');
