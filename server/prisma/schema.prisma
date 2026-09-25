@@ -722,6 +722,17 @@ model Tournament {
   finishedAt      DateTime?
   createdAt       DateTime  @default(now())
 
+  /// Busted out (chips at zero) can buy back in to `startingBalance` for this
+  /// fee, which feeds the pool exactly like an entry fee. 0 rebuys left in
+  /// `rebuyLimit` means unlimited while `rebuyEnabled` is on.
+  rebuyEnabled Boolean @default(false)
+  rebuyFee     Int     @default(0)
+  rebuyLimit   Int     @default(0)
+
+  /// Markets this tournament's chips can trade. Null (the default) is every
+  /// market; set, it's the exhaustive allow-list of Asset ids.
+  allowedAssetIds Json?
+
   entries TournamentEntry[]
 
   @@index([status, startsAt])
@@ -737,6 +748,7 @@ model TournamentEntry {
   wins            Int      @default(0)
   rank            Int?
   prize           Int      @default(0)
+  rebuys          Int      @default(0)
   joinedAt        DateTime @default(now())
 
   tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)

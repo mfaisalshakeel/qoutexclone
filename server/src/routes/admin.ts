@@ -5,7 +5,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { ADMIN_ROLES } from '../lib/permissions.js';
-import { badRequest, notFound, wrap } from '../lib/errors.js';
+import { badRequest, conflict, notFound, wrap } from '../lib/errors.js';
 import {
   buildFilterWhere,
   buildOrderBy,
@@ -23,7 +23,12 @@ import { approveWithdrawal, priorityOrder, rejectWithdrawal } from '../services/
 import { marketFeed } from '../engine/feed.js';
 import { latestKycSubmission, reviewKyc } from '../services/kyc.js';
 import { PROMO_KINDS, describe } from '../services/promos.js';
-import { adminLeaderboardPage, finishTournament, startTournament } from '../services/tournaments.js';
+import {
+  adminLeaderboardPage,
+  cancelTournament,
+  finishTournament,
+  startTournament,
+} from '../services/tournaments.js';
 import { postMessage, readTicket, setTicketStatus } from '../services/support.js';
 import { SETTINGS, settings } from '../services/settings.js';
 import { mailTransportName, sendMail, sendTestEmail, smtpReady } from '../services/mailer.js';
@@ -1244,30 +1249,85 @@ router.get(
   }),
 );
 
+const TOURNAMENT_BODY = {
+  name: z.string().min(3).max(120),
+  description: z.string().max(500).optional(),
+  entryFee: z.number().int().min(0).default(0),
+  prizePool: z.number().int().min(0).default(0),
+  startingBalance: z.number().int().min(1000).default(100000),
+  maxEntries: z.number().int().min(0).default(0),
+  prizeSplit: z.string().max(60).default('50,30,20'),
+  startsAt: z.string().datetime(),
+  endsAt: z.string().datetime(),
+  rebuyEnabled: z.boolean().default(false),
+  rebuyFee: z.number().int().min(0).default(0),
+  rebuyLimit: z.number().int().min(0).default(0),
+  // null (the default) is every market; an empty array would mean "none",
+  // which is never useful, so it's treated the same as null
+  allowedAssetIds: z.array(z.string()).nullable().optional(),
+};
+
 router.post(
   '/tournaments',
   wrap(async (req, res) => {
-    const body = z
-      .object({
-        name: z.string().min(3).max(120),
-        description: z.string().max(500).optional(),
-        entryFee: z.number().int().min(0).default(0),
-        prizePool: z.number().int().min(0).default(0),
-        startingBalance: z.number().int().min(1000).default(100000),
-        maxEntries: z.number().int().min(0).default(0),
-        prizeSplit: z.string().max(60).default('50,30,20'),
-        startsAt: z.string().datetime(),
-        endsAt: z.string().datetime(),
-      })
-      .parse(req.body);
+    const { allowedAssetIds, ...body } = z.object(TOURNAMENT_BODY).parse(req.body);
 
     const startsAt = new Date(body.startsAt);
     const endsAt = new Date(body.endsAt);
     if (endsAt <= startsAt) throw badRequest('The tournament must end after it starts', 'bad_window');
 
-    const tournament = await prisma.tournament.create({ data: { ...body, startsAt, endsAt } });
+    const tournament = await prisma.tournament.create({
+      data: {
+        ...body,
+        startsAt,
+        endsAt,
+        allowedAssetIds: allowedAssetIds?.length ? allowedAssetIds : Prisma.DbNull,
+      },
+    });
     await audit(req.user!.id, 'tournament.create', 'tournament', tournament.id, tournament.name);
     res.status(201).json({ tournament });
+  }),
+);
+
+router.put(
+  '/tournaments/:id',
+  wrap(async (req, res) => {
+    const { allowedAssetIds, ...rest } = z.object(TOURNAMENT_BODY).partial().parse(req.body);
+    const existing = await prisma.tournament.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw notFound('Tournament not found');
+    // once anyone has joined, its economics are a promise made to them —
+    // edit is for fixing a typo before the doors open, not for changing the
+    // deal after someone paid to get in
+    if (existing.status !== 'SCHEDULED') {
+      throw conflict('Only a scheduled tournament can be edited', 'bad_status');
+    }
+
+    const startsAt = rest.startsAt ? new Date(rest.startsAt) : existing.startsAt;
+    const endsAt = rest.endsAt ? new Date(rest.endsAt) : existing.endsAt;
+    if (endsAt <= startsAt) throw badRequest('The tournament must end after it starts', 'bad_window');
+
+    const tournament = await prisma.tournament.update({
+      where: { id: existing.id },
+      data: {
+        ...rest,
+        startsAt,
+        endsAt,
+        ...(allowedAssetIds !== undefined && {
+          allowedAssetIds: allowedAssetIds?.length ? allowedAssetIds : Prisma.DbNull,
+        }),
+      },
+    });
+    await audit(req.user!.id, 'tournament.edit', 'tournament', tournament.id, tournament.name);
+    res.json({ tournament });
+  }),
+);
+
+router.post(
+  '/tournaments/:id/cancel',
+  wrap(async (req, res) => {
+    const tournament = await cancelTournament(req.params.id);
+    await audit(req.user!.id, 'tournament.cancel', 'tournament', tournament.id, tournament.name);
+    res.json({ tournament });
   }),
 );
 

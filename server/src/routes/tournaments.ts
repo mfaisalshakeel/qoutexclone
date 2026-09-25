@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { wrap } from '../lib/errors.js';
 import { optionalAuth, requireActiveUser, requireAuth } from '../middleware/auth.js';
-import { joinTournament, leaderboard, listTournaments } from '../services/tournaments.js';
+import { joinTournament, leaderboard, listTournaments, rebuyEntry } from '../services/tournaments.js';
 
 const router = Router();
 
@@ -36,6 +36,16 @@ router.post(
   wrap(async (req, res) => {
     const entry = await joinTournament(req.user!.id, req.params.id);
     res.status(201).json({ entry });
+  }),
+);
+
+router.post(
+  '/:id/rebuy',
+  requireAuth,
+  requireActiveUser,
+  wrap(async (req, res) => {
+    const entry = await rebuyEntry(req.user!.id, req.params.id);
+    res.json({ entry });
   }),
 );
 

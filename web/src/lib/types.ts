@@ -76,6 +76,12 @@ export interface Tournament {
   myBalance: number | null;
   myRank: number | null;
   myPrize: number;
+  myRebuys: number;
+  rebuyEnabled: boolean;
+  rebuyFee: number;
+  rebuyLimit: number;
+  /** Null means every market; else the exhaustive allow-list of Asset ids. */
+  allowedAssetIds: string[] | null;
 }
 
 export interface LeaderboardRow {

@@ -125,6 +125,10 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
   if (input.accountType === 'TOURNAMENT') {
     if (!entry) throw conflict('You are not in a running tournament', 'no_tournament_entry');
     if (entry.balance < input.stake) throw badRequest('Not enough tournament balance', 'insufficient_funds');
+    const allowed = entry.tournament.allowedAssetIds as string[] | null;
+    if (allowed && !allowed.includes(asset.id)) {
+      throw conflict(`${asset.pair} is not one of this tournament's markets`, 'asset_not_allowed');
+    }
   }
 
   const openedAt = new Date();

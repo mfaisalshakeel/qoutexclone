@@ -14,7 +14,7 @@ import type { Tournament } from '../lib/types';
  * which one a position would be staked from.
  */
 export function BalanceSwitcher() {
-  const { user, setAccount, resetDemo } = useAuth();
+  const { user, setAccount, resetDemo, refreshUser } = useAuth();
   const practice = useMarket((s) => s.practice);
   const { tournamentId, tournamentName, tournamentBalance, setTournament } = useTradingAccount();
   const [open, setOpen] = useState(false);
@@ -24,6 +24,7 @@ export function BalanceSwitcher() {
   // trader's money back to practice on every page load
   const [listed, setListed] = useState(false);
   const [refilling, setRefilling] = useState(false);
+  const [rebuying, setRebuying] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   // the tournaments the trader has joined, playable or not yet
@@ -66,7 +67,7 @@ export function BalanceSwitcher() {
     // response is the fresher number, and re-applying this snapshot would undo
     // every stake the moment it was taken.
     if (tournamentName === null || tournamentBalance === null) {
-      setTournament({ id: current.id!, name: current.label, balance: current.balance });
+      setTournament({ id: current.id!, name: current.label, balance: current.balance, allowedAssetIds: current.allowedAssetIds });
     }
   }, [listed, options, tournamentId, tournamentBalance, tournamentName, setTournament]);
 
@@ -98,7 +99,7 @@ export function BalanceSwitcher() {
     setOpen(false);
 
     if (option.kind === 'TOURNAMENT') {
-      setTournament({ id: option.id!, name: option.label, balance: option.balance });
+      setTournament({ id: option.id!, name: option.label, balance: option.balance, allowedAssetIds: option.allowedAssetIds });
       toast.info(`Trading ${option.label}`, 'Positions are staked in tournament chips');
       return;
     }
@@ -119,6 +120,36 @@ export function BalanceSwitcher() {
       toast.error('Could not top up', err instanceof ApiError ? err.message : 'Please try again');
     } finally {
       setRefilling(false);
+    }
+  };
+
+  const activeTournament = tournaments.find((t) => t.id === tournamentId);
+  const rebuysLeft =
+    activeTournament && (activeTournament.rebuyLimit === 0 || activeTournament.myRebuys < activeTournament.rebuyLimit);
+  const canRebuy = inTournament && activeTournament?.rebuyEnabled && (tournamentBalance ?? 0) <= 0 && rebuysLeft;
+
+  const rebuy = async () => {
+    if (!activeTournament) return;
+    setRebuying(true);
+    try {
+      const { entry } = await api.post<{ entry: { balance: number } }>(
+        `/tournaments/${activeTournament.id}/rebuy`,
+      );
+      setTournament({
+        id: activeTournament.id,
+        name: activeTournament.name,
+        balance: entry.balance,
+        allowedAssetIds: activeTournament.allowedAssetIds,
+      });
+      const { tournaments: refreshed } = await api.get<{ tournaments: Tournament[] }>('/tournaments');
+      setTournaments(refreshed);
+      await refreshUser();
+      setOpen(false);
+      toast.success('Rebought in', `${money(entry.balance)} in tournament chips`);
+    } catch (err) {
+      toast.error('Could not rebuy', err instanceof ApiError ? err.message : undefined);
+    } finally {
+      setRebuying(false);
     }
   };
 
@@ -197,6 +228,18 @@ export function BalanceSwitcher() {
           )}
 
           <div className="mt-1 border-t border-ink-600 pt-1">
+            {canRebuy && (
+              <button
+                role="menuitem"
+                onClick={() => void rebuy()}
+                disabled={rebuying}
+                className="w-full rounded-lg px-3 py-2 text-left text-xs text-accent transition hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {rebuying
+                  ? 'Rebuying…'
+                  : `Rebuy in for ${money(activeTournament!.rebuyFee)} → ${money(activeTournament!.startingBalance)} chips`}
+              </button>
+            )}
             <button
               role="menuitem"
               onClick={() => void topUp()}

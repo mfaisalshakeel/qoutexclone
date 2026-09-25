@@ -17,6 +17,8 @@ export const TX_TYPES = [
   'REFERRAL_COMMISSION',
   'TOURNAMENT_ENTRY',
   'TOURNAMENT_PRIZE',
+  'TOURNAMENT_REBUY',
+  'TOURNAMENT_REFUND',
   'ADJUSTMENT',
   'DEMO_RESET',
   // marketplace: what an item cost, what a risk-free item refunded, and the

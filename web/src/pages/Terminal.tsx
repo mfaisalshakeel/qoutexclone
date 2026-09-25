@@ -82,9 +82,19 @@ export function Terminal() {
   );
   const livePrice = prices[symbol] ?? asset?.price ?? null;
   const tournamentId = useTradingAccount((s) => s.tournamentId);
+  const allowedAssetIds = useTradingAccount((s) => s.allowedAssetIds);
   const setTournamentBalance = useTradingAccount((s) => s.setBalance);
   const patchBalance = useAuth((s) => s.patchBalance);
   const accountType = tournamentId ? 'TOURNAMENT' : (user?.activeAccount ?? 'DEMO');
+
+  // switching to a tournament that scopes its own markets moves off a symbol
+  // it doesn't offer, the same way switching to a closed market would
+  useEffect(() => {
+    if (!tournamentId || !allowedAssetIds || !asset) return;
+    if (allowedAssetIds.includes(asset.id)) return;
+    const first = assets.find((candidate) => allowedAssetIds.includes(candidate.id));
+    if (first) selectSymbol(first.symbol);
+  }, [tournamentId, allowedAssetIds, asset, assets, selectSymbol]);
 
   useEffect(() => {
     if (!loaded) void load();

@@ -102,7 +102,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **User 360 page.** Profile, balances per account, status, KYC, devices/sessions, trades, deposits, withdrawals, ledger, bonuses, referrals, tickets, notes, and audit trail. Actions: suspend, force logout, reset 2FA, adjust balance (with reason, audited), change status level, and send email.
 - [x] **Roles and permissions (RBAC).** Super admin, finance, risk, support and content roles, with permission checks on every admin route and hidden UI for disallowed actions. Admin users are managed with 2FA required.
 - [x] **Assets and risk.** Edit assets, sessions, payout rules, OTC engine parameters (with a live preview chart of the generated feed), and risk limits.
-- [ ] **Tournaments.** Create/edit with rules (entry fee, rebuys, prize distribution table, starting balance, allowed assets), monitor the leaderboard live, and cancel with refunds.
+- [x] **Tournaments.** Create/edit with rules (entry fee, rebuys, prize distribution table, starting balance, allowed assets), monitor the leaderboard live, and cancel with refunds.
 - [ ] **Content CMS.** Homepage sections, FAQ, legal pages, announcements banner, and email templates. There's a markdown/rich editor with preview and publish/draft.
 
 ### Settings (all persisted through the Phase 0 settings service, each page validated)

@@ -84,6 +84,25 @@ describe('filtering', () => {
   it('applies the tab and the search together', () => {
     expect(filterAssets(catalogue, { ...options, tab: 'CRYPTO', query: 'eur' })).toHaveLength(0);
   });
+
+  it('narrows to a tournament\'s own market list when one is given', () => {
+    const scoped = filterAssets(catalogue, { ...options, allowedAssetIds: ['EURUSD', 'AAPL'] });
+    expect(scoped.map((a) => a.symbol)).toEqual(['EURUSD', 'AAPL']);
+  });
+
+  it('offers everything when the tournament allows every market', () => {
+    expect(filterAssets(catalogue, { ...options, allowedAssetIds: null })).toHaveLength(4);
+    expect(filterAssets(catalogue, { ...options, allowedAssetIds: undefined })).toHaveLength(4);
+  });
+
+  it('combines a tournament\'s market list with the tab and the search', () => {
+    const narrowed = filterAssets(catalogue, {
+      ...options,
+      tab: 'CRYPTO',
+      allowedAssetIds: ['EURUSD', 'BTCUSDT'],
+    });
+    expect(narrowed.map((a) => a.symbol)).toEqual(['BTCUSDT']);
+  });
 });
 
 describe('sorting', () => {

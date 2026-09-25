@@ -21,6 +21,11 @@ function tournament(over: Partial<Tournament> & { id: string }): Tournament {
     myBalance: 120_000,
     myRank: 2,
     myPrize: 0,
+    myRebuys: 0,
+    rebuyEnabled: false,
+    rebuyFee: 0,
+    rebuyLimit: 0,
+    allowedAssetIds: null,
     ...over,
   };
 }
@@ -53,6 +58,20 @@ describe('the accounts a trader can stake from', () => {
     // chips are chips, never dollars
     expect(options[2].chips).toBe(true);
     expect(options[2].balance).toBe(120_000);
+  });
+
+  it("carries a tournament's own market list onto its account option", () => {
+    const options = accountOptions({
+      demoBalance: 0,
+      realBalance: 0,
+      tournaments: [
+        tournament({ id: 'a', allowedAssetIds: ['asset-1', 'asset-2'] }),
+        tournament({ id: 'b', allowedAssetIds: null }),
+      ],
+      now,
+    });
+    expect(options[2].allowedAssetIds).toEqual(['asset-1', 'asset-2']);
+    expect(options[3].allowedAssetIds).toBeNull();
   });
 
   it('leaves out tournaments the trader never joined, and finished ones', () => {

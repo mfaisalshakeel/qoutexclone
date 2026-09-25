@@ -101,12 +101,16 @@ export interface FilterOptions {
   query: string;
   tab: PickerTab;
   favourites: string[];
+  /** Trading with tournament chips against a scoped tournament: only these
+   *  symbols are offered. Undefined or null means every market, as usual. */
+  allowedAssetIds?: string[] | null;
 }
 
-/** Narrows the catalogue to what the tab and the search box ask for. */
+/** Narrows the catalogue to what the tab, the search box and an active tournament's own market list ask for. */
 export function filterAssets(assets: Asset[], options: FilterOptions): Asset[] {
   const query = options.query.trim().toLowerCase();
   return assets.filter((asset) => {
+    if (options.allowedAssetIds && !options.allowedAssetIds.includes(asset.id)) return false;
     if (options.tab === 'FAVOURITES' && !options.favourites.includes(asset.symbol)) return false;
     if (options.tab !== 'ALL' && options.tab !== 'FAVOURITES' && asset.assetClass !== options.tab) {
       return false;

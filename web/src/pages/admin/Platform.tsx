@@ -29,6 +29,10 @@ interface AdminTournament {
   startsAt: string;
   endsAt: string;
   entrants: number;
+  rebuyEnabled: boolean;
+  rebuyFee: number;
+  rebuyLimit: number;
+  allowedAssetIds: string[] | null;
 }
 
 interface Promo {
@@ -79,7 +83,25 @@ export function AdminTournaments() {
     prizeSplit: '50,30,20',
     startsAt: isoIn(0),
     endsAt: isoIn(24),
+    rebuyEnabled: false,
+    rebuyFee: 5,
+    rebuyLimit: 0,
+    allowedAssetIds: [] as string[],
   });
+  const [assetOptions, setAssetOptions] = useState<{ id: string; symbol: string; pair: string }[]>([]);
+  // cancelling refunds real money and is separate from the two-click "finish"
+  // confirm, so the two never share state and a slip can't trigger the wrong one
+  const [cancelling, setCancelling] = useState<string | null>(null);
+
+  useEffect(() => {
+    // the public catalogue, not /admin/assets — picking a tournament's own
+    // markets is a content decision and shouldn't need the risk role's
+    // permission just to see the list of symbols
+    api
+      .get<{ assets: { id: string; symbol: string; pair: string }[] }>('/market/assets')
+      .then((data) => setAssetOptions(data.assets))
+      .catch(() => undefined);
+  }, []);
 
   const create = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -94,8 +116,12 @@ export function AdminTournaments() {
         prizeSplit: form.prizeSplit,
         startsAt: new Date(form.startsAt).toISOString(),
         endsAt: new Date(form.endsAt).toISOString(),
+        rebuyEnabled: form.rebuyEnabled,
+        rebuyFee: Math.round(form.rebuyFee * 100),
+        rebuyLimit: form.rebuyLimit,
+        allowedAssetIds: form.allowedAssetIds.length ? form.allowedAssetIds : null,
       });
-      setForm({ ...form, name: '', description: '' });
+      setForm({ ...form, name: '', description: '', allowedAssetIds: [] });
       reload();
       toast.success('Tournament created');
     } catch (err) {
@@ -111,6 +137,17 @@ export function AdminTournaments() {
       toast.success(action === 'start' ? 'Tournament started' : 'Prizes paid out');
     } catch (err) {
       toast.error('Action failed', err instanceof ApiError ? err.message : undefined);
+    }
+  };
+
+  const cancel = async (id: string) => {
+    setCancelling(null);
+    try {
+      await api.post(`/admin/tournaments/${id}/cancel`);
+      reload();
+      toast.success('Tournament cancelled', 'Every entrant was refunded');
+    } catch (err) {
+      toast.error('Could not cancel', err instanceof ApiError ? err.message : undefined);
     }
   };
 
@@ -216,6 +253,39 @@ export function AdminTournaments() {
                 className="btn-up !px-3 !py-1.5 text-xs"
               >
                 Finish &amp; pay
+              </button>
+            ))}
+          {(t.status === 'SCHEDULED' || t.status === 'RUNNING') &&
+            (cancelling === t.id ? (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void cancel(t.id);
+                  }}
+                  className="btn-ghost !px-3 !py-1.5 text-xs !text-down"
+                >
+                  Confirm cancel
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCancelling(null);
+                  }}
+                  className="btn-ghost !px-3 !py-1.5 text-xs"
+                >
+                  Never mind
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCancelling(t.id);
+                }}
+                className="btn-ghost !px-3 !py-1.5 text-xs !text-down"
+              >
+                Cancel
               </button>
             ))}
         </span>
@@ -329,6 +399,72 @@ export function AdminTournaments() {
             className="field"
           />
         </div>
+        <div className="flex items-center gap-2">
+          <input
+            id="t-rebuy-enabled"
+            type="checkbox"
+            checked={form.rebuyEnabled}
+            onChange={(e) => setForm({ ...form, rebuyEnabled: e.target.checked })}
+            className="accent-accent"
+          />
+          <label className="label !mb-0" htmlFor="t-rebuy-enabled">
+            Allow rebuys once busted
+          </label>
+        </div>
+        {form.rebuyEnabled && (
+          <>
+            <div>
+              <label className="label" htmlFor="t-rebuy-fee">
+                Rebuy fee $
+              </label>
+              <input
+                id="t-rebuy-fee"
+                type="number"
+                min={0}
+                value={form.rebuyFee}
+                onChange={(e) => setForm({ ...form, rebuyFee: Number(e.target.value) })}
+                className="field"
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="t-rebuy-limit">
+                Rebuys allowed (0 = unlimited)
+              </label>
+              <input
+                id="t-rebuy-limit"
+                type="number"
+                min={0}
+                value={form.rebuyLimit}
+                onChange={(e) => setForm({ ...form, rebuyLimit: Number(e.target.value) })}
+                className="field"
+              />
+            </div>
+          </>
+        )}
+        <div className="sm:col-span-2 lg:col-span-4">
+          <label className="label" htmlFor="t-assets">
+            Markets (none selected means every market)
+          </label>
+          <select
+            id="t-assets"
+            multiple
+            size={6}
+            value={form.allowedAssetIds}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                allowedAssetIds: Array.from(e.target.selectedOptions, (o) => o.value),
+              })
+            }
+            className="field !h-auto !py-1 !text-xs"
+          >
+            {assetOptions.map((asset) => (
+              <option key={asset.id} value={asset.id}>
+                {asset.pair}
+              </option>
+            ))}
+          </select>
+        </div>
         <div className="flex items-end lg:col-span-2">
           <button type="submit" className="btn-primary w-full">
             Create tournament
@@ -353,13 +489,19 @@ export function AdminTournaments() {
           );
           return { items: data.tournaments, total: data.total, pageCount: data.pageCount };
         }}
-        renderDrawer={(t) => <TournamentLeaderboardDrawer tournament={t} />}
+        renderDrawer={(t) => <TournamentLeaderboardDrawer tournament={t} assetOptions={assetOptions} />}
       />
     </>
   );
 }
 
-function TournamentLeaderboardDrawer({ tournament }: { tournament: AdminTournament }) {
+function TournamentLeaderboardDrawer({
+  tournament,
+  assetOptions,
+}: {
+  tournament: AdminTournament;
+  assetOptions: { id: string; symbol: string; pair: string }[];
+}) {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -381,24 +523,34 @@ function TournamentLeaderboardDrawer({ tournament }: { tournament: AdminTourname
   }, [searchInput, search]);
 
   useEffect(() => {
+    if (tournament.status === 'SCHEDULED') return;
     let cancelled = false;
-    setError('');
     const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (search) params.set('search', search);
-    api
-      .get<{ leaderboard: LeaderboardRow[]; total: number; pageCount: number }>(
-        `/admin/tournaments/${tournament.id}/leaderboard?${params.toString()}`,
-      )
-      .then((data) => {
-        if (!cancelled) setResult({ items: data.leaderboard, total: data.total, pageCount: data.pageCount });
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof ApiError ? err.message : 'Could not load the leaderboard');
-      });
+
+    const load = () =>
+      api
+        .get<{ leaderboard: LeaderboardRow[]; total: number; pageCount: number }>(
+          `/admin/tournaments/${tournament.id}/leaderboard?${params.toString()}`,
+        )
+        .then((data) => {
+          if (!cancelled) {
+            setResult({ items: data.leaderboard, total: data.total, pageCount: data.pageCount });
+            setError('');
+          }
+        })
+        .catch((err) => {
+          if (!cancelled) setError(err instanceof ApiError ? err.message : 'Could not load the leaderboard');
+        });
+
+    void load();
+    // live while it's actually running — a finished table doesn't move
+    const id = tournament.status === 'RUNNING' ? window.setInterval(load, 5000) : null;
     return () => {
       cancelled = true;
+      if (id) window.clearInterval(id);
     };
-  }, [tournament.id, page, search]);
+  }, [tournament.id, tournament.status, page, search]);
 
   return (
     <div>
@@ -409,64 +561,283 @@ function TournamentLeaderboardDrawer({ tournament }: { tournament: AdminTourname
         <span className="text-[11px] text-slate-500">{tournament.entrants} entrants</span>
       </p>
 
-      <input
-        value={searchInput}
-        onChange={(e) => setSearchInput(e.target.value)}
-        placeholder="Search by trader name"
-        className="field mt-4 !py-2 !text-xs"
-      />
-
-      {error ? (
-        <div className="mt-4 rounded-lg border border-ink-600 p-4 text-center">
-          <p className="text-xs text-slate-400">{error}</p>
-        </div>
-      ) : !result ? (
-        <p className="mt-4 text-center text-xs text-slate-500">Loading…</p>
-      ) : result.items.length === 0 ? (
-        <p className="mt-4 text-center text-xs text-slate-500">No entrants match</p>
+      {tournament.status === 'SCHEDULED' ? (
+        <EditTournamentForm tournament={tournament} assetOptions={assetOptions} />
       ) : (
         <>
-          <ol className="mt-4 space-y-1.5">
-            {result.items.map((row) => (
-              <li key={row.id} className="flex items-center gap-3 text-xs">
-                <span className="w-6 font-bold text-slate-500">{row.place}</span>
-                <span className="flex-1 truncate">{row.name}</span>
-                <span className="tabular">{money(row.balance)}</span>
-                <span className={`tabular w-20 text-right ${row.profit >= 0 ? 'text-up' : 'text-down'}`}>
-                  {money(row.profit, { sign: true })}
-                </span>
-                <span className="tabular w-20 text-right text-up">
-                  {row.prize > 0 ? money(row.prize) : ''}
-                </span>
-              </li>
-            ))}
-          </ol>
-          {result.pageCount > 1 && (
-            <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500">
-              <span>
-                Page {page} of {result.pageCount} · {result.total} entrants
-              </span>
-              <span className="flex gap-1">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="btn-ghost !px-2.5 !py-1 text-xs disabled:opacity-40"
-                >
-                  ‹
-                </button>
-                <button
-                  onClick={() => setPage((p) => Math.min(result.pageCount, p + 1))}
-                  disabled={page >= result.pageCount}
-                  className="btn-ghost !px-2.5 !py-1 text-xs disabled:opacity-40"
-                >
-                  ›
-                </button>
-              </span>
+          <input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by trader name"
+            className="field mt-4 !py-2 !text-xs"
+          />
+
+          {error ? (
+            <div className="mt-4 rounded-lg border border-ink-600 p-4 text-center">
+              <p className="text-xs text-slate-400">{error}</p>
             </div>
+          ) : !result ? (
+            <p className="mt-4 text-center text-xs text-slate-500">Loading…</p>
+          ) : result.items.length === 0 ? (
+            <p className="mt-4 text-center text-xs text-slate-500">No entrants match</p>
+          ) : (
+            <>
+              <ol className="mt-4 space-y-1.5">
+                {result.items.map((row) => (
+                  <li key={row.id} className="flex items-center gap-3 text-xs">
+                    <span className="w-6 font-bold text-slate-500">{row.place}</span>
+                    <span className="flex-1 truncate">{row.name}</span>
+                    <span className="tabular">{money(row.balance)}</span>
+                    <span className={`tabular w-20 text-right ${row.profit >= 0 ? 'text-up' : 'text-down'}`}>
+                      {money(row.profit, { sign: true })}
+                    </span>
+                    <span className="tabular w-20 text-right text-up">
+                      {row.prize > 0 ? money(row.prize) : ''}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              {result.pageCount > 1 && (
+                <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500">
+                  <span>
+                    Page {page} of {result.pageCount} · {result.total} entrants
+                  </span>
+                  <span className="flex gap-1">
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                      className="btn-ghost !px-2.5 !py-1 text-xs disabled:opacity-40"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      onClick={() => setPage((p) => Math.min(result.pageCount, p + 1))}
+                      disabled={page >= result.pageCount}
+                      className="btn-ghost !px-2.5 !py-1 text-xs disabled:opacity-40"
+                    >
+                      ›
+                    </button>
+                  </span>
+                </div>
+              )}
+            </>
           )}
         </>
       )}
     </div>
+  );
+}
+
+/** A scheduled tournament's rules are still a draft — this edits them in place, nothing bought in yet. */
+function EditTournamentForm({
+  tournament,
+  assetOptions,
+}: {
+  tournament: AdminTournament;
+  assetOptions: { id: string; symbol: string; pair: string }[];
+}) {
+  const [form, setForm] = useState({
+    name: tournament.name,
+    description: tournament.description ?? '',
+    entryFee: tournament.entryFee / 100,
+    prizePool: tournament.prizePool / 100,
+    startingBalance: tournament.startingBalance / 100,
+    maxEntries: tournament.maxEntries,
+    prizeSplit: tournament.prizeSplit,
+    startsAt: tournament.startsAt.slice(0, 16),
+    endsAt: tournament.endsAt.slice(0, 16),
+    rebuyEnabled: tournament.rebuyEnabled,
+    rebuyFee: tournament.rebuyFee / 100,
+    rebuyLimit: tournament.rebuyLimit,
+    allowedAssetIds: tournament.allowedAssetIds ?? ([] as string[]),
+  });
+  const [saving, setSaving] = useState(false);
+
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      await api.put(`/admin/tournaments/${tournament.id}`, {
+        name: form.name,
+        description: form.description || undefined,
+        entryFee: Math.round(form.entryFee * 100),
+        prizePool: Math.round(form.prizePool * 100),
+        startingBalance: Math.round(form.startingBalance * 100),
+        maxEntries: form.maxEntries,
+        prizeSplit: form.prizeSplit,
+        startsAt: new Date(form.startsAt).toISOString(),
+        endsAt: new Date(form.endsAt).toISOString(),
+        rebuyEnabled: form.rebuyEnabled,
+        rebuyFee: Math.round(form.rebuyFee * 100),
+        rebuyLimit: form.rebuyLimit,
+        allowedAssetIds: form.allowedAssetIds.length ? form.allowedAssetIds : null,
+      });
+      toast.success('Tournament updated');
+    } catch (err) {
+      toast.error('Could not save', err instanceof ApiError ? err.message : undefined);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={save} className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="sm:col-span-2">
+        <label className="label" htmlFor="et-name">
+          Name
+        </label>
+        <input
+          id="et-name"
+          required
+          minLength={3}
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          className="field !text-xs"
+        />
+      </div>
+      <div>
+        <label className="label" htmlFor="et-fee">
+          Entry fee $
+        </label>
+        <input
+          id="et-fee"
+          type="number"
+          min={0}
+          value={form.entryFee}
+          onChange={(e) => setForm({ ...form, entryFee: Number(e.target.value) })}
+          className="field !text-xs"
+        />
+      </div>
+      <div>
+        <label className="label" htmlFor="et-pool">
+          Guaranteed pool $
+        </label>
+        <input
+          id="et-pool"
+          type="number"
+          min={0}
+          value={form.prizePool}
+          onChange={(e) => setForm({ ...form, prizePool: Number(e.target.value) })}
+          className="field !text-xs"
+        />
+      </div>
+      <div>
+        <label className="label" htmlFor="et-chips">
+          Starting chips $
+        </label>
+        <input
+          id="et-chips"
+          type="number"
+          min={10}
+          value={form.startingBalance}
+          onChange={(e) => setForm({ ...form, startingBalance: Number(e.target.value) })}
+          className="field !text-xs"
+        />
+      </div>
+      <div>
+        <label className="label" htmlFor="et-split">
+          Prize split %
+        </label>
+        <input
+          id="et-split"
+          value={form.prizeSplit}
+          onChange={(e) => setForm({ ...form, prizeSplit: e.target.value })}
+          className="field font-mono !text-xs"
+        />
+      </div>
+      <div>
+        <label className="label" htmlFor="et-start">
+          Starts
+        </label>
+        <input
+          id="et-start"
+          type="datetime-local"
+          value={form.startsAt}
+          onChange={(e) => setForm({ ...form, startsAt: e.target.value })}
+          className="field !text-xs"
+        />
+      </div>
+      <div>
+        <label className="label" htmlFor="et-end">
+          Ends
+        </label>
+        <input
+          id="et-end"
+          type="datetime-local"
+          value={form.endsAt}
+          onChange={(e) => setForm({ ...form, endsAt: e.target.value })}
+          className="field !text-xs"
+        />
+      </div>
+      <div className="flex items-center gap-2 sm:col-span-2">
+        <input
+          id="et-rebuy-enabled"
+          type="checkbox"
+          checked={form.rebuyEnabled}
+          onChange={(e) => setForm({ ...form, rebuyEnabled: e.target.checked })}
+          className="accent-accent"
+        />
+        <label className="label !mb-0" htmlFor="et-rebuy-enabled">
+          Allow rebuys once busted
+        </label>
+      </div>
+      {form.rebuyEnabled && (
+        <>
+          <div>
+            <label className="label" htmlFor="et-rebuy-fee">
+              Rebuy fee $
+            </label>
+            <input
+              id="et-rebuy-fee"
+              type="number"
+              min={0}
+              value={form.rebuyFee}
+              onChange={(e) => setForm({ ...form, rebuyFee: Number(e.target.value) })}
+              className="field !text-xs"
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="et-rebuy-limit">
+              Rebuys allowed (0 = unlimited)
+            </label>
+            <input
+              id="et-rebuy-limit"
+              type="number"
+              min={0}
+              value={form.rebuyLimit}
+              onChange={(e) => setForm({ ...form, rebuyLimit: Number(e.target.value) })}
+              className="field !text-xs"
+            />
+          </div>
+        </>
+      )}
+      <div className="sm:col-span-2">
+        <label className="label" htmlFor="et-assets">
+          Markets (none selected means every market)
+        </label>
+        <select
+          id="et-assets"
+          multiple
+          size={6}
+          value={form.allowedAssetIds}
+          onChange={(e) =>
+            setForm({ ...form, allowedAssetIds: Array.from(e.target.selectedOptions, (o) => o.value) })
+          }
+          className="field !h-auto !py-1 !text-xs"
+        >
+          {assetOptions.map((asset) => (
+            <option key={asset.id} value={asset.id}>
+              {asset.pair}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="sm:col-span-2">
+        <button type="submit" disabled={saving} className="btn-primary w-full disabled:opacity-50">
+          {saving ? 'Saving…' : 'Save changes'}
+        </button>
+      </div>
+    </form>
   );
 }
 

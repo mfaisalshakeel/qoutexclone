@@ -68,6 +68,20 @@ export function Tournaments() {
     }
   };
 
+  const rebuy = async (tournament: Tournament) => {
+    setBusy(tournament.id);
+    try {
+      await api.post(`/tournaments/${tournament.id}/rebuy`);
+      await load();
+      await refreshUser();
+      toast.success('Rebought in', `${money(tournament.startingBalance)} in tournament chips`);
+    } catch (err) {
+      toast.error('Could not rebuy', err instanceof ApiError ? err.message : undefined);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-4">
@@ -129,12 +143,26 @@ export function Tournaments() {
                 </div>
 
                 {tournament.joined ? (
-                  <span className="chip bg-accent-soft text-accent">
-                    {ended
-                      ? tournament.myPrize > 0
-                        ? `won ${money(tournament.myPrize)}`
-                        : `placed #${tournament.myRank ?? '—'}`
-                      : `${money(tournament.myBalance ?? 0)} chips`}
+                  <span className="flex items-center gap-2">
+                    <span className="chip bg-accent-soft text-accent">
+                      {ended
+                        ? tournament.myPrize > 0
+                          ? `won ${money(tournament.myPrize)}`
+                          : `placed #${tournament.myRank ?? '—'}`
+                        : `${money(tournament.myBalance ?? 0)} chips`}
+                    </span>
+                    {live &&
+                      tournament.rebuyEnabled &&
+                      (tournament.myBalance ?? 0) <= 0 &&
+                      (tournament.rebuyLimit === 0 || tournament.myRebuys < tournament.rebuyLimit) && (
+                        <button
+                          onClick={() => void rebuy(tournament)}
+                          disabled={busy === tournament.id}
+                          className="btn-primary !px-3 !py-2 text-xs"
+                        >
+                          Rebuy · {money(tournament.rebuyFee)}
+                        </button>
+                      )}
                   </span>
                 ) : (
                   !ended && (

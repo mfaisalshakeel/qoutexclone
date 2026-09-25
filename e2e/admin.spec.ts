@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import {
   ADMIN,
+  accountMenu,
+  accountPill,
   failOnPageErrors,
   fundAccount,
   login,
@@ -320,9 +322,10 @@ test.describe('admin', () => {
     await page.getByText('Clear filters ✕').click();
     await expect(row).toBeVisible();
 
-    // clicking the row opens its leaderboard, empty until someone joins
+    // clicking a still-scheduled row opens its rules to edit, not a leaderboard
+    // nobody has joined yet
     await row.getByText(name).click();
-    await expect(page.getByText('No entrants match')).toBeVisible();
+    await expect(page.locator('#et-name')).toHaveValue(name);
     await page.getByRole('button', { name: 'Close ✕' }).click();
 
     // clean up: start and finish it so it stops appearing as an open contest
@@ -333,6 +336,98 @@ test.describe('admin', () => {
     await expect(page.getByText('Prizes paid out')).toBeVisible();
 
     expect(errors).toEqual([]);
+  });
+
+  test('a tournament can be edited before it starts, scopes its own markets, and refunds everyone on cancel', async ({
+    browser,
+  }) => {
+    const adminContext = await browser.newContext();
+    const admin = await adminContext.newPage();
+    const errors = failOnPageErrors(admin, [/status of 409/]);
+    await login(admin, ADMIN);
+    await admin.goto('/admin/tournaments');
+
+    const name = `E2E Scoped Cup ${Date.now()}`;
+    await admin.fill('#t-name', name);
+    await admin.fill('#t-fee', '5');
+    await admin.fill('#t-pool', '0');
+    await admin.fill('#t-chips', '500');
+    await admin.fill('#t-split', '100');
+    // a couple of hours out, so the background sweeper that promotes a due
+    // tournament to RUNNING does not race the edit step below
+    await admin.fill('#t-start', new Date(Date.now() + 2 * 3600 * 1000).toISOString().slice(0, 16));
+    await admin.check('#t-rebuy-enabled');
+    await admin.fill('#t-rebuy-fee', '2');
+    await admin.locator('#t-assets').selectOption({ label: 'NVIDIA' });
+    await admin.click('button:has-text("Create tournament")');
+    await expect(admin.getByText('Tournament created')).toBeVisible();
+
+    await admin.getByPlaceholder('Search by name').fill(name);
+    await expect(admin).toHaveURL(/search=/);
+    const row = admin.getByRole('row', { name: new RegExp(name.replace(/\s/g, '\\s')) }).first();
+    await expect(row).toBeVisible();
+
+    // edited while it's still scheduled — nobody has bought in yet
+    await row.getByText(name).click();
+    const newName = `${name} (edited)`;
+    await admin.fill('#et-name', newName);
+    await admin.getByRole('button', { name: 'Save changes' }).click();
+    await expect(admin.getByText('Tournament updated')).toBeVisible();
+    await admin.getByRole('button', { name: 'Close ✕' }).click();
+    await admin.getByPlaceholder('Search by name').fill(newName);
+    const editedRow = admin.getByRole('row', { name: new RegExp(newName.replace(/[()]/g, '\\$&')) }).first();
+    await expect(editedRow).toBeVisible();
+    await editedRow.getByRole('button', { name: 'Start' }).click();
+    await expect(admin.getByText('Tournament started')).toBeVisible();
+
+    // a funded trader joins, pays the entry fee, and only sees this
+    // tournament's own market while trading its chips
+    const traderContext = await browser.newContext();
+    const trader = await traderContext.newPage();
+    const traderErrors = failOnPageErrors(trader);
+    await register(trader, newCredentials('tourn'));
+    await fundAccount(trader, '$250');
+
+    await trader.goto('/tournaments');
+    const card = trader.locator('.card').filter({ hasText: newName });
+    await card.getByRole('button', { name: /Join/ }).click();
+    await expect(card.getByText(/chips/)).toBeVisible();
+
+    // the $5 entry fee left the live balance
+    await trader.goto('/wallet');
+    await expect(trader.getByText('$245.00').first()).toBeVisible();
+
+    await trader.goto('/trade');
+    await accountPill(trader).click();
+    await accountMenu(trader)
+      .getByRole('menuitem', { name: new RegExp(newName.replace(/[()]/g, '\\$&')) })
+      .click();
+    await expect(accountPill(trader)).toContainText('500.00');
+
+    // the market rail is a column on desktop and a sheet behind the header on
+    // a phone — "Change market" only opens the sheet, and is inert (decorative)
+    // on desktop where the rail is already showing, per Terminal.tsx's own rule
+    const searchField = trader.getByLabel('Search markets');
+    if (!(await searchField.isVisible().catch(() => false))) {
+      await trader.getByRole('button', { name: 'Change market' }).first().click();
+      await expect(searchField).toBeVisible();
+    }
+    await expect(trader.getByRole('button', { name: 'NVIDIA', exact: true }).first()).toBeVisible();
+    await expect(trader.getByRole('button', { name: 'Amazon', exact: true })).toHaveCount(0);
+
+    // cancelling from the back office refunds the entry fee straight back
+    await editedRow.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await editedRow.getByRole('button', { name: 'Confirm cancel' }).click();
+    await expect(admin.getByText('Tournament cancelled')).toBeVisible();
+    await expect(editedRow.getByText('cancelled')).toBeVisible();
+
+    await trader.goto('/wallet');
+    await expect(trader.getByText('$250.00').first()).toBeVisible();
+
+    expect(errors).toEqual([]);
+    expect(traderErrors).toEqual([]);
+    await adminContext.close();
+    await traderContext.close();
   });
 
   test('promo code list searches, filters and shows a redemptions drawer', async ({ page }) => {

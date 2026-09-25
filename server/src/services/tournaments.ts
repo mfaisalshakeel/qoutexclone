@@ -42,7 +42,7 @@ export async function listTournaments(userId?: string) {
   const myEntries = userId
     ? await prisma.tournamentEntry.findMany({
         where: { userId },
-        select: { tournamentId: true, balance: true, rank: true, prize: true },
+        select: { tournamentId: true, balance: true, rank: true, prize: true, rebuys: true },
       })
     : [];
 
@@ -65,6 +65,12 @@ export async function listTournaments(userId?: string) {
       myBalance: entry?.balance ?? null,
       myRank: entry?.rank ?? null,
       myPrize: entry?.prize ?? 0,
+      myRebuys: entry?.rebuys ?? 0,
+      rebuyEnabled: tournament.rebuyEnabled,
+      rebuyFee: tournament.rebuyFee,
+      rebuyLimit: tournament.rebuyLimit,
+      // null (every market) stays null; the client only ever needs the ids
+      allowedAssetIds: (tournament.allowedAssetIds as string[] | null) ?? null,
     };
   });
 }
@@ -209,6 +215,51 @@ export async function joinTournament(userId: string, tournamentId: string): Prom
   return entry;
 }
 
+/**
+ * Buys a busted entry back up to the starting stack. Only once the chips are
+ * actually gone — a rebuy is for someone who's out, not a top-up for someone
+ * still playing — and only as many times as the tournament allows.
+ */
+export async function rebuyEntry(userId: string, tournamentId: string): Promise<TournamentEntry> {
+  const tournament = await prisma.tournament.findUnique({ where: { id: tournamentId } });
+  if (!tournament) throw notFound('Tournament not found');
+  if (!tournament.rebuyEnabled) throw conflict('Rebuys are not offered in this tournament', 'no_rebuys');
+  if (tournament.status !== 'RUNNING') throw conflict('This tournament is not running', 'closed');
+
+  const entry = await prisma.tournamentEntry.findUnique({
+    where: { tournamentId_userId: { tournamentId, userId } },
+  });
+  if (!entry) throw conflict('You have not joined this tournament', 'not_joined');
+  if (entry.balance > 0) throw conflict('You still have chips to trade with', 'not_busted');
+  if (tournament.rebuyLimit > 0 && entry.rebuys >= tournament.rebuyLimit) {
+    throw conflict('No rebuys left', 'rebuy_limit');
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    if (tournament.rebuyFee > 0) {
+      await applyLedger(tx, {
+        userId,
+        accountType: 'REAL',
+        type: 'TOURNAMENT_REBUY',
+        amount: -tournament.rebuyFee,
+        refType: 'tournament',
+        refId: tournament.id,
+        note: `Rebuy: ${tournament.name}`,
+      });
+      await tx.tournament.update({
+        where: { id: tournament.id },
+        data: { prizePool: { increment: tournament.rebuyFee } },
+      });
+    }
+    return tx.tournamentEntry.update({
+      where: { id: entry.id },
+      data: { balance: tournament.startingBalance, rebuys: { increment: 1 } },
+    });
+  });
+
+  return updated;
+}
+
 /** The entry a user may trade with right now, if any. */
 export async function activeEntry(userId: string, tournamentId?: string) {
   const now = new Date();
@@ -313,6 +364,59 @@ export async function finishTournament(tournamentId: string): Promise<Tournament
   // a separate event, because the ranks and prizes are only known now
   tournamentEvents.emit('finished', finished);
   return finished as Tournament;
+}
+
+/**
+ * Voids a tournament and refunds every entrant exactly what they put in —
+ * read back from the ledger itself (entry fee plus any rebuys) rather than
+ * recomputed from the tournament's current fee, so a refund is correct even
+ * if it's for money paid before some other change. Idempotent: a tournament
+ * already CANCELLED is returned untouched, and one already FINISHED can't be
+ * — the prizes are already out.
+ */
+export async function cancelTournament(tournamentId: string): Promise<Tournament> {
+  const tournament = await prisma.tournament.findUnique({ where: { id: tournamentId } });
+  if (!tournament) throw notFound('Tournament not found');
+  if (tournament.status === 'CANCELLED') return tournament;
+  if (tournament.status === 'FINISHED') throw conflict('Tournament has already finished', 'bad_status');
+
+  const cancelled = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.tournament.updateMany({
+      where: { id: tournamentId, status: { in: ['SCHEDULED', 'RUNNING'] } },
+      data: { status: 'CANCELLED', finishedAt: new Date() },
+    });
+    if (claimed.count === 0) return tx.tournament.findUnique({ where: { id: tournamentId } });
+
+    const entries = await tx.tournamentEntry.findMany({ where: { tournamentId } });
+    for (const entry of entries) {
+      const paid = await tx.transaction.aggregate({
+        where: {
+          userId: entry.userId,
+          accountType: 'REAL',
+          type: { in: ['TOURNAMENT_ENTRY', 'TOURNAMENT_REBUY'] },
+          refType: 'tournament',
+          refId: tournamentId,
+        },
+        _sum: { amount: true },
+      });
+      const refund = -(paid._sum.amount ?? 0);
+      if (refund > 0) {
+        await applyLedger(tx, {
+          userId: entry.userId,
+          accountType: 'REAL',
+          type: 'TOURNAMENT_REFUND',
+          amount: refund,
+          refType: 'tournament',
+          refId: tournamentId,
+          note: `Cancelled: ${tournament.name}`,
+        });
+      }
+    }
+    return tx.tournament.findUnique({ where: { id: tournamentId } });
+  });
+
+  tournamentEvents.emit('updated', cancelled);
+  return cancelled as Tournament;
 }
 
 /** Closes out tournaments whose clock has run out. */

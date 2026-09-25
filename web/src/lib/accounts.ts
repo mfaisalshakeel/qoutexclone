@@ -23,6 +23,9 @@ export interface AccountOption {
   selectable: boolean;
   /** Why it cannot be selected, when it cannot. */
   note: string | null;
+  /** A tournament's own market list. Null (every account but a scoped
+   *  tournament) means every market is offered. */
+  allowedAssetIds: string[] | null;
 }
 
 export interface PracticeConfig {
@@ -47,6 +50,7 @@ export function accountOptions(input: {
       chips: false,
       selectable: true,
       note: null,
+      allowedAssetIds: null,
     },
     {
       kind: 'DEMO',
@@ -56,6 +60,7 @@ export function accountOptions(input: {
       chips: false,
       selectable: true,
       note: null,
+      allowedAssetIds: null,
     },
   ];
 
@@ -74,6 +79,7 @@ export function accountOptions(input: {
       chips: true,
       selectable: running,
       note: running ? null : 'Not started yet',
+      allowedAssetIds: tournament.allowedAssetIds,
     });
   }
   return options;

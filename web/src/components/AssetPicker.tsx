@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMarket } from '../store/market';
+import { useTradingAccount } from '../store/tradingAccount';
 import { percent, price, untilShort } from '../lib/format';
 import {
   CLASS_LABELS,
@@ -30,14 +31,23 @@ export function AssetPicker({ onPicked }: Props) {
   const { assets, prices, symbol, selectSymbol, loaded } = useMarket();
   const favourites = useMarket((s) => s.favourites);
   const setFavourites = useMarket((s) => s.setFavourites);
+  const tournamentId = useTradingAccount((s) => s.tournamentId);
+  const allowedAssetIds = useTradingAccount((s) => s.allowedAssetIds);
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<PickerTab>('ALL');
   const [sort, setSort] = useState<SortKey>('default');
 
-  const tabs = useMemo(() => tabsFor(assets, favourites), [assets, favourites]);
+  // trading with tournament chips only offers that tournament's own markets
+  const scope = tournamentId ? allowedAssetIds : null;
+  const inScope = useMemo(
+    () => (scope ? assets.filter((asset) => scope.includes(asset.id)) : assets),
+    [assets, scope],
+  );
+
+  const tabs = useMemo(() => tabsFor(inScope, favourites), [inScope, favourites]);
   const shown = useMemo(
-    () => sortAssets(filterAssets(assets, { query, tab, favourites }), sort, favourites),
-    [assets, query, tab, favourites, sort],
+    () => sortAssets(filterAssets(assets, { query, tab, favourites, allowedAssetIds: scope }), sort, favourites),
+    [assets, query, tab, favourites, sort, scope],
   );
 
   // a tab can disappear — the last favourite was removed — so never strand it
