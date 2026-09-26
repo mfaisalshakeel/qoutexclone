@@ -21,8 +21,8 @@ import * as marketplace from '../services/marketplace.js';
 import * as responsible from '../services/responsible.js';
 import {
   AVATARS,
+  enabledLanguages,
   isKnownTimezone,
-  LANGUAGES,
   NOTIFY_KINDS,
   NUMBER_FORMATS,
   profileSchema,
@@ -76,7 +76,7 @@ router.patch(
 router.get('/profile-options', (_req, res) => {
   res.json({
     avatars: AVATARS,
-    languages: LANGUAGES,
+    languages: enabledLanguages(settings.get('localisation.enabledLanguages')),
     numberFormats: NUMBER_FORMATS,
     notifyKinds: NOTIFY_KINDS,
   });

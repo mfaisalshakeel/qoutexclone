@@ -81,9 +81,9 @@ test.describe('account switcher', () => {
     } finally {
       await admin.goto('/admin/settings');
       await admin
-        .locator('div', { has: admin.locator('#setting-trading\\.practiceRefillBelow') })
-        .locator('button:has-text("Reset")')
-        .first()
+        .locator('#setting-trading\\.practiceRefillBelow')
+        .locator('xpath=ancestor::div[contains(@class, "py-3")][1]')
+        .getByRole('button', { name: 'Reset' })
         .click();
       await adminContext.close();
       await traderContext.close();

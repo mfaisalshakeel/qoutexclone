@@ -10,7 +10,7 @@ export const settingsEvents = new EventEmitter();
 interface Definition<T extends z.ZodTypeAny> {
   schema: T;
   default: z.infer<T>;
-  group: 'general' | 'trading' | 'wallet' | 'growth' | 'compliance' | 'security';
+  group: 'general' | 'trading' | 'wallet' | 'growth' | 'compliance' | 'security' | 'email' | 'seo' | 'localisation';
   label: string;
   help?: string;
   /** Safe to expose to unauthenticated clients and broadcast over ws. */
@@ -632,40 +632,40 @@ export const SETTINGS = {
   'email.enabled': define({
     schema: z.boolean(),
     default: false,
-    group: 'general',
+    group: 'email',
     label: 'Send email',
     help: 'Off keeps every message in the outbox without delivering it.',
   }),
   'email.host': define({
     schema: z.string().max(200),
     default: env.smtp.host,
-    group: 'general',
+    group: 'email',
     label: 'SMTP host',
   }),
   'email.port': define({
     schema: z.number().int().min(1).max(65535),
     default: env.smtp.port,
-    group: 'general',
+    group: 'email',
     label: 'SMTP port',
     help: '465 for implicit TLS, 587 for STARTTLS.',
   }),
   'email.secure': define({
     schema: z.boolean(),
     default: env.smtp.port === 465,
-    group: 'general',
+    group: 'email',
     label: 'Implicit TLS',
     help: 'On for port 465. Off lets the connection upgrade with STARTTLS.',
   }),
   'email.user': define({
     schema: z.string().max(200),
     default: env.smtp.user,
-    group: 'general',
+    group: 'email',
     label: 'SMTP username',
   }),
   'email.password': define({
     schema: z.string().max(400),
     default: env.smtp.password,
-    group: 'general',
+    group: 'email',
     label: 'SMTP password',
     help: 'Stored on the server and never shown again once saved.',
     secret: true,
@@ -673,19 +673,19 @@ export const SETTINGS = {
   'email.fromName': define({
     schema: z.string().max(80),
     default: 'Quantex',
-    group: 'general',
+    group: 'email',
     label: 'From name',
   }),
   'email.fromAddress': define({
     schema: z.string().max(200),
     default: 'no-reply@quantex.example',
-    group: 'general',
+    group: 'email',
     label: 'From address',
   }),
   'email.replyTo': define({
     schema: z.string().max(200),
     default: '',
-    group: 'general',
+    group: 'email',
     label: 'Reply-to address',
     help: 'Left empty, replies go to the from address.',
   }),
@@ -743,6 +743,125 @@ export const SETTINGS = {
     default: env.refreshTokenDays,
     group: 'security',
     label: 'Session lifetime (days)',
+  }),
+  'security.apiRateLimitPerMinute': define({
+    schema: z.number().int().min(60).max(10_000),
+    default: 600,
+    group: 'security',
+    label: 'API requests per minute, per IP',
+    help: 'Applies to every request. Sign-in and sign-up have their own, tighter limit above.',
+  }),
+  'security.corsOrigins': define({
+    schema: z.array(z.string().max(200)).min(1).max(50),
+    default: env.corsOrigins,
+    group: 'security',
+    label: 'Allowed CORS origins',
+    help: 'Which sites may call the API from a browser. "*" allows any origin.',
+  }),
+
+  /**
+   * Phase 7 builds the public site's actual rendering (meta tags,
+   * `/sitemap.xml`, `/robots.txt`); these are the values it will read, kept
+   * here so an operator can set them — and Phase 7's own renderer can find
+   * them already in place — before that phase exists.
+   */
+  'seo.titleTemplate': define({
+    schema: z.string().max(100),
+    default: '%s — Quantex',
+    group: 'seo',
+    label: 'Title template',
+    help: 'A page’s own title fills in the %s.',
+    public: true,
+  }),
+  'seo.metaDescription': define({
+    schema: z.string().max(300),
+    default:
+      'Trade fixed-payout options on currencies, crypto, commodities, stocks and indices. Practice free, deposit and withdraw in crypto.',
+    group: 'seo',
+    label: 'Default meta description',
+    public: true,
+  }),
+  'seo.metaKeywords': define({
+    schema: z.array(z.string().max(40)).max(30),
+    default: ['binary options', 'crypto trading', 'options trading', 'practice trading account'],
+    group: 'seo',
+    label: 'Meta keywords',
+    public: true,
+  }),
+  'seo.ogImageUrl': define({
+    schema: z.string().max(500),
+    default: '',
+    group: 'seo',
+    label: 'Open Graph image URL',
+    help: 'Shown when a link to the site is shared. Empty omits the tag.',
+    public: true,
+  }),
+  'seo.twitterCard': define({
+    schema: z.enum(['summary', 'summary_large_image']),
+    default: 'summary_large_image',
+    group: 'seo',
+    label: 'Twitter card type',
+    public: true,
+  }),
+  'seo.canonicalBaseUrl': define({
+    schema: z.string().max(200),
+    default: 'http://localhost:5173',
+    group: 'seo',
+    label: 'Canonical base URL',
+    help: 'The domain every canonical and Open Graph URL is built from.',
+    public: true,
+  }),
+  'seo.robotsIndexing': define({
+    schema: z.boolean(),
+    default: true,
+    group: 'seo',
+    label: 'Allow search engines to index the site',
+    help: 'Off publishes a sitewide Disallow — for a staging deploy that is not ready to be found.',
+    public: true,
+  }),
+  'seo.sitemapEnabled': define({
+    schema: z.boolean(),
+    default: true,
+    group: 'seo',
+    label: 'Publish /sitemap.xml',
+    public: true,
+  }),
+  'seo.gaId': define({
+    schema: z.string().max(40),
+    default: '',
+    group: 'seo',
+    label: 'Google Analytics measurement ID',
+    help: 'e.g. G-XXXXXXXXXX. Empty loads no analytics script.',
+  }),
+  'seo.gtmId': define({
+    schema: z.string().max(40),
+    default: '',
+    group: 'seo',
+    label: 'Google Tag Manager ID',
+    help: 'e.g. GTM-XXXXXXX. Empty loads no tag manager.',
+  }),
+  'seo.searchConsoleVerification': define({
+    schema: z.string().max(200),
+    default: '',
+    group: 'seo',
+    label: 'Search Console verification code',
+    help: 'The content of the google-site-verification meta tag Search Console gives you.',
+  }),
+  'seo.customHeadSnippet': define({
+    schema: z.string().max(4000),
+    default: '',
+    group: 'seo',
+    label: 'Custom <head> snippet',
+    help: 'Sanitised before it is ever rendered into a page — scripts and event handlers are stripped.',
+  }),
+
+  'localisation.enabledLanguages': define({
+    schema: z.array(z.string().min(2).max(10)).min(1).max(50),
+    default: ['en'],
+    group: 'localisation',
+    label: 'Enabled languages',
+    help: 'ISO codes. The first is the default for a visitor with no preference of their own.',
+    public: true,
   }),
 } as const;
 

@@ -21,7 +21,17 @@ describe('settings registry', () => {
     const described = settings.describe();
     expect(described.length).toBe(Object.keys(SETTINGS).length);
     for (const row of described) {
-      expect(['general', 'trading', 'wallet', 'growth', 'compliance', 'security']).toContain(row.group);
+      expect([
+        'general',
+        'trading',
+        'wallet',
+        'growth',
+        'compliance',
+        'security',
+        'email',
+        'seo',
+        'localisation',
+      ]).toContain(row.group);
       expect(['boolean', 'number', 'string', 'numberList', 'stringList']).toContain(row.type);
       expect(row.label.length).toBeGreaterThan(0);
     }

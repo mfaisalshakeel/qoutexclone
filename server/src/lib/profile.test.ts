@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_NOTIFY,
+  LANGUAGES,
+  enabledLanguages,
   isKnownTimezone,
   profileSchema,
   readNotifyPrefs,
@@ -71,5 +73,25 @@ describe('wantsNotification', () => {
     // deposits and withdrawals are never optional: it is their money
     expect(wantsNotification({ DEPOSIT: false }, 'DEPOSIT')).toBe(true);
     expect(wantsNotification({ WITHDRAWAL: false }, 'WITHDRAWAL')).toBe(true);
+  });
+});
+
+describe('enabledLanguages', () => {
+  it('offers only the codes an operator turned on', () => {
+    expect(enabledLanguages(['en'])).toEqual([{ code: 'en', name: 'English' }]);
+  });
+
+  it('preserves the catalogue order, not the setting order', () => {
+    const codes = enabledLanguages(['fr', 'en']).map((l) => l.code);
+    expect(codes).toEqual(['en', 'fr']);
+  });
+
+  it('ignores a code nobody translated', () => {
+    expect(enabledLanguages(['en', 'klingon'])).toEqual([{ code: 'en', name: 'English' }]);
+  });
+
+  it('can offer every language at once', () => {
+    const codes = enabledLanguages(LANGUAGES.map((l) => l.code)).map((l) => l.code);
+    expect(codes).toEqual(LANGUAGES.map((l) => l.code));
   });
 });

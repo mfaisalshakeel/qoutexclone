@@ -33,6 +33,12 @@ export const NUMBER_FORMATS = [
   { code: 'en-IN', example: '1,23,456.78' },
 ] as const;
 
+/** Only the languages an operator has actually enabled — the rest of LANGUAGES stays hidden until its translation is ready. */
+export function enabledLanguages(codes: readonly string[]): typeof LANGUAGES[number][] {
+  const enabled = new Set(codes);
+  return LANGUAGES.filter((language) => enabled.has(language.code));
+}
+
 /** The notifications a trader can turn off. Money is not one of them. */
 export const NOTIFY_KINDS = ['TRADE', 'TOURNAMENT', 'SYSTEM', 'SUPPORT'] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];

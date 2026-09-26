@@ -22,6 +22,9 @@ const GROUP_LABELS: Record<string, string> = {
   growth: 'Growth',
   compliance: 'Compliance',
   security: 'Security',
+  email: 'Email / SMTP',
+  seo: 'SEO',
+  localisation: 'Localisation',
 };
 
 /** Renders itself from the server's settings registry, so new keys need no UI work. */

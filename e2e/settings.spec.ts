@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ADMIN, failOnPageErrors, login, newCredentials, openMarket, register } from './helpers';
+import { ADMIN, adminApiToken, failOnPageErrors, login, newCredentials, openMarket, register } from './helpers';
 
 test.describe('runtime settings', () => {
   test('an admin change reaches traders without a restart', async ({ page, request }) => {
@@ -25,9 +25,9 @@ test.describe('runtime settings', () => {
 
     // reset leaves no override behind
     await page
-      .locator('div', { has: page.locator('#setting-wallet\\.withdrawFeePct') })
-      .locator('button:has-text("Reset")')
-      .first()
+      .locator('#setting-wallet\\.withdrawFeePct')
+      .locator('xpath=ancestor::div[contains(@class, "py-3")][1]')
+      .getByRole('button', { name: 'Reset' })
       .click();
     await expect(page.getByText(/restored to default/i)).toBeVisible();
 
@@ -106,9 +106,79 @@ test.describe('runtime settings', () => {
     } finally {
       await page.goto('/admin/settings');
       await page
-        .locator('div', { has: page.locator('#setting-trading\\.maxStakeCents') })
-        .locator('button:has-text("Reset")')
-        .first()
+        .locator('#setting-trading\\.maxStakeCents')
+        .locator('xpath=ancestor::div[contains(@class, "py-3")][1]')
+        .getByRole('button', { name: 'Reset' })
+        .click();
+      await expect(page.getByText(/restored to default/i)).toBeVisible();
+    }
+
+    expect(errors).toEqual([]);
+  });
+
+  test('a tightened API rate limit actually starts refusing requests', async ({ page, request }) => {
+    // fetched before the burst below, since once the limit trips every
+    // request — including a fresh login — is refused until the window clears
+    const token = await adminApiToken(request);
+    // a previous run of this exact test can leave the value already at 60,
+    // which would leave the form with nothing to save
+    await request.post('/api/admin/settings/security.apiRateLimitPerMinute/reset', {
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    await login(page, ADMIN);
+    await page.goto('/admin/settings');
+    await page.locator('#setting-security\\.apiRateLimitPerMinute').fill('60');
+    await page.click('button:has-text("Save")');
+    await expect(page.getByText('Settings saved')).toBeVisible();
+
+    try {
+      let sawLimited = false;
+      for (let i = 0; i < 70 && !sawLimited; i += 1) {
+        const res = await request.get('/api/health');
+        if (res.status() === 429) sawLimited = true;
+      }
+      expect(sawLimited).toBe(true);
+    } finally {
+      // the window is a fixed 60s, and every request in it — including a
+      // reset call itself — is refused, so this has to wait it out
+      await new Promise((resolve) => setTimeout(resolve, 61_000));
+      const reset = await request.post('/api/admin/settings/security.apiRateLimitPerMinute/reset', {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(reset.ok()).toBeTruthy();
+    }
+  });
+
+  test('the enabled-languages setting narrows what a trader is offered', async ({ page, request }) => {
+    const errors = failOnPageErrors(page);
+    // a previous run of this exact test can leave the value already at
+    // ['en', 'es'], which would leave the form with nothing to save
+    const token = await adminApiToken(request);
+    await request.post('/api/admin/settings/localisation.enabledLanguages/reset', {
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    await login(page, ADMIN);
+    await page.goto('/admin/settings');
+
+    try {
+      await page.locator('#setting-localisation\\.enabledLanguages').fill('en, es');
+      await page.click('button:has-text("Save")');
+      await expect(page.getByText('Settings saved')).toBeVisible();
+
+      await page.goto('/account');
+      const languageSelect = page.locator('#language');
+      await expect(languageSelect.locator('option')).toHaveCount(2);
+      await expect(languageSelect.getByRole('option', { name: 'English' })).toHaveCount(1);
+      await expect(languageSelect.getByRole('option', { name: 'Español' })).toHaveCount(1);
+      await expect(languageSelect.getByRole('option', { name: 'Français' })).toHaveCount(0);
+    } finally {
+      await page.goto('/admin/settings');
+      await page
+        .locator('#setting-localisation\\.enabledLanguages')
+        .locator('xpath=ancestor::div[contains(@class, "py-3")][1]')
+        .getByRole('button', { name: 'Reset' })
         .click();
       await expect(page.getByText(/restored to default/i)).toBeVisible();
     }

@@ -5,7 +5,6 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { env } from './env.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { requestLog } from './middleware/request-log.js';
 import { log } from './lib/logger.js';
@@ -21,6 +20,7 @@ import supportRoutes from './routes/support.js';
 import contentRoutes from './routes/content.js';
 import webhookRoutes from './routes/webhooks.js';
 import { marketFeed } from './engine/feed.js';
+import { settings } from './services/settings.js';
 
 /**
  * Single-port deployment: when the web client has been built, the API serves
@@ -75,8 +75,9 @@ export function createApp() {
   app.use(
     cors({
       origin(origin, callback) {
+        const allowed = settings.get('security.corsOrigins');
         // No Origin header means same-origin or a non-browser client.
-        if (!origin || env.corsOrigins.includes('*') || env.corsOrigins.includes(origin)) {
+        if (!origin || allowed.includes('*') || allowed.includes(origin)) {
           return callback(null, true);
         }
         // Answer without CORS headers rather than failing the request: the
@@ -101,7 +102,7 @@ export function createApp() {
   app.use(
     rateLimit({
       windowMs: 60 * 1000,
-      limit: 600,
+      limit: () => settings.get('security.apiRateLimitPerMinute'),
       standardHeaders: true,
       legacyHeaders: false,
       message: { error: { code: 'rate_limited', message: 'Slow down a little' } },

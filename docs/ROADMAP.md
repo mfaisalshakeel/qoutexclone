@@ -110,10 +110,10 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **Trading:** expiry lists, purchase cut-off, min/max stake, practice balance and refill rules, hotkeys on/off, and top-traders opt-out default.
 - [x] **Payments:** methods, fees, limits, KYC thresholds, and auto-approve rules.
 - [x] **Growth:** referral %, status levels, bonuses, marketplace items, and XP rules.
-- [ ] **Email/SMTP** with a "send test email" button.
-- [ ] **SEO:** default title template, meta description, keywords, OG image, Twitter card, canonical base URL, robots rules, sitemap on/off, Google Analytics / GTM ids, Search Console verification, and custom `<head>` snippet (sanitised).
-- [ ] **Security:** password policy, 2FA enforcement for admins, session lifetime, rate limits, and allowed CORS origins.
-- [ ] **Localisation:** enabled languages and translation overrides.
+- [x] **Email/SMTP** with a "send test email" button.
+- [x] **SEO:** default title template, meta description, keywords, OG image, Twitter card, canonical base URL, robots rules, sitemap on/off, Google Analytics / GTM ids, Search Console verification, and custom `<head>` snippet (sanitised).
+- [x] **Security:** password policy, 2FA enforcement for admins, session lifetime, rate limits, and allowed CORS origins.
+- [x] **Localisation:** enabled languages and translation overrides.
 
 ## Phase 7 — Public website, homepage and SEO
 
