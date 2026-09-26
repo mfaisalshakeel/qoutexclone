@@ -381,6 +381,25 @@ export interface HomepageSection {
   updatedAt: string | null;
 }
 
+export interface Testimonial {
+  id: string;
+  name: string;
+  role: string;
+  quote: string;
+  avatar: string;
+  rating: number;
+  sortOrder: number;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** What the public `/content/homepage` endpoint returns: published copy only, keyed by section. */
+export type PublicHomepageSections = Record<
+  string,
+  { title: string | null; subtitle: string | null; body: string | null }
+>;
+
 export type AnnouncementStyle = 'info' | 'warning' | 'success';
 
 export interface Announcement {

@@ -44,7 +44,15 @@ test.describe('responsive shell', () => {
   test('public and admin pages fit the viewport', async ({ page }) => {
     const errors = failOnPageErrors(page, [/CERT_AUTHORITY/, /favicon/]);
 
-    for (const path of ['/', '/login', '/register', '/forgot-password', '/verify-email']) {
+    for (const path of [
+      '/',
+      '/login',
+      '/register',
+      '/forgot-password',
+      '/verify-email',
+      '/legal/terms',
+      '/legal/privacy',
+    ]) {
       await page.goto(path);
       await page.waitForLoadState('networkidle');
       await expectNoHorizontalScroll(page);

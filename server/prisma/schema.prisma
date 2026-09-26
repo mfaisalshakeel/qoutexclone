@@ -1007,6 +1007,23 @@ model HomepageSection {
   updatedAt         DateTime  @updatedAt
 }
 
+/// A trader quote shown in the homepage's testimonials section. Short enough,
+/// like an FAQ entry, that `enabled` is the whole publish state.
+model Testimonial {
+  id        String   @id @default(cuid())
+  name      String
+  role      String
+  quote     String   @db.Text
+  avatar    String   @default("slate")
+  rating    Int      @default(5)
+  sortOrder Int      @default(0)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, sortOrder])
+}
+
 /// A dismissible banner shown across the platform. `active` plus the optional
 /// date window is its whole publish state — there is no separate draft, since
 /// an announcement is written once and switched on, not iterated on in place.

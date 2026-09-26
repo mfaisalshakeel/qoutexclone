@@ -1,5 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { ADMIN, adminApiToken, failOnPageErrors, login, newCredentials, openMarket, register } from './helpers';
+import {
+  ADMIN,
+  adminApiToken,
+  failOnPageErrors,
+  login,
+  newCredentials,
+  openMarket,
+  register,
+} from './helpers';
 
 test.describe('runtime settings', () => {
   test('an admin change reaches traders without a restart', async ({ page, request }) => {

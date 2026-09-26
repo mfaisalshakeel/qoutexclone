@@ -31,6 +31,7 @@ suite('content CMS', () => {
     await prisma.homepageSection.deleteMany({});
     await prisma.announcement.deleteMany({});
     await prisma.emailTemplateOverride.deleteMany({});
+    await prisma.testimonial.deleteMany({});
   });
 
   afterAll(async () => {
@@ -87,7 +88,10 @@ suite('content CMS', () => {
       });
       expect(entry.published).toBe(false);
 
-      const updated = await content.updateFaqEntry(entry.id, { published: true, answer: 'Under 10 minutes.' });
+      const updated = await content.updateFaqEntry(entry.id, {
+        published: true,
+        answer: 'Under 10 minutes.',
+      });
       expect(updated.published).toBe(true);
       expect(updated.answer).toBe('Under 10 minutes.');
 
@@ -134,6 +138,116 @@ suite('content CMS', () => {
 
     it('refuses to publish a section with no draft at all', async () => {
       await expect(content.publishHomepageSection('footer')).rejects.toThrow();
+    });
+  });
+
+  describe('testimonials', () => {
+    it('creates, updates and deletes one', async () => {
+      const created = await content.createTestimonial({
+        name: 'Test Trader',
+        role: 'Trading since 2025',
+        quote: 'It works.',
+        avatar: 'slate',
+        rating: 5,
+        sortOrder: 0,
+        enabled: true,
+      });
+      expect(created.enabled).toBe(true);
+
+      const updated = await content.updateTestimonial(created.id, { rating: 3, enabled: false });
+      expect(updated.rating).toBe(3);
+      expect(updated.enabled).toBe(false);
+
+      const listed = await content.listTestimonials();
+      expect(listed.map((t) => t.id)).toContain(created.id);
+
+      await content.deleteTestimonial(created.id);
+      const afterDelete = await content.listTestimonials();
+      expect(afterDelete.map((t) => t.id)).not.toContain(created.id);
+    });
+
+    it('refuses to update or delete one that does not exist', async () => {
+      await expect(content.updateTestimonial('missing-id', { enabled: false })).rejects.toThrow();
+      await expect(content.deleteTestimonial('missing-id')).rejects.toThrow();
+    });
+
+    it('the public list only ever shows enabled testimonials, in order', async () => {
+      const first = await content.createTestimonial({
+        name: 'First',
+        role: 'Trading since 2024',
+        quote: 'One.',
+        avatar: 'slate',
+        rating: 5,
+        sortOrder: 20,
+        enabled: true,
+      });
+      const disabled = await content.createTestimonial({
+        name: 'Disabled',
+        role: 'Trading since 2024',
+        quote: 'Two.',
+        avatar: 'slate',
+        rating: 5,
+        sortOrder: 10,
+        enabled: false,
+      });
+      const second = await content.createTestimonial({
+        name: 'Second',
+        role: 'Trading since 2024',
+        quote: 'Three.',
+        avatar: 'slate',
+        rating: 5,
+        sortOrder: 30,
+        enabled: true,
+      });
+
+      const shown = await content.publicTestimonials();
+      expect(shown.map((t) => t.id)).not.toContain(disabled.id);
+      expect(shown.map((t) => t.id)).toEqual([first.id, second.id]);
+    });
+  });
+
+  describe('public readers', () => {
+    it('the public homepage sections reader shows only published copy, keyed by section', async () => {
+      await content.saveHomepageSectionDraft('hero', { title: 'Draft only', subtitle: null, body: null });
+      let published = await content.publicHomepageSections();
+      expect(published.hero).toBeUndefined();
+
+      await content.publishHomepageSection('hero');
+      published = await content.publicHomepageSections();
+      expect(published.hero).toEqual({ title: 'Draft only', subtitle: null, body: null });
+    });
+
+    it('the public FAQ reader shows only published entries', async () => {
+      const draft = await content.createFaqEntry({
+        category: 'Testing',
+        question: 'Draft question?',
+        answer: 'Not yet.',
+        sortOrder: 0,
+        published: false,
+      });
+      const live = await content.createFaqEntry({
+        category: 'Testing',
+        question: 'Live question?',
+        answer: 'Yes.',
+        sortOrder: 0,
+        published: true,
+      });
+
+      const shown = await content.publicFaqEntries();
+      const ids = shown.map((e) => e.id);
+      expect(ids).not.toContain(draft.id);
+      expect(ids).toContain(live.id);
+    });
+
+    it('the public legal page reader returns null until something has been published', async () => {
+      expect(await content.publicLegalPage('privacy')).toBeNull();
+
+      await content.saveLegalPageDraft('privacy', 'Draft body.');
+      expect(await content.publicLegalPage('privacy')).toBeNull();
+
+      await content.publishLegalPage('privacy');
+      const page = await content.publicLegalPage('privacy');
+      expect(page).toMatchObject({ slug: 'privacy', body: 'Draft body.' });
     });
   });
 

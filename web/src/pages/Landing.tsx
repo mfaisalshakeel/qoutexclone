@@ -1,35 +1,76 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import { percent, price } from '../lib/format';
 import { IconLogo } from '../components/Icons';
-import { RowSkeletons } from '../components/Skeleton';
-import type { Asset } from '../lib/types';
+import { HomeChart } from '../components/home/HomeChart';
+import {
+  FaqAccordionSection,
+  FeaturesGridSection,
+  FinalCtaSection,
+  HowItWorksSection,
+  MarketsStripSection,
+  PaymentMethodsSection,
+  PlatformShowcaseSection,
+  SecuritySection,
+  SiteFooter,
+  StatusLevelsSection,
+  TestimonialsSection,
+  TournamentsTeaserSection,
+  copyFor,
+  type SectionCopy,
+} from '../components/home/Sections';
+import type { Asset, FaqEntry, PublicHomepageSections, Testimonial, Tournament } from '../lib/types';
 
-const FEATURES = [
-  {
-    title: 'Fixed-payout trading',
-    body: 'Pick a market, pick an expiry from 30 seconds to an hour, and know your exact profit before you commit.',
-  },
-  {
-    title: 'Crypto in, crypto out',
-    body: 'Fund with BTC, ETH or USDT on ERC-20 and TRC-20. Withdrawals are quoted with fees up front, no surprises.',
-  },
-  {
-    title: 'Practice with $10,000',
-    body: 'Every account ships with a demo balance on the same live prices and the same engine as the real thing.',
-  },
-];
+type PaymentMethodSummary = {
+  key: string;
+  label: string;
+  provider: string;
+  currency: string;
+  network: string | null;
+};
 
+/**
+ * The marketing homepage. Every section pulls real data — live markets, real
+ * tournaments, the CMS's own published copy — rather than a mock of what
+ * those will eventually say; a section whose data has not loaded yet shows a
+ * skeleton, never a placeholder dressed up as the real thing.
+ */
 export function Landing() {
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [assets, setAssets] = useState<Asset[] | null>(null);
+  const [sections, setSections] = useState<PublicHomepageSections | null>(null);
+  const [faq, setFaq] = useState<FaqEntry[] | null>(null);
+  const [testimonials, setTestimonials] = useState<Testimonial[] | null>(null);
+  const [methods, setMethods] = useState<PaymentMethodSummary[] | null>(null);
+  const [tournaments, setTournaments] = useState<Tournament[] | null>(null);
 
   useEffect(() => {
     api
       .get<{ assets: Asset[] }>('/market/assets')
-      .then(({ assets: list }) => setAssets(list.slice(0, 6)))
-      .catch(() => undefined);
+      .then(({ assets: list }) => setAssets(list.slice(0, 8)))
+      .catch(() => setAssets([]));
+    api
+      .get<{ sections: PublicHomepageSections }>('/content/homepage')
+      .then(({ sections: data }) => setSections(data))
+      .catch(() => setSections({}));
+    api
+      .get<{ entries: FaqEntry[] }>('/content/faq')
+      .then(({ entries }) => setFaq(entries))
+      .catch(() => setFaq([]));
+    api
+      .get<{ testimonials: Testimonial[] }>('/content/testimonials')
+      .then(({ testimonials: list }) => setTestimonials(list))
+      .catch(() => setTestimonials([]));
+    api
+      .get<{ methods: PaymentMethodSummary[] }>('/content/payment-methods')
+      .then(({ methods: list }) => setMethods(list))
+      .catch(() => setMethods([]));
+    api
+      .get<{ tournaments: Tournament[] }>('/tournaments')
+      .then(({ tournaments: list }) => setTournaments(list))
+      .catch(() => setTournaments([]));
   }, []);
+
+  const hero = copyFor(sections, 'hero', 'Trade the next tick, not the next quarter');
 
   return (
     <div className="min-h-dvh">
@@ -48,95 +89,78 @@ export function Landing() {
         </nav>
       </header>
 
-      <section className="mx-auto max-w-6xl px-4 pb-14 pt-8 sm:pt-16">
-        <div className="grid items-center gap-10 lg:grid-cols-2">
-          <div>
-            <span className="chip bg-accent-soft text-accent">Crypto binary options</span>
-            <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-              Trade the direction.
-              <span className="block text-accent">Know the payout.</span>
-            </h1>
-            <p className="mt-4 max-w-lg text-base leading-relaxed text-slate-400">
-              Up or down on BTC, ETH, SOL and more. Fixed payouts up to 87%, expiries from 30 seconds,
-              deposits and withdrawals settled in crypto.
-            </p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <Link to="/register" className="btn-primary !px-5 !py-3">
-                Create free account
-              </Link>
-              <Link to="/login" className="btn-ghost !px-5 !py-3">
-                I already have one
-              </Link>
-            </div>
-            <p className="mt-4 text-xs text-slate-500">
-              No deposit required to use the $10,000 practice account.
-            </p>
-          </div>
+      <HeroSection copy={hero} />
 
-          <div className="card overflow-hidden">
-            <div className="border-b border-ink-600 px-4 py-3">
-              <p className="text-sm font-semibold">Live markets</p>
-              <p className="text-xs text-slate-500">Payouts update with market conditions</p>
-            </div>
-            <ul className="divide-y divide-ink-700">
-              {assets.map((asset) => (
-                <li key={asset.symbol} className="flex items-center gap-3 px-4 py-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-600 text-[10px] font-bold text-slate-300">
-                    {asset.base}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold">{asset.name}</span>
-                    <span className="block text-[11px] text-slate-500">{asset.symbol}</span>
-                  </span>
-                  <span className="text-right">
-                    <span className="tabular block text-sm font-semibold">
-                      {price(asset.price, asset.precision)}
-                    </span>
-                    <span
-                      className={`tabular block text-[11px] ${asset.changePct >= 0 ? 'text-up' : 'text-down'}`}
-                    >
-                      {percent(asset.changePct)}
-                    </span>
-                  </span>
-                  <span className="chip bg-up-soft text-up">{asset.payoutPct}%</span>
-                </li>
-              ))}
-              {assets.length === 0 && (
-                <li>
-                  <RowSkeletons
-                    rows={6}
-                    avatar
-                    className="divide-y divide-ink-700"
-                    rowClassName="px-4 py-3"
-                  />
-                </li>
-              )}
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      <section className="border-y border-ink-700 bg-ink-800/40">
-        <div className="mx-auto grid max-w-6xl gap-6 px-4 py-12 sm:grid-cols-3">
-          {FEATURES.map((feature) => (
-            <div key={feature.title}>
-              <h2 className="text-base font-semibold">{feature.title}</h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-400">{feature.body}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <footer className="mx-auto max-w-6xl px-4 py-10 text-xs leading-relaxed text-slate-500">
-        <p className="font-semibold text-slate-400">Risk warning</p>
-        <p className="mt-2 max-w-3xl">
-          Binary options are high-risk instruments. You can lose your entire investment on a single trade.
-          This platform is a reference implementation built for education and development — run it against
-          your own infrastructure and comply with the regulations that apply to you before accepting real
-          customer funds.
-        </p>
-        <p className="mt-6">© {new Date().getFullYear()} Quantex. All rights reserved.</p>
-      </footer>
+      <MarketsStripSection
+        copy={copyFor(sections, 'markets_strip', 'Live markets, live payouts')}
+        assets={assets}
+      />
+      <HowItWorksSection copy={copyFor(sections, 'how_it_works', 'Three steps, start to finish')} />
+      <PlatformShowcaseSection copy={copyFor(sections, 'platform_showcase', 'One terminal, every screen')} />
+      <FeaturesGridSection
+        copy={copyFor(sections, 'features_grid', 'Built for traders who watch the clock')}
+      />
+      <StatusLevelsSection
+        copy={copyFor(sections, 'status_levels', 'The more you trade, the more you keep')}
+      />
+      <TournamentsTeaserSection
+        copy={copyFor(sections, 'tournaments_teaser', 'Trade the leaderboard, not just the market')}
+        tournaments={tournaments}
+      />
+      <PaymentMethodsSection
+        copy={copyFor(sections, 'payment_methods', 'Deposit your way')}
+        methods={methods}
+      />
+      <SecuritySection copy={copyFor(sections, 'security', 'Trade with your eyes open')} />
+      <TestimonialsSection
+        copy={copyFor(sections, 'testimonials', 'What traders say')}
+        testimonials={testimonials}
+      />
+      <FaqAccordionSection copy={copyFor(sections, 'faq_accordion', 'Questions, answered')} entries={faq} />
+      <FinalCtaSection copy={copyFor(sections, 'final_cta', 'Your first trade is on the house')} />
+      <SiteFooter copy={copyFor(sections, 'footer', 'Quantex')} />
     </div>
+  );
+}
+
+function HeroSection({ copy }: { copy: SectionCopy }) {
+  return (
+    <section className="mx-auto max-w-6xl px-4 pb-14 pt-8 sm:pt-16">
+      <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
+        <div className="min-w-0">
+          <span className="chip bg-accent-soft text-accent">Fixed-payout trading</span>
+          <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight sm:text-5xl">{copy.title}</h1>
+          {copy.subtitle && (
+            <p className="mt-4 max-w-lg text-base leading-relaxed text-slate-400">{copy.subtitle}</p>
+          )}
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Link to="/register" className="btn-primary !px-5 !py-3">
+              Create free account
+            </Link>
+            <Link to="/login" className="btn-ghost !px-5 !py-3">
+              I already have one
+            </Link>
+          </div>
+          <p className="mt-4 text-xs text-slate-500">
+            No deposit required to use the $10,000 practice account.
+          </p>
+        </div>
+
+        <div className="card overflow-hidden">
+          <div className="border-b border-ink-600 px-4 py-3">
+            <p className="text-sm font-semibold">BTC/USDT · live</p>
+            <p className="text-xs text-slate-500">Real ticks from the platform's own feed</p>
+          </div>
+          <div className="p-4">
+            <HomeChart className="h-[160px] w-full" />
+          </div>
+          {copy.body && (
+            <p className="border-t border-ink-700 px-4 py-3 text-xs leading-relaxed text-slate-500">
+              {copy.body}
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }

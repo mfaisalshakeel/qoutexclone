@@ -5,6 +5,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { ADMIN_ROLES } from '../lib/permissions.js';
+import { AVATARS } from '../lib/profile.js';
 import { badRequest, conflict, notFound, wrap } from '../lib/errors.js';
 import {
   buildFilterWhere,
@@ -39,9 +40,10 @@ import {
   assertKnownEmailKey,
   createAnnouncement,
   createFaqEntry,
+  createTestimonial,
   deleteAnnouncement,
   deleteFaqEntry,
-  emailOverrideCache,
+  deleteTestimonial,
   isAnnouncementStyle,
   isHomepageSectionKey,
   isLegalSlug,
@@ -50,6 +52,7 @@ import {
   listFaqEntries,
   listHomepageSections,
   listLegalPages,
+  listTestimonials,
   publishEmailOverride,
   publishHomepageSection,
   publishLegalPage,
@@ -59,6 +62,7 @@ import {
   unpublishEmailOverride,
   updateAnnouncement,
   updateFaqEntry,
+  updateTestimonial,
 } from '../services/content.js';
 import { levelFor, statusConfig } from '../services/status.js';
 import {
@@ -274,7 +278,11 @@ router.get(
         take: 25,
         include: { referred: { select: { email: true, name: true } } },
       }),
-      prisma.supportTicket.findMany({ where: { userId: user.id }, orderBy: { lastMessageAt: 'desc' }, take: 25 }),
+      prisma.supportTicket.findMany({
+        where: { userId: user.id },
+        orderBy: { lastMessageAt: 'desc' },
+        take: 25,
+      }),
       prisma.userNote.findMany({
         where: { userId: user.id },
         orderBy: { createdAt: 'desc' },
@@ -2024,6 +2032,58 @@ router.post(
 );
 
 router.get(
+  '/content/testimonials',
+  wrap(async (_req, res) => {
+    res.json({ testimonials: await listTestimonials() });
+  }),
+);
+
+const TESTIMONIAL_BODY = {
+  name: z.string().min(1).max(100),
+  role: z.string().min(1).max(100),
+  quote: z.string().min(1).max(2_000),
+  avatar: z.enum(AVATARS),
+  rating: z.number().int().min(1).max(5).default(5),
+  sortOrder: z.number().int().default(0),
+  enabled: z.boolean().default(true),
+};
+
+router.post(
+  '/content/testimonials',
+  wrap(async (req, res) => {
+    const body = z.object(TESTIMONIAL_BODY).parse(req.body);
+    const testimonial = await createTestimonial(body);
+    await audit(req.user!.id, 'content.testimonial.create', 'Testimonial', testimonial.id, testimonial.name);
+    res.status(201).json({ testimonial });
+  }),
+);
+
+router.patch(
+  '/content/testimonials/:id',
+  wrap(async (req, res) => {
+    const body = z.object(TESTIMONIAL_BODY).partial().parse(req.body);
+    const testimonial = await updateTestimonial(req.params.id, body);
+    await audit(
+      req.user!.id,
+      'content.testimonial.update',
+      'Testimonial',
+      testimonial.id,
+      JSON.stringify(body),
+    );
+    res.json({ testimonial });
+  }),
+);
+
+router.delete(
+  '/content/testimonials/:id',
+  wrap(async (req, res) => {
+    await deleteTestimonial(req.params.id);
+    await audit(req.user!.id, 'content.testimonial.delete', 'Testimonial', req.params.id);
+    res.status(204).end();
+  }),
+);
+
+router.get(
   '/content/announcements',
   wrap(async (_req, res) => {
     res.json({ announcements: await listAnnouncements() });
@@ -2069,7 +2129,13 @@ router.patch(
       ...(startsAt !== undefined && { startsAt: startsAt ? new Date(startsAt) : null }),
       ...(endsAt !== undefined && { endsAt: endsAt ? new Date(endsAt) : null }),
     });
-    await audit(req.user!.id, 'content.announcement.update', 'Announcement', announcement.id, JSON.stringify(body));
+    await audit(
+      req.user!.id,
+      'content.announcement.update',
+      'Announcement',
+      announcement.id,
+      JSON.stringify(body),
+    );
     res.json({ announcement });
   }),
 );

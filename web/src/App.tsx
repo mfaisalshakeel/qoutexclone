@@ -32,6 +32,7 @@ import { AdminStaff } from './pages/admin/Staff';
 import { History } from './pages/History';
 import { Leaderboard } from './pages/Leaderboard';
 import { Landing } from './pages/Landing';
+import { Legal } from './pages/Legal';
 import { ForgotPassword, ResetPassword } from './pages/ForgotPassword';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
@@ -70,6 +71,7 @@ export default function App() {
       <ErrorBoundary>
         <Routes>
           <Route path="/" element={ready && user ? <Navigate to="/trade" replace /> : <Landing />} />
+          <Route path="/legal/:slug" element={<Legal />} />
           <Route path="/login" element={ready && user ? <Navigate to="/trade" replace /> : <Login />} />
           <Route path="/register" element={ready && user ? <Navigate to="/trade" replace /> : <Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />

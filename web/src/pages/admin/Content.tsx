@@ -4,14 +4,23 @@ import { dateTime } from '../../lib/format';
 import { toast } from '../../store/toast';
 import { Empty, Loading, PageHead, StatusPill, Table, Td } from '../../components/admin/ui';
 import { MarkdownEditor } from '../../components/admin/MarkdownEditor';
-import type { Announcement, AnnouncementStyle, FaqEntry, HomepageSection, LegalPage } from '../../lib/types';
+import { AVATAR_COLORS, Avatar } from '../../components/Avatar';
+import type {
+  Announcement,
+  AnnouncementStyle,
+  FaqEntry,
+  HomepageSection,
+  LegalPage,
+  Testimonial,
+} from '../../lib/types';
 
-const TABS = ['homepage', 'faq', 'legal', 'announcements'] as const;
+const TABS = ['homepage', 'faq', 'legal', 'testimonials', 'announcements'] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   homepage: 'Homepage',
   faq: 'FAQ',
   legal: 'Legal pages',
+  testimonials: 'Testimonials',
   announcements: 'Announcements',
 };
 
@@ -51,13 +60,22 @@ export function AdminContent() {
       {tab === 'homepage' && <HomepageTab />}
       {tab === 'faq' && <FaqTab />}
       {tab === 'legal' && <LegalTab />}
+      {tab === 'testimonials' && <TestimonialsTab />}
       {tab === 'announcements' && <AnnouncementsTab />}
     </div>
   );
 }
 
 /** Slide-over used by every tab below, so editing one content type reads the same as any other. */
-function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function Drawer({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -86,7 +104,13 @@ function Drawer({ title, onClose, children }: { title: string; onClose: () => vo
   );
 }
 
-function PublishBadge({ publishedAt, hasDraftAhead }: { publishedAt: string | null; hasDraftAhead: boolean }) {
+function PublishBadge({
+  publishedAt,
+  hasDraftAhead,
+}: {
+  publishedAt: string | null;
+  hasDraftAhead: boolean;
+}) {
   if (!publishedAt) return <StatusPill status="draft" />;
   return <StatusPill status={hasDraftAhead ? 'pending' : 'active'} />;
 }
@@ -134,7 +158,9 @@ function HomepageTab() {
               <p className="text-sm font-semibold">{section.label}</p>
               <PublishBadge
                 publishedAt={section.publishedAt}
-                hasDraftAhead={section.draftTitle !== section.publishedTitle || section.draftBody !== section.publishedBody}
+                hasDraftAhead={
+                  section.draftTitle !== section.publishedTitle || section.draftBody !== section.publishedBody
+                }
               />
             </div>
             <p className="mt-1.5 truncate text-xs text-slate-400">
@@ -489,12 +515,21 @@ function LegalTab() {
       </p>
       <Table head={['Page', 'State', 'Last published']}>
         {pages.map((page) => (
-          <tr key={page.slug} className="cursor-pointer transition hover:bg-ink-700/40" onClick={() => setOpen(page)}>
+          <tr
+            key={page.slug}
+            className="cursor-pointer transition hover:bg-ink-700/40"
+            onClick={() => setOpen(page)}
+          >
             <Td className="text-sm font-semibold">{page.title}</Td>
             <Td>
-              <PublishBadge publishedAt={page.publishedAt} hasDraftAhead={page.draftBody !== page.publishedBody} />
+              <PublishBadge
+                publishedAt={page.publishedAt}
+                hasDraftAhead={page.draftBody !== page.publishedBody}
+              />
             </Td>
-            <Td className="text-xs text-slate-400">{page.publishedAt ? dateTime(page.publishedAt) : 'never'}</Td>
+            <Td className="text-xs text-slate-400">
+              {page.publishedAt ? dateTime(page.publishedAt) : 'never'}
+            </Td>
           </tr>
         ))}
       </Table>
@@ -562,7 +597,11 @@ function LegalPageDrawer({
 
 /* ------------------------------- announcements ------------------------------- */
 
-const STYLE_LABEL: Record<AnnouncementStyle, string> = { info: 'Info', warning: 'Warning', success: 'Success' };
+const STYLE_LABEL: Record<AnnouncementStyle, string> = {
+  info: 'Info',
+  warning: 'Warning',
+  success: 'Success',
+};
 
 function AnnouncementsTab() {
   const [items, setItems] = useState<Announcement[] | null>(null);
@@ -604,7 +643,15 @@ function AnnouncementsTab() {
         startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : null,
         endsAt: form.endsAt ? new Date(form.endsAt).toISOString() : null,
       });
-      setForm({ message: '', style: 'info', linkLabel: '', linkUrl: '', active: true, startsAt: '', endsAt: '' });
+      setForm({
+        message: '',
+        style: 'info',
+        linkLabel: '',
+        linkUrl: '',
+        active: true,
+        startsAt: '',
+        endsAt: '',
+      });
       toast.success('Announcement created');
       void load();
     } catch (err) {
@@ -728,13 +775,17 @@ function AnnouncementsTab() {
           {items.map((item) => (
             <tr key={item.id} className="transition hover:bg-ink-700/40">
               <Td>
-                <button onClick={() => setOpen(item)} className="max-w-xs truncate text-left text-sm hover:text-accent">
+                <button
+                  onClick={() => setOpen(item)}
+                  className="max-w-xs truncate text-left text-sm hover:text-accent"
+                >
                   {item.message}
                 </button>
               </Td>
               <Td className="text-xs text-slate-400">{STYLE_LABEL[item.style]}</Td>
               <Td className="text-[11px] text-slate-500">
-                {item.startsAt ? dateTime(item.startsAt) : 'now'} → {item.endsAt ? dateTime(item.endsAt) : 'no end'}
+                {item.startsAt ? dateTime(item.startsAt) : 'now'} →{' '}
+                {item.endsAt ? dateTime(item.endsAt) : 'no end'}
               </Td>
               <Td>
                 <button onClick={() => void toggleActive(item)} className="inline-flex">
@@ -846,7 +897,333 @@ function AnnouncementDrawer({
         <label className="label" htmlFor="an-e-link-url">
           Link URL
         </label>
-        <input id="an-e-link-url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} className="field" />
+        <input
+          id="an-e-link-url"
+          value={linkUrl}
+          onChange={(e) => setLinkUrl(e.target.value)}
+          className="field"
+        />
+      </div>
+      <div className="flex gap-2 pt-2">
+        <button
+          onClick={() => void remove()}
+          className={`btn-ghost flex-1 ${deleting ? '!border-down !text-down' : ''}`}
+        >
+          {deleting ? 'Confirm delete' : 'Delete'}
+        </button>
+        <button onClick={() => void save()} disabled={busy} className="btn-primary flex-1">
+          {busy ? 'Saving…' : 'Save changes'}
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
+/* -------------------------------- testimonials -------------------------------- */
+
+const AVATAR_KEYS = Object.keys(AVATAR_COLORS);
+
+function TestimonialsTab() {
+  const [testimonials, setTestimonials] = useState<Testimonial[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState<Testimonial | null>(null);
+  const [form, setForm] = useState({
+    name: '',
+    role: '',
+    quote: '',
+    avatar: AVATAR_KEYS[0],
+    rating: 5,
+    sortOrder: 0,
+  });
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const data = await api.get<{ testimonials: Testimonial[] }>('/admin/content/testimonials');
+      setTestimonials(data.testimonials);
+      setOpen((current) => (current ? (data.testimonials.find((t) => t.id === current.id) ?? null) : null));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not load the testimonials');
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const create = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try {
+      await api.post('/admin/content/testimonials', { ...form, enabled: true });
+      setForm({ name: '', role: '', quote: '', avatar: AVATAR_KEYS[0], rating: 5, sortOrder: 0 });
+      toast.success('Testimonial added');
+      void load();
+    } catch (err) {
+      toast.error('Could not add it', err instanceof ApiError ? err.message : undefined);
+    }
+  };
+
+  const toggle = async (testimonial: Testimonial) => {
+    try {
+      await api.patch(`/admin/content/testimonials/${testimonial.id}`, { enabled: !testimonial.enabled });
+      void load();
+    } catch (err) {
+      toast.error('Could not update it', err instanceof ApiError ? err.message : undefined);
+    }
+  };
+
+  if (error) return <ErrorCard message={error} onRetry={load} />;
+
+  return (
+    <>
+      <p className="mb-3 text-xs text-slate-500">
+        Trader quotes shown on the homepage, in this order. Disable one instead of deleting it if you might
+        reuse it.
+      </p>
+      <form onSubmit={create} className="card mb-4 grid gap-3 p-4 sm:grid-cols-2">
+        <div>
+          <label className="label" htmlFor="t-name">
+            Name
+          </label>
+          <input
+            id="t-name"
+            required
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            className="field"
+            placeholder="Amara O."
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="t-role">
+            Role / context
+          </label>
+          <input
+            id="t-role"
+            required
+            value={form.role}
+            onChange={(e) => setForm({ ...form, role: e.target.value })}
+            className="field"
+            placeholder="Trading since 2024"
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="label" htmlFor="t-quote">
+            Quote
+          </label>
+          <textarea
+            id="t-quote"
+            required
+            rows={3}
+            value={form.quote}
+            onChange={(e) => setForm({ ...form, quote: e.target.value })}
+            className="field"
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="t-avatar">
+            Avatar colour
+          </label>
+          <select
+            id="t-avatar"
+            value={form.avatar}
+            onChange={(e) => setForm({ ...form, avatar: e.target.value })}
+            className="field"
+          >
+            {AVATAR_KEYS.map((key) => (
+              <option key={key} value={key}>
+                {key}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="t-rating">
+            Rating (1-5)
+          </label>
+          <input
+            id="t-rating"
+            type="number"
+            min={1}
+            max={5}
+            value={form.rating}
+            onChange={(e) => setForm({ ...form, rating: Number(e.target.value) })}
+            className="field"
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="t-sort">
+            Order
+          </label>
+          <input
+            id="t-sort"
+            type="number"
+            value={form.sortOrder}
+            onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) })}
+            className="field"
+          />
+        </div>
+        <div className="flex items-end">
+          <button type="submit" className="btn-primary w-full">
+            Add testimonial
+          </button>
+        </div>
+      </form>
+
+      {!error && testimonials === null && <Loading rows={4} cols={3} />}
+      {!error && testimonials !== null && testimonials.length === 0 && <Empty text="No testimonials yet." />}
+      {!error && testimonials !== null && testimonials.length > 0 && (
+        <Table head={['Trader', 'Quote', 'State', 'Action']}>
+          {testimonials.map((testimonial) => (
+            <tr key={testimonial.id} className="transition hover:bg-ink-700/40">
+              <Td>
+                <button
+                  onClick={() => setOpen(testimonial)}
+                  className="flex items-center gap-2 text-left hover:text-accent"
+                >
+                  <Avatar name={testimonial.name} avatar={testimonial.avatar} className="h-8 w-8 text-xs" />
+                  <span>
+                    <span className="block text-sm font-semibold">{testimonial.name}</span>
+                    <span className="block text-xs text-slate-500">{testimonial.role}</span>
+                  </span>
+                </button>
+              </Td>
+              <Td className="max-w-xs truncate text-xs text-slate-400">{testimonial.quote}</Td>
+              <Td>
+                <StatusPill status={testimonial.enabled ? 'active' : 'closed'} />
+              </Td>
+              <Td className="text-right">
+                <button onClick={() => void toggle(testimonial)} className="btn-ghost !px-3 !py-1.5 text-xs">
+                  {testimonial.enabled ? 'Disable' : 'Enable'}
+                </button>
+              </Td>
+            </tr>
+          ))}
+        </Table>
+      )}
+
+      {open && <TestimonialDrawer testimonial={open} onClose={() => setOpen(null)} onSaved={load} />}
+    </>
+  );
+}
+
+function TestimonialDrawer({
+  testimonial,
+  onClose,
+  onSaved,
+}: {
+  testimonial: Testimonial;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(testimonial.name);
+  const [role, setRole] = useState(testimonial.role);
+  const [quote, setQuote] = useState(testimonial.quote);
+  const [avatar, setAvatar] = useState(testimonial.avatar);
+  const [rating, setRating] = useState(testimonial.rating);
+  const [sortOrder, setSortOrder] = useState(testimonial.sortOrder);
+  const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.patch(`/admin/content/testimonials/${testimonial.id}`, {
+        name,
+        role,
+        quote,
+        avatar,
+        rating,
+        sortOrder,
+      });
+      toast.success('Saved');
+      onSaved();
+      onClose();
+    } catch (err) {
+      toast.error('Could not save', err instanceof ApiError ? err.message : undefined);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!deleting) {
+      setDeleting(true);
+      return;
+    }
+    try {
+      await api.del(`/admin/content/testimonials/${testimonial.id}`);
+      toast.success('Deleted');
+      onSaved();
+      onClose();
+    } catch (err) {
+      toast.error('Could not delete it', err instanceof ApiError ? err.message : undefined);
+    }
+  };
+
+  return (
+    <Drawer title="Edit testimonial" onClose={onClose}>
+      <div>
+        <label className="label" htmlFor="t-e-name">
+          Name
+        </label>
+        <input id="t-e-name" value={name} onChange={(e) => setName(e.target.value)} className="field" />
+      </div>
+      <div>
+        <label className="label" htmlFor="t-e-role">
+          Role / context
+        </label>
+        <input id="t-e-role" value={role} onChange={(e) => setRole(e.target.value)} className="field" />
+      </div>
+      <div>
+        <label className="label" htmlFor="t-e-quote">
+          Quote
+        </label>
+        <textarea
+          id="t-e-quote"
+          rows={4}
+          value={quote}
+          onChange={(e) => setQuote(e.target.value)}
+          className="field"
+        />
+      </div>
+      <div>
+        <label className="label" htmlFor="t-e-avatar">
+          Avatar colour
+        </label>
+        <select id="t-e-avatar" value={avatar} onChange={(e) => setAvatar(e.target.value)} className="field">
+          {AVATAR_KEYS.map((key) => (
+            <option key={key} value={key}>
+              {key}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="label" htmlFor="t-e-rating">
+          Rating (1-5)
+        </label>
+        <input
+          id="t-e-rating"
+          type="number"
+          min={1}
+          max={5}
+          value={rating}
+          onChange={(e) => setRating(Number(e.target.value))}
+          className="field"
+        />
+      </div>
+      <div>
+        <label className="label" htmlFor="t-e-sort">
+          Order
+        </label>
+        <input
+          id="t-e-sort"
+          type="number"
+          value={sortOrder}
+          onChange={(e) => setSortOrder(Number(e.target.value))}
+          className="field"
+        />
       </div>
       <div className="flex gap-2 pt-2">
         <button

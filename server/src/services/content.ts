@@ -55,6 +55,14 @@ export async function saveLegalPageDraft(slug: LegalSlug, body: string) {
   });
 }
 
+/** What the public legal pages actually show: only what has ever been published. */
+export async function publicLegalPage(slug: LegalSlug) {
+  const page = await prisma.legalPage.findUnique({ where: { slug } });
+  const title = LEGAL_PAGES.find((p) => p.slug === slug)!.title;
+  if (!page?.publishedAt) return null;
+  return { slug, title, body: page.publishedBody, publishedAt: page.publishedAt };
+}
+
 export async function publishLegalPage(slug: LegalSlug) {
   const page = await prisma.legalPage.findUnique({ where: { slug } });
   if (!page) throw notFound('Nothing has been drafted for this page yet');
@@ -70,6 +78,15 @@ export async function listFaqEntries() {
   return prisma.faqEntry.findMany({ orderBy: [{ category: 'asc' }, { sortOrder: 'asc' }] });
 }
 
+/** What the help centre actually shows: published entries only. */
+export async function publicFaqEntries() {
+  return prisma.faqEntry.findMany({
+    where: { published: true },
+    orderBy: [{ category: 'asc' }, { sortOrder: 'asc' }],
+    select: { id: true, category: true, question: true, answer: true, sortOrder: true },
+  });
+}
+
 export async function createFaqEntry(data: {
   category: string;
   question: string;
@@ -82,7 +99,13 @@ export async function createFaqEntry(data: {
 
 export async function updateFaqEntry(
   id: string,
-  patch: Partial<{ category: string; question: string; answer: string; sortOrder: number; published: boolean }>,
+  patch: Partial<{
+    category: string;
+    question: string;
+    answer: string;
+    sortOrder: number;
+    published: boolean;
+  }>,
 ) {
   const entry = await prisma.faqEntry.findUnique({ where: { id } });
   if (!entry) throw notFound('That FAQ entry does not exist');
@@ -141,6 +164,18 @@ export async function listHomepageSections() {
   });
 }
 
+/** What the homepage actually renders: published copy only, keyed for easy lookup, sections never drafted yet simply absent. */
+export async function publicHomepageSections(): Promise<
+  Record<string, { title: string | null; subtitle: string | null; body: string | null }>
+> {
+  const rows = await prisma.homepageSection.findMany({ where: { publishedAt: { not: null } } });
+  const out: Record<string, { title: string | null; subtitle: string | null; body: string | null }> = {};
+  for (const row of rows) {
+    out[row.key] = { title: row.publishedTitle, subtitle: row.publishedSubtitle, body: row.publishedBody };
+  }
+  return out;
+}
+
 export async function saveHomepageSectionDraft(
   key: HomepageSectionKey,
   patch: { title?: string | null; subtitle?: string | null; body?: string | null },
@@ -173,6 +208,55 @@ export async function publishHomepageSection(key: HomepageSectionKey) {
       publishedAt: new Date(),
     },
   });
+}
+
+/* ------------------------------ testimonials ------------------------------ */
+
+export async function listTestimonials() {
+  return prisma.testimonial.findMany({ orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] });
+}
+
+/** What the homepage actually shows: enabled, in the order an operator set. */
+export async function publicTestimonials() {
+  return prisma.testimonial.findMany({
+    where: { enabled: true },
+    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+  });
+}
+
+export async function createTestimonial(data: {
+  name: string;
+  role: string;
+  quote: string;
+  avatar: string;
+  rating: number;
+  sortOrder: number;
+  enabled: boolean;
+}) {
+  return prisma.testimonial.create({ data });
+}
+
+export async function updateTestimonial(
+  id: string,
+  patch: Partial<{
+    name: string;
+    role: string;
+    quote: string;
+    avatar: string;
+    rating: number;
+    sortOrder: number;
+    enabled: boolean;
+  }>,
+) {
+  const testimonial = await prisma.testimonial.findUnique({ where: { id } });
+  if (!testimonial) throw notFound('That testimonial does not exist');
+  return prisma.testimonial.update({ where: { id }, data: patch });
+}
+
+export async function deleteTestimonial(id: string) {
+  const testimonial = await prisma.testimonial.findUnique({ where: { id } });
+  if (!testimonial) throw notFound('That testimonial does not exist');
+  await prisma.testimonial.delete({ where: { id } });
 }
 
 /* ------------------------------ announcements ------------------------------ */
@@ -258,7 +342,11 @@ export const EMAIL_TEMPLATE_KEYS = [
     label: 'Deposit credited',
     placeholders: ['name', 'site', 'amount', 'bonus', 'bonusLine', 'currency', 'network'],
   },
-  { key: 'withdrawal-completed', label: 'Withdrawal update', placeholders: ['name', 'site', 'amount', 'what'] },
+  {
+    key: 'withdrawal-completed',
+    label: 'Withdrawal update',
+    placeholders: ['name', 'site', 'amount', 'what'],
+  },
   { key: 'kyc-approved', label: 'Identity check passed', placeholders: ['name', 'site'] },
   {
     key: 'tournament-result',

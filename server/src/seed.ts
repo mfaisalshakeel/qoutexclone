@@ -10,6 +10,7 @@ import { DEFAULT_PAYMENT_METHODS } from './data/payment-methods.js';
 import { DEFAULT_LEGAL_PAGES } from './data/legal-pages.js';
 import { DEFAULT_FAQ } from './data/faq.js';
 import { DEFAULT_HOMEPAGE_SECTIONS } from './data/homepage-sections.js';
+import { DEFAULT_TESTIMONIALS } from './data/testimonials.js';
 import { LEGAL_PAGES, HOMEPAGE_SECTIONS } from './services/content.js';
 
 async function main() {
@@ -169,6 +170,13 @@ async function main() {
     }
   }
 
+  for (const testimonial of DEFAULT_TESTIMONIALS) {
+    const existing = await prisma.testimonial.findFirst({ where: { name: testimonial.name } });
+    if (!existing) {
+      await prisma.testimonial.create({ data: { ...testimonial, enabled: true } });
+    }
+  }
+
   const byClass = Object.entries(MARKET_COUNTS.byClass)
     .map(([assetClass, count]) => `${assetClass.toLowerCase()} ${count}`)
     .join(', ');
@@ -177,7 +185,9 @@ async function main() {
   console.log(`Seeded ${DEFAULT_MARKETPLACE_ITEMS.length} marketplace items.`);
   console.log(`Seeded ${DEFAULT_BONUS_OFFERS.length} bonus offers.`);
   console.log(`Seeded ${DEFAULT_PAYMENT_METHODS.length} payment methods.`);
-  console.log(`Seeded ${LEGAL_PAGES.length} legal pages, ${HOMEPAGE_SECTIONS.length} homepage sections, ${DEFAULT_FAQ.length} FAQ entries.`);
+  console.log(
+    `Seeded ${LEGAL_PAGES.length} legal pages, ${HOMEPAGE_SECTIONS.length} homepage sections, ${DEFAULT_FAQ.length} FAQ entries, ${DEFAULT_TESTIMONIALS.length} testimonials.`,
+  );
   console.log(`Admin:  ${adminEmail} / ${adminPassword}`);
   console.log(`Trader: ${demoEmail} / Trader123!`);
 }

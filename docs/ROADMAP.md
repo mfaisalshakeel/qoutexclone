@@ -117,7 +117,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 
 ## Phase 7 — Public website, homepage and SEO
 
-- [ ] **Homepage** (the first impression, must be outstanding and original). Sections:
+- [x] **Homepage** (the first impression, must be outstanding and original). Sections:
   1. hero with headline, sub-copy, primary CTA "Start trading" and secondary "Try practice account", and a *live* animated chart/terminal preview using the real feed
   2. live markets strip/table with payouts
   3. how it works in 3 steps
