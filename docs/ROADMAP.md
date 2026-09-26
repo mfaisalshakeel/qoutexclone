@@ -109,7 +109,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **General:** site name, logo (light/dark), favicon, support email, default currency, timezone, default language, maintenance mode (with allowlist IPs and message).
 - [x] **Trading:** expiry lists, purchase cut-off, min/max stake, practice balance and refill rules, hotkeys on/off, and top-traders opt-out default.
 - [x] **Payments:** methods, fees, limits, KYC thresholds, and auto-approve rules.
-- [ ] **Growth:** referral %, status levels, bonuses, marketplace items, and XP rules.
+- [x] **Growth:** referral %, status levels, bonuses, marketplace items, and XP rules.
 - [ ] **Email/SMTP** with a "send test email" button.
 - [ ] **SEO:** default title template, meta description, keywords, OG image, Twitter card, canonical base URL, robots rules, sitemap on/off, Google Analytics / GTM ids, Search Console verification, and custom `<head>` snippet (sanitised).
 - [ ] **Security:** password policy, 2FA enforcement for admins, session lifetime, rate limits, and allowed CORS origins.

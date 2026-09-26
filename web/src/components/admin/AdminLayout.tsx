@@ -50,6 +50,8 @@ const SECTIONS: {
       { to: '/admin/tournaments', label: 'Tournaments', area: 'content', badge: 'liveTournaments' },
       { to: '/admin/content', label: 'Content', area: 'content' },
       { to: '/admin/promos', label: 'Promo codes', area: 'content' },
+      { to: '/admin/bonus-offers', label: 'Bonus offers', area: 'content' },
+      { to: '/admin/marketplace-items', label: 'Marketplace items', area: 'content' },
       { to: '/admin/marketplace-orders', label: 'Marketplace orders', area: 'finance' },
       { to: '/admin/assets', label: 'Markets', area: 'risk' },
       { to: '/admin/schedules', label: 'Sessions', area: 'risk' },

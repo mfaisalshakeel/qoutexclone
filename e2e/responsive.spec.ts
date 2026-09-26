@@ -63,6 +63,8 @@ test.describe('responsive shell', () => {
       '/admin/tournaments',
       '/admin/content',
       '/admin/promos',
+      '/admin/bonus-offers',
+      '/admin/marketplace-items',
       '/admin/marketplace-orders',
       '/admin/assets',
       '/admin/audit',
