@@ -30,6 +30,7 @@ const SECTIONS: {
     items: [
       { to: '/admin/withdrawals', label: 'Withdrawals', area: 'finance', badge: 'pendingWithdrawals' },
       { to: '/admin/deposits', label: 'Deposits', area: 'finance', badge: 'pendingDeposits' },
+      { to: '/admin/payment-methods', label: 'Payment methods', area: 'finance' },
       { to: '/admin/ledger', label: 'Ledger', area: 'finance' },
       { to: '/admin/referrals', label: 'Referrals', area: 'finance' },
     ],

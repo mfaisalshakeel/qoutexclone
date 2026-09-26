@@ -8,6 +8,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { Account } from './pages/Account';
 import { AdminDashboard } from './pages/admin/Dashboard';
 import { AdminDeposits, AdminWithdrawals } from './pages/admin/Money';
+import { AdminPaymentMethods } from './pages/admin/PaymentMethods';
 import { AdminLedger, AdminReferrals, AdminTrades } from './pages/admin/Activity';
 import {
   AdminAssets,
@@ -110,6 +111,10 @@ export default function App() {
               element={<RequireArea area="finance"><AdminWithdrawals /></RequireArea>}
             />
             <Route path="deposits" element={<RequireArea area="finance"><AdminDeposits /></RequireArea>} />
+            <Route
+              path="payment-methods"
+              element={<RequireArea area="finance"><AdminPaymentMethods /></RequireArea>}
+            />
             <Route path="users" element={<RequireArea area="users.view"><AdminUsers /></RequireArea>} />
             <Route
               path="users/:id"
