@@ -112,6 +112,7 @@ router.post(
         // i18n work), unlike timezone, so seeding it here changes nothing a
         // trader would notice until they set their own in Account → Profile
         language: settings.get('general.defaultLanguage'),
+        leaderboardOptOut: settings.get('trading.leaderboardOptOutDefault'),
       },
     });
 

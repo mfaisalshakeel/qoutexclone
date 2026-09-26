@@ -87,4 +87,32 @@ test.describe('runtime settings', () => {
     await adminContext.close();
     await traderContext.close();
   });
+
+  test('a platform-wide stake ceiling reaches the ticket, not just the server', async ({ page }) => {
+    const errors = failOnPageErrors(page);
+    await login(page, ADMIN);
+    await page.goto('/admin/settings');
+
+    try {
+      await page.locator('#setting-trading\\.maxStakeCents').fill('20000'); // $200
+      await page.click('button:has-text("Save")');
+      await expect(page.getByText('Settings saved')).toBeVisible();
+
+      await page.goto('/trade');
+      await openMarket(page, 'EURUSD_OTC', 'EUR/USD (OTC)');
+      await page.getByLabel('Investment amount').fill('500');
+      await expect(page.getByText('Maximum investment is $200.00')).toBeVisible();
+      await expect(page.locator('button:visible:has-text("Higher")').first()).toBeDisabled();
+    } finally {
+      await page.goto('/admin/settings');
+      await page
+        .locator('div', { has: page.locator('#setting-trading\\.maxStakeCents') })
+        .locator('button:has-text("Reset")')
+        .first()
+        .click();
+      await expect(page.getByText(/restored to default/i)).toBeVisible();
+    }
+
+    expect(errors).toEqual([]);
+  });
 });

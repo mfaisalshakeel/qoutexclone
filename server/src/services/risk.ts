@@ -22,11 +22,17 @@ export interface AssetRiskConfig {
   maxExposurePerDirection: number;
 }
 
-/** Fills a market's zeroes in from the runtime defaults. */
+/**
+ * Fills a market's zeroes in from the runtime defaults, and clamps its own
+ * stake bounds to the platform-wide ones: a market's minimum can only ever be
+ * stricter (higher) than the platform floor, and its maximum only stricter
+ * (lower) than the platform ceiling — an operator tightening the platform
+ * setting takes effect on every market at once, without editing each one.
+ */
 export function limitsFor(asset: AssetRiskConfig): RiskLimits {
   return {
-    minStake: asset.minStake,
-    maxStake: asset.maxStake,
+    minStake: Math.max(asset.minStake, settings.get('trading.minStakeCents')),
+    maxStake: Math.min(asset.maxStake, settings.get('trading.maxStakeCents')),
     maxOpenStakePerUser:
       asset.maxOpenStakePerUser > 0 ? asset.maxOpenStakePerUser : settings.get('risk.maxOpenStakePerUser'),
     maxExposurePerDirection:

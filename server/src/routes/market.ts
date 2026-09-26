@@ -10,6 +10,7 @@ import { settings } from '../services/settings.js';
 import { marketHours } from '../services/market-hours.js';
 import { payouts } from '../services/payouts.js';
 import { sentiment } from '../services/sentiment.js';
+import { limitsFor } from '../services/risk.js';
 
 const router = Router();
 
@@ -36,6 +37,9 @@ router.get(
           },
           { at: now },
         );
+        // clamped to the platform-wide bounds — the ticket must never show a
+        // range wider than what placing the trade will actually accept
+        const stakeLimits = limitsFor(asset);
         return {
           id: asset.id,
           symbol: asset.symbol,
@@ -56,8 +60,8 @@ router.get(
             adjustment: rule.adjustment,
           })),
           durations: durationsFor(asset),
-          minStake: asset.minStake,
-          maxStake: asset.maxStake,
+          minStake: stakeLimits.minStake,
+          maxStake: stakeLimits.maxStake,
           precision: asset.precision,
           price: marketFeed.getPrice(asset.symbol),
           priceSource: marketFeed.sourceFor(asset.symbol),

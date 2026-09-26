@@ -218,6 +218,23 @@ export const SETTINGS = {
     public: true,
   }),
 
+  'trading.minStakeCents': define({
+    schema: money,
+    default: 100,
+    group: 'trading',
+    label: 'Minimum stake, platform-wide (cents)',
+    help: "A market's own minimum can only be stricter (higher) than this, never looser.",
+    public: true,
+  }),
+  'trading.maxStakeCents': define({
+    schema: money,
+    default: 500_000,
+    group: 'trading',
+    label: 'Maximum stake, platform-wide (cents)',
+    help: "A market's own maximum can only be stricter (lower) than this, never looser.",
+    public: true,
+  }),
+
   'trading.minPayoutPct': define({
     schema: z.number().int().min(1).max(500),
     default: 20,
@@ -242,6 +259,13 @@ export const SETTINGS = {
     label: "Show today's top traders",
     help: 'Live-money profit only, with masked names. A trader can opt out for themselves.',
     public: true,
+  }),
+  'trading.leaderboardOptOutDefault': define({
+    schema: z.boolean(),
+    default: false,
+    group: 'trading',
+    label: 'New accounts start opted out of the leaderboard',
+    help: 'A trader can always change this for themselves afterwards.',
   }),
   'trading.leaderboardSize': define({
     schema: z.number().int().min(3).max(100),
