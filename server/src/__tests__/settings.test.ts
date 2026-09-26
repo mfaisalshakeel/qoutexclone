@@ -22,7 +22,7 @@ describe('settings registry', () => {
     expect(described.length).toBe(Object.keys(SETTINGS).length);
     for (const row of described) {
       expect(['general', 'trading', 'wallet', 'growth', 'compliance', 'security']).toContain(row.group);
-      expect(['boolean', 'number', 'string', 'numberList']).toContain(row.type);
+      expect(['boolean', 'number', 'string', 'numberList', 'stringList']).toContain(row.type);
       expect(row.label.length).toBeGreaterThan(0);
     }
   });
@@ -46,5 +46,14 @@ describe('settings registry', () => {
 
   it('refuses an unknown key', async () => {
     await expect(settings.set('nope.not.a.key' as never, 1)).rejects.toThrow();
+  });
+
+  it('types a list of strings correctly even when its default is empty', () => {
+    // read off the schema, not the value — an empty default array has no
+    // element to inspect, and used to fall through to "numberList"
+    const row = settings.describe().find((r) => r.key === 'general.maintenanceAllowlist')!;
+    expect(row.type).toBe('stringList');
+    const numbers = settings.describe().find((r) => r.key === 'trading.durations')!;
+    expect(numbers.type).toBe('numberList');
   });
 });

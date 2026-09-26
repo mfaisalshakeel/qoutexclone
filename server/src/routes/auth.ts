@@ -108,6 +108,10 @@ router.post(
         passwordHash: await bcrypt.hash(body.password, 10),
         referralCode: makeReferralCode(),
         referredById: referrer?.id,
+        // language has no live "follow the browser" behaviour yet (Phase 7's
+        // i18n work), unlike timezone, so seeding it here changes nothing a
+        // trader would notice until they set their own in Account → Profile
+        language: settings.get('general.defaultLanguage'),
       },
     });
 

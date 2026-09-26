@@ -94,6 +94,10 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
   const sentimentConfig = useMarket((s) => s.sentimentConfig);
   const statusCeiling =
     useSettings((s) => s.values['growth.statusMaxPayoutPct'] as number | undefined) ?? 100;
+  // the server enforces this; an admin's own account bypasses it there too
+  const maintenanceActive =
+    Boolean(useSettings((s) => s.values['general.maintenanceMode'])) && user?.role !== 'ADMIN';
+  const maintenanceMessage = useSettings((s) => s.values['general.maintenanceMessage'] as string | undefined);
   const [amount, setAmount] = useState(10);
   const [durationSec, setDurationSec] = useState(60);
   const [busy, setBusy] = useState<'UP' | 'DOWN' | null>(null);
@@ -276,7 +280,8 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
     (!Number.isFinite(levelNumber) || levelNumber <= 0 || (livePrice != null && levelNumber === livePrice));
   const badTime =
     orderType === 'PENDING' && trigger === 'TIME' && !(new Date(triggerAt).getTime() > Date.now());
-  const blocked = marketClosed || tooSmall || tooLarge || insufficient || noSlot || badLevel || badTime;
+  const blocked =
+    maintenanceActive || marketClosed || tooSmall || tooLarge || insufficient || noSlot || badLevel || badTime;
   // a pending order is not funded until it fires, so a thin balance is only a
   // warning there rather than a block
   const pendingSide = orderType === 'PENDING' ? (levelNumber > (livePrice ?? 0) ? 'above' : 'below') : null;
@@ -375,6 +380,29 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
     expiryUp: () => stepExpiry(1),
     expiryDown: () => stepExpiry(-1),
   };
+
+  if (maintenanceActive) {
+    return (
+      <div
+        role="region"
+        aria-label="Order ticket"
+        className="card flex h-full flex-col items-center justify-center gap-3 p-5 text-center"
+      >
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-400/10 text-amber-300">
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M12 9v4M12 17h.01" strokeLinecap="round" />
+            <path d="M10.3 3.9 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+          </svg>
+        </span>
+        <div>
+          <p className="text-sm font-semibold">Trading is paused</p>
+          <p className="mt-1 text-xs text-slate-400">
+            {maintenanceMessage || 'Trading and payments are paused for maintenance.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (marketClosed) {
     return (

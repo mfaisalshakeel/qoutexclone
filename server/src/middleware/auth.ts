@@ -1,5 +1,5 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
-import { forbidden, unauthorized } from '../lib/errors.js';
+import { forbidden, serviceUnavailable, unauthorized } from '../lib/errors.js';
 import { verifyAccessToken } from '../lib/jwt.js';
 import { prisma } from '../lib/prisma.js';
 import { settings } from '../services/settings.js';
@@ -116,6 +116,22 @@ export const requireVerifiedEmail: RequestHandler = (req, _res, next) => {
       next(forbidden('Confirm your email address before depositing or withdrawing.'));
     })
     .catch(next);
+};
+
+/**
+ * Blocks new trades and payments while an operator has maintenance mode on.
+ * An admin, or a request from an allowlisted IP (for an ops team testing the
+ * platform before it reopens), goes through as normal. Read-only routes and
+ * a trader backing out of something already in flight (cancelling a pending
+ * order or a withdrawal) are never gated here — this is only where new
+ * money-moving or trading commitments are made.
+ */
+export const requireNotInMaintenance: RequestHandler = (req, _res, next) => {
+  if (!settings.get('general.maintenanceMode')) return next();
+  if (req.user?.role === 'ADMIN') return next();
+  const allowlist = settings.get('general.maintenanceAllowlist');
+  if (req.ip && allowlist.includes(req.ip)) return next();
+  next(serviceUnavailable(settings.get('general.maintenanceMessage'), 'maintenance'));
 };
 
 /** Blocks suspended accounts from trading or moving money. */

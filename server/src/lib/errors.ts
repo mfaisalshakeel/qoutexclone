@@ -19,6 +19,8 @@ export const forbidden = (msg = 'Not allowed', code = 'forbidden') => new AppErr
 export const notFound = (msg = 'Not found') => new AppError(404, msg, 'not_found');
 export const conflict = (msg: string, code = 'conflict', details?: unknown) =>
   new AppError(409, msg, code, details);
+export const serviceUnavailable = (msg: string, code = 'service_unavailable') =>
+  new AppError(503, msg, code);
 
 /** Wraps an async route handler so rejected promises reach the error middleware. */
 export function wrap(

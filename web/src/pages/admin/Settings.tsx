@@ -12,7 +12,7 @@ interface SettingRow {
   value: unknown;
   default: unknown;
   overridden: boolean;
-  type: 'boolean' | 'number' | 'string' | 'numberList';
+  type: 'boolean' | 'number' | 'string' | 'numberList' | 'stringList';
 }
 
 const GROUP_LABELS: Record<string, string> = {
@@ -79,6 +79,11 @@ export function AdminSettings() {
         .split(',')
         .map((part) => Number(part.trim()))
         .filter((value) => Number.isFinite(value));
+    if (row.type === 'stringList')
+      return raw
+        .split(',')
+        .map((part) => part.trim())
+        .filter(Boolean);
     return raw;
   };
 

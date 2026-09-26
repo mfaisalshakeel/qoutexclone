@@ -48,11 +48,20 @@ import { useSettings } from './store/settings';
 export default function App() {
   const { bootstrap, user, ready } = useAuth();
   const loadSettings = useSettings((state) => state.load);
+  const favicon = useSettings((state) => state.values['general.favicon'] as string | undefined);
 
   useEffect(() => {
     void bootstrap();
     void loadSettings();
   }, [bootstrap, loadSettings]);
+
+  // an operator's own icon, once the registry has loaded one — the bundled
+  // mark set directly in index.html stands in until then
+  useEffect(() => {
+    if (!favicon) return;
+    const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (link) link.href = favicon;
+  }, [favicon]);
 
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

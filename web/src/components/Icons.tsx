@@ -1,3 +1,5 @@
+import { useSettings } from '../store/settings';
+
 interface Props {
   className?: string;
 }
@@ -93,16 +95,24 @@ export const IconVolume = ({ className = base }: Props) => (
   </svg>
 );
 
-export const IconLogo = ({ className = 'h-7 w-7' }: Props) => (
-  <svg viewBox="0 0 32 32" fill="none" className={className}>
-    <rect width="32" height="32" rx="9" fill="#3d7bff" />
-    <path
-      d="M8 21l5-6 4 3.5L24 10"
-      stroke="#fff"
-      strokeWidth="2.4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <circle cx="24" cy="10" r="2.3" fill="#12b886" stroke="#0a0e17" strokeWidth="1.2" />
-  </svg>
-);
+/**
+ * The platform's own mark, or an operator's uploaded logo when one is set —
+ * dark-theme only for now, since that is the only theme the app ships.
+ */
+export const IconLogo = ({ className = 'h-7 w-7' }: Props) => {
+  const custom = useSettings((s) => s.values['general.logoDark'] as string | undefined);
+  if (custom) return <img src={custom} alt="" className={`${className} rounded-lg object-contain`} />;
+  return (
+    <svg viewBox="0 0 32 32" fill="none" className={className}>
+      <rect width="32" height="32" rx="9" fill="#3d7bff" />
+      <path
+        d="M8 21l5-6 4 3.5L24 10"
+        stroke="#fff"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="24" cy="10" r="2.3" fill="#12b886" stroke="#0a0e17" strokeWidth="1.2" />
+    </svg>
+  );
+};

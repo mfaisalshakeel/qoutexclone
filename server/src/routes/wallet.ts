@@ -5,7 +5,7 @@ import { badRequest, forbidden, notFound, wrap } from '../lib/errors.js';
 import { NETWORKS } from '../lib/crypto-networks.js';
 import { publicDeposit, publicTransaction, publicWithdrawal } from '../lib/serialize.js';
 import { prisma } from '../lib/prisma.js';
-import { requireActiveUser, requireAuth, requireVerifiedEmail } from '../middleware/auth.js';
+import { requireActiveUser, requireAuth, requireNotInMaintenance, requireVerifiedEmail } from '../middleware/auth.js';
 import { bonusesEnabled, holdFor, listOffers, quoteOffer } from '../services/bonuses.js';
 import { cryptoMethodKey, findMethod } from '../services/payments.js';
 import { createProviderDeposit, simulateProviderPayment } from '../services/provider-deposits.js';
@@ -230,6 +230,7 @@ router.post(
   '/deposits',
   requireActiveUser,
   requireVerifiedEmail,
+  requireNotInMaintenance,
   wrap(async (req, res) => {
     const body = z
       .object({
@@ -257,6 +258,7 @@ router.post(
   '/deposits/provider',
   requireActiveUser,
   requireVerifiedEmail,
+  requireNotInMaintenance,
   wrap(async (req, res) => {
     const body = z
       .object({
@@ -371,6 +373,7 @@ router.post(
   '/withdrawals',
   requireActiveUser,
   requireVerifiedEmail,
+  requireNotInMaintenance,
   wrap(async (req, res) => {
     const body = z
       .object({
@@ -397,6 +400,7 @@ router.post(
 router.post(
   '/withdrawals/provider',
   requireActiveUser,
+  requireNotInMaintenance,
   requireVerifiedEmail,
   wrap(async (req, res) => {
     const body = z

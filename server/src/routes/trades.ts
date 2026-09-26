@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { notFound, wrap } from '../lib/errors.js';
 import { publicOrder, publicTrade } from '../lib/serialize.js';
-import { requireActiveUser, requireAuth } from '../middleware/auth.js';
+import { requireActiveUser, requireAuth, requireNotInMaintenance } from '../middleware/auth.js';
 import { clockExpiries, listTrades, placeTrade, repeatTrade } from '../services/trading.js';
 import { cancelOrder, createOrder, listOrders } from '../services/orders.js';
 import { marketFeed } from '../engine/feed.js';
@@ -37,6 +37,7 @@ const placeSchema = z
 router.post(
   '/',
   requireActiveUser,
+  requireNotInMaintenance,
   wrap(async (req, res) => {
     const body = placeSchema.parse(req.body);
     const trade = await placeTrade({
@@ -103,6 +104,7 @@ router.get(
 router.post(
   '/:id/repeat',
   requireActiveUser,
+  requireNotInMaintenance,
   wrap(async (req, res) => {
     const body = z.object({ multiplier: z.union([z.literal(1), z.literal(2)]).default(1) }).parse(req.body);
     const trade = await repeatTrade(req.user!.id, req.params.id, body.multiplier);
@@ -183,6 +185,7 @@ const orderSchema = z
 router.post(
   '/pending',
   requireActiveUser,
+  requireNotInMaintenance,
   wrap(async (req, res) => {
     const body = orderSchema.parse(req.body);
     const order = await createOrder({

@@ -63,7 +63,70 @@ export const SETTINGS = {
     default: false,
     group: 'general',
     label: 'Maintenance mode',
-    help: 'Blocks trading and payments for non-administrators.',
+    help: 'Blocks trading and payments for non-administrators. Admins and allowlisted IPs are unaffected.',
+    public: true,
+  }),
+  'general.maintenanceMessage': define({
+    schema: z.string().max(500),
+    default: "We're doing scheduled maintenance. Trading and payments will be back shortly.",
+    group: 'general',
+    label: 'Maintenance message',
+    help: 'Shown to every trader while maintenance mode is on.',
+    public: true,
+  }),
+  'general.maintenanceAllowlist': define({
+    schema: z.array(z.string().max(45)).max(50),
+    default: [],
+    group: 'general',
+    label: 'Maintenance allowlist (IPs)',
+    help: 'These addresses can still trade and move money while maintenance mode is on, same as an admin.',
+  }),
+
+  'general.logoLight': define({
+    schema: z.string().max(500),
+    default: '',
+    group: 'general',
+    label: 'Logo (light theme)',
+    help: 'A hosted image URL. Empty keeps the default mark.',
+    public: true,
+  }),
+  'general.logoDark': define({
+    schema: z.string().max(500),
+    default: '',
+    group: 'general',
+    label: 'Logo (dark theme)',
+    help: 'A hosted image URL. Empty keeps the default mark.',
+    public: true,
+  }),
+  'general.favicon': define({
+    schema: z.string().max(500),
+    default: '',
+    group: 'general',
+    label: 'Favicon',
+    help: 'A hosted image URL. Empty keeps the default icon.',
+    public: true,
+  }),
+  'general.defaultCurrency': define({
+    schema: z.enum(['USD']),
+    default: 'USD',
+    group: 'general',
+    label: 'Default currency',
+    help: 'Balances and prices are stored and settled in USD; this only labels the platform for now.',
+    public: true,
+  }),
+  'general.defaultTimezone': define({
+    schema: z.string().max(60),
+    default: 'UTC',
+    group: 'general',
+    label: 'Default timezone',
+    help: 'An IANA zone (e.g. Europe/London). Used for timestamps the server itself renders, such as a new-device email — a signed-in trader always sees their own device’s time.',
+  }),
+  'general.defaultLanguage': define({
+    schema: z.string().max(10),
+    default: 'en',
+    group: 'general',
+    label: 'Default language',
+    help: "A new account's language until they set their own in Account → Profile.",
     public: true,
   }),
 
@@ -747,7 +810,7 @@ class SettingsService {
       hasValue: definition.secret ? Boolean(this.get(key as SettingKey)) : undefined,
       default: definition.secret ? '' : definition.default,
       overridden: this.cache.has(key as SettingKey),
-      type: describeType(definition.default),
+      type: describeType(definition),
     }));
   }
 
@@ -771,10 +834,21 @@ class SettingsService {
   }
 }
 
-function describeType(value: unknown): 'boolean' | 'number' | 'string' | 'numberList' {
+/**
+ * Read off the schema rather than the default value: an empty-by-default
+ * list (the maintenance allowlist) still needs to render as a list of
+ * strings, not fall through to a plain text box.
+ */
+function describeType(
+  definition: Definition<z.ZodTypeAny>,
+): 'boolean' | 'number' | 'string' | 'numberList' | 'stringList' {
+  const { default: value, schema } = definition;
   if (typeof value === 'boolean') return 'boolean';
   if (typeof value === 'number') return 'number';
-  if (Array.isArray(value)) return 'numberList';
+  if (Array.isArray(value)) {
+    const element = (schema as unknown as { _def?: { type?: z.ZodTypeAny } })._def?.type;
+    return element instanceof z.ZodString ? 'stringList' : 'numberList';
+  }
   return 'string';
 }
 

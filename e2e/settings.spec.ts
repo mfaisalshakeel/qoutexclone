@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ADMIN, failOnPageErrors, login } from './helpers';
+import { ADMIN, failOnPageErrors, login, newCredentials, openMarket, register } from './helpers';
 
 test.describe('runtime settings', () => {
   test('an admin change reaches traders without a restart', async ({ page, request }) => {
@@ -40,5 +40,51 @@ test.describe('runtime settings', () => {
     await page.locator('#setting-wallet\\.withdrawFeePct').fill('500');
     await page.click('button:has-text("Save")');
     await expect(page.getByText(/Could not save/i)).toBeVisible();
+  });
+
+  test('maintenance mode pauses trading for a trader and never for the admin', async ({ browser }) => {
+    const adminContext = await browser.newContext();
+    const admin = await adminContext.newPage();
+    const adminErrors = failOnPageErrors(admin);
+    await login(admin, ADMIN);
+    await admin.goto('/admin/settings');
+
+    const traderContext = await browser.newContext();
+    const trader = await traderContext.newPage();
+    const traderErrors = failOnPageErrors(trader);
+    await register(trader, newCredentials('maint'));
+    await openMarket(trader, 'EURUSD_OTC', 'EUR/USD (OTC)');
+
+    try {
+      await admin.locator('#setting-general\\.maintenanceMode').click();
+      await expect(admin.locator('#setting-general\\.maintenanceMode')).toHaveAttribute(
+        'aria-checked',
+        'true',
+      );
+
+      // the trader's own ticket says so, in place of the buy buttons — the
+      // server's own enforcement of this same setting is covered directly in
+      // middleware/auth.test.ts (requireNotInMaintenance), not re-proven here
+      await trader.reload();
+      await expect(trader.getByText('Trading is paused')).toBeVisible();
+      await expect(trader.locator('button:visible:has-text("Higher")')).toHaveCount(0);
+
+      // an admin trades straight through the same setting
+      await admin.goto('/trade');
+      await openMarket(admin, 'EURUSD_OTC', 'EUR/USD (OTC)');
+      await expect(admin.getByText('Trading is paused')).toHaveCount(0);
+      await expect(admin.locator('button:visible:has-text("Higher")').first()).toBeVisible();
+    } finally {
+      // leave the platform open for every other spec in the suite
+      await admin.goto('/admin/settings');
+      const toggle = admin.locator('#setting-general\\.maintenanceMode');
+      if ((await toggle.getAttribute('aria-checked')) === 'true') await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    }
+
+    expect(adminErrors).toEqual([]);
+    expect(traderErrors).toEqual([]);
+    await adminContext.close();
+    await traderContext.close();
   });
 });

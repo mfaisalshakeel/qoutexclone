@@ -98,7 +98,17 @@ export function newDeviceAlert(options: {
   url: string;
 }): RenderedEmail {
   const site = settings.get('general.siteName');
-  const when = options.at.toUTCString();
+  // there is no browser here to ask, so this reads the operator's own
+  // configured zone rather than always printing UTC
+  const when = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: settings.get('general.defaultTimezone'),
+    timeZoneName: 'short',
+  }).format(options.at);
   const { subject, body: intro } = overridden(
     'new-device',
     { name: options.name, site },

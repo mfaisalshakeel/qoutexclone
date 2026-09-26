@@ -106,7 +106,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **Content CMS.** Homepage sections, FAQ, legal pages, announcements banner, and email templates. There's a markdown/rich editor with preview and publish/draft.
 
 ### Settings (all persisted through the Phase 0 settings service, each page validated)
-- [ ] **General:** site name, logo (light/dark), favicon, support email, default currency, timezone, default language, maintenance mode (with allowlist IPs and message).
+- [x] **General:** site name, logo (light/dark), favicon, support email, default currency, timezone, default language, maintenance mode (with allowlist IPs and message).
 - [ ] **Trading:** expiry lists, purchase cut-off, min/max stake, practice balance and refill rules, hotkeys on/off, and top-traders opt-out default.
 - [ ] **Payments:** methods, fees, limits, KYC thresholds, and auto-approve rules.
 - [ ] **Growth:** referral %, status levels, bonuses, marketplace items, and XP rules.
