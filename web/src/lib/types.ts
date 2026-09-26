@@ -341,3 +341,69 @@ export interface TraderSentiment {
   stake: number;
   meaningful: boolean;
 }
+
+/* --------------------------------- content CMS -------------------------------- */
+
+export type LegalSlug = 'terms' | 'privacy' | 'risk-disclosure' | 'aml-kyc' | 'cookie-policy';
+
+export interface LegalPage {
+  id: string | null;
+  slug: LegalSlug;
+  title: string;
+  draftBody: string;
+  publishedBody: string | null;
+  publishedAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface FaqEntry {
+  id: string;
+  category: string;
+  question: string;
+  answer: string;
+  sortOrder: number;
+  published: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HomepageSection {
+  id: string | null;
+  key: string;
+  label: string;
+  draftTitle: string | null;
+  draftSubtitle: string | null;
+  draftBody: string | null;
+  publishedTitle: string | null;
+  publishedSubtitle: string | null;
+  publishedBody: string | null;
+  publishedAt: string | null;
+  updatedAt: string | null;
+}
+
+export type AnnouncementStyle = 'info' | 'warning' | 'success';
+
+export interface Announcement {
+  id: string;
+  message: string;
+  style: AnnouncementStyle;
+  linkLabel: string | null;
+  linkUrl: string | null;
+  active: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmailTemplateOverride {
+  key: string;
+  label: string;
+  placeholders: string[];
+  draftSubject: string | null;
+  draftBody: string | null;
+  publishedSubject: string | null;
+  publishedBody: string | null;
+  publishedAt: string | null;
+  updatedAt: string | null;
+}

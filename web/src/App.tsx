@@ -17,6 +17,7 @@ import {
   AdminSchedules,
   AdminTournaments,
 } from './pages/admin/Platform';
+import { AdminContent } from './pages/admin/Content';
 import { AdminEmail } from './pages/admin/Email';
 import { AdminOtcEngine } from './pages/admin/OtcEngine';
 import { AdminPayouts } from './pages/admin/Payouts';
@@ -114,6 +115,7 @@ export default function App() {
               path="tournaments"
               element={<RequireArea area="content"><AdminTournaments /></RequireArea>}
             />
+            <Route path="content" element={<RequireArea area="content"><AdminContent /></RequireArea>} />
             <Route path="promos" element={<RequireArea area="content"><AdminPromos /></RequireArea>} />
             <Route
               path="marketplace-orders"

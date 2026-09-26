@@ -1,4 +1,5 @@
 import { settings } from './settings.js';
+import { getEmailOverride } from './content.js';
 
 /**
  * The HTML the platform sends.
@@ -6,7 +7,10 @@ import { settings } from './settings.js';
  * Plain tables and inline styles, because that is what mail clients render
  * reliably, and a text alternative for every one of them. The content is
  * written here rather than in the database so a template can never be missing;
- * the CMS in a later phase overrides the copy, not the structure.
+ * the content CMS overrides the copy, not the structure — a published
+ * override (see `content.ts`) replaces a template's subject and intro
+ * sentence, and everything else (buttons, amounts, statuses, the footer) stays
+ * exactly as coded.
  */
 
 export interface RenderedEmail {
@@ -17,6 +21,27 @@ export interface RenderedEmail {
 
 function escape(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Substitutes `{{name}}`-style placeholders in an admin-written override. */
+function fill(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (whole, key: string) =>
+    Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : whole,
+  );
+}
+
+/** The subject and intro copy for one template: a published override if there is one, the platform default otherwise. */
+function overridden(
+  key: string,
+  vars: Record<string, string>,
+  fallbackSubject: string,
+  fallbackBody: string,
+): { subject: string; body: string } {
+  const override = getEmailOverride(key);
+  return {
+    subject: override?.subject ? fill(override.subject, vars) : fallbackSubject,
+    body: override?.body ? fill(override.body, vars) : fallbackBody,
+  };
 }
 
 /**
@@ -48,14 +73,20 @@ Trading carries risk and you can lose the money you put in. If you did not expec
 
 export function verifyEmail(options: { name: string; url: string; hours: number }): RenderedEmail {
   const site = settings.get('general.siteName');
+  const { subject, body } = overridden(
+    'verify-email',
+    { name: options.name, site, hours: String(options.hours) },
+    `Confirm your ${site} email address`,
+    `Confirm this address to finish setting up your ${site} account. The link works for the next ${options.hours} hours.`,
+  );
   return {
-    subject: `Confirm your ${site} email address`,
+    subject,
     html: layout({
       title: `Hello ${options.name},`,
-      body: `<p>Confirm this address to finish setting up your ${escape(site)} account. The link works for the next ${options.hours} hours.</p>`,
+      body: `<p>${escape(body)}</p>`,
       action: { label: 'Confirm my email', url: options.url },
     }),
-    text: `Hello ${options.name},\n\nConfirm this address to finish setting up your ${site} account:\n${options.url}\n\nThe link works for the next ${options.hours} hours.`,
+    text: `Hello ${options.name},\n\n${body}\n\n${options.url}`,
   };
 }
 
@@ -68,36 +99,49 @@ export function newDeviceAlert(options: {
 }): RenderedEmail {
   const site = settings.get('general.siteName');
   const when = options.at.toUTCString();
+  const { subject, body: intro } = overridden(
+    'new-device',
+    { name: options.name, site },
+    `New sign-in to your ${site} account`,
+    `Your account was signed in to from a device we have not seen before.`,
+  );
   return {
-    subject: `New sign-in to your ${site} account`,
+    subject,
     html: layout({
       title: `Hello ${options.name},`,
       body:
-        `<p>Your account was signed in to from a device we have not seen before.</p>` +
+        `<p>${escape(intro)}</p>` +
         `<p style="color:#94a3b8"><strong style="color:#e2e8f0">${escape(options.device)}</strong><br>IP ${escape(options.ip)}<br>${escape(when)}</p>` +
         `<p>If that was you, there is nothing to do. If it was not, change your password and sign the other devices out.</p>`,
       action: { label: 'Review my devices', url: options.url },
     }),
-    text: `Hello ${options.name},\n\nYour account was signed in to from a new device.\n\n${options.device}\nIP ${options.ip}\n${when}\n\nIf that was not you, change your password and sign the other devices out: ${options.url}`,
+    text: `Hello ${options.name},\n\n${intro}\n\n${options.device}\nIP ${options.ip}\n${when}\n\nIf that was not you, change your password and sign the other devices out: ${options.url}`,
   };
 }
 
 export function twoFactorChanged(options: { name: string; enabled: boolean; url: string }): RenderedEmail {
   const site = settings.get('general.siteName');
+  // only the "just turned on" confirmation is CMS copy — the "turned off"
+  // warning is a security nudge, not marketing prose, and stays fixed
+  const { subject, body } = options.enabled
+    ? overridden(
+        'two-factor-on',
+        { name: options.name, site },
+        `Two-factor authentication is on for your ${site} account`,
+        `Two-factor authentication is now switched on. You will need a code from your authenticator app each time you sign in.`,
+      )
+    : {
+        subject: `Two-factor authentication was turned off`,
+        body: `Two-factor authentication was switched off on your account. If that was not you, turn it back on and change your password now.`,
+      };
   return {
-    subject: options.enabled
-      ? `Two-factor authentication is on for your ${site} account`
-      : `Two-factor authentication was turned off`,
+    subject,
     html: layout({
       title: `Hello ${options.name},`,
-      body: options.enabled
-        ? `<p>Two-factor authentication is now switched on. You will need a code from your authenticator app each time you sign in.</p>`
-        : `<p>Two-factor authentication was switched off on your account. If that was not you, turn it back on and change your password now.</p>`,
+      body: `<p>${escape(body)}</p>`,
       action: { label: 'Open security settings', url: options.url },
     }),
-    text: options.enabled
-      ? `Hello ${options.name},\n\nTwo-factor authentication is now switched on for your ${site} account.\n\n${options.url}`
-      : `Hello ${options.name},\n\nTwo-factor authentication was switched off on your ${site} account. If that was not you, turn it back on and change your password: ${options.url}`,
+    text: `Hello ${options.name},\n\n${body}\n\n${options.url}`,
   };
 }
 
@@ -108,16 +152,20 @@ function dollars(cents: number): string {
 
 export function resetPassword(options: { name: string; url: string; minutes: number }): RenderedEmail {
   const site = settings.get('general.siteName');
+  const { subject, body: intro } = overridden(
+    'reset-password',
+    { name: options.name, site, minutes: String(options.minutes) },
+    `Reset your ${site} password`,
+    `Someone asked to reset the password on your ${site} account. The link below works for the next ${options.minutes} minutes and can be used once.`,
+  );
   return {
-    subject: `Reset your ${site} password`,
+    subject,
     html: layout({
       title: `Hello ${options.name},`,
-      body:
-        `<p>Someone asked to reset the password on your ${escape(site)} account. The link below works for the next ${options.minutes} minutes and can be used once.</p>` +
-        `<p>If it was not you, ignore this email — nothing has changed.</p>`,
+      body: `<p>${escape(intro)}</p><p>If it was not you, ignore this email — nothing has changed.</p>`,
       action: { label: 'Choose a new password', url: options.url },
     }),
-    text: `Hello ${options.name},\n\nSomeone asked to reset the password on your ${site} account:\n${options.url}\n\nThe link works for the next ${options.minutes} minutes and can be used once. If it was not you, ignore this email.`,
+    text: `Hello ${options.name},\n\n${intro}\n\nIf it was not you, ignore this email — nothing has changed.\n\n${options.url}`,
   };
 }
 
@@ -131,14 +179,29 @@ export function depositCredited(options: {
 }): RenderedEmail {
   const site = settings.get('general.siteName');
   const bonusLine = options.bonus > 0 ? ` A bonus of ${dollars(options.bonus)} was added on top.` : '';
+  const vars = {
+    name: options.name,
+    site,
+    amount: dollars(options.amount),
+    bonus: dollars(options.bonus),
+    bonusLine,
+    currency: options.currency,
+    network: options.network,
+  };
+  const override = getEmailOverride('deposit-credited');
+  const subject = override?.subject
+    ? fill(override.subject, vars)
+    : `${dollars(options.amount)} credited to your ${site} account`;
+  const bodyHtml = override?.body
+    ? `<p>${escape(fill(override.body, vars))}</p>`
+    : `<p>Your ${escape(options.currency)} deposit on ${escape(options.network)} has confirmed and <strong>${dollars(options.amount)}</strong> is on your live balance.${escape(bonusLine)}</p>`;
+  const bodyText = override?.body
+    ? fill(override.body, vars)
+    : `Your ${options.currency} deposit on ${options.network} has confirmed and ${dollars(options.amount)} is on your live balance.${bonusLine}`;
   return {
-    subject: `${dollars(options.amount)} credited to your ${site} account`,
-    html: layout({
-      title: `Hello ${options.name},`,
-      body: `<p>Your ${escape(options.currency)} deposit on ${escape(options.network)} has confirmed and <strong>${dollars(options.amount)}</strong> is on your live balance.${escape(bonusLine)}</p>`,
-      action: { label: 'Open my wallet', url: options.url },
-    }),
-    text: `Hello ${options.name},\n\nYour ${options.currency} deposit on ${options.network} has confirmed and ${dollars(options.amount)} is on your live balance.${bonusLine}\n\n${options.url}`,
+    subject,
+    html: layout({ title: `Hello ${options.name},`, body: bodyHtml, action: { label: 'Open my wallet', url: options.url } }),
+    text: `Hello ${options.name},\n\n${bodyText}\n\n${options.url}`,
   };
 }
 
@@ -159,14 +222,20 @@ export function withdrawalUpdate(options: {
   };
   const what = headline[options.status] ?? `now ${options.status.toLowerCase()}`;
   const note = options.note ? `<p style="color:#94a3b8">${escape(options.note)}</p>` : '';
+  const { subject, body: intro } = overridden(
+    'withdrawal-completed',
+    { name: options.name, site, amount: dollars(options.amount), what },
+    `Your ${dollars(options.amount)} withdrawal is ${what}`,
+    `Your withdrawal of ${dollars(options.amount)} from ${site} is ${what}.`,
+  );
   return {
-    subject: `Your ${dollars(options.amount)} withdrawal is ${what}`,
+    subject,
     html: layout({
       title: `Hello ${options.name},`,
-      body: `<p>Your withdrawal of <strong>${dollars(options.amount)}</strong> from ${escape(site)} is ${escape(what)}.</p>${note}`,
+      body: `<p>${escape(intro)}</p>${note}`,
       action: { label: 'See the details', url: options.url },
     }),
-    text: `Hello ${options.name},\n\nYour withdrawal of ${dollars(options.amount)} from ${site} is ${what}.${options.note ? `\n\n${options.note}` : ''}\n\n${options.url}`,
+    text: `Hello ${options.name},\n\n${intro}${options.note ? `\n\n${options.note}` : ''}\n\n${options.url}`,
   };
 }
 
@@ -177,20 +246,36 @@ export function kycResult(options: {
   url: string;
 }): RenderedEmail {
   const site = settings.get('general.siteName');
-  return {
-    subject: options.approved ? 'Your identity check passed' : 'Your identity check needs another look',
-    html: layout({
-      title: `Hello ${options.name},`,
-      body: options.approved
-        ? `<p>Your documents have been checked and your ${escape(site)} account is now verified. Withdrawals are open.</p>`
-        : `<p>We could not verify your account from the documents you sent.</p>` +
+  // the rejection reason is per-submission, never fixed copy, so only the
+  // approved branch is CMS-overridable — the rejection stays coded
+  if (!options.approved) {
+    return {
+      subject: 'Your identity check needs another look',
+      html: layout({
+        title: `Hello ${options.name},`,
+        body:
+          `<p>We could not verify your account from the documents you sent.</p>` +
           (options.reason ? `<p style="color:#94a3b8">${escape(options.reason)}</p>` : '') +
           `<p>Send them again and we will look straight away.</p>`,
-      action: { label: options.approved ? 'Open my account' : 'Send new documents', url: options.url },
+        action: { label: 'Send new documents', url: options.url },
+      }),
+      text: `Hello ${options.name},\n\nWe could not verify your account from the documents you sent.${options.reason ? `\n\n${options.reason}` : ''}\n\nSend them again: ${options.url}`,
+    };
+  }
+  const { subject, body } = overridden(
+    'kyc-approved',
+    { name: options.name, site },
+    'Your identity check passed',
+    `Your documents have been checked and your ${site} account is now verified. Withdrawals are open.`,
+  );
+  return {
+    subject,
+    html: layout({
+      title: `Hello ${options.name},`,
+      body: `<p>${escape(body)}</p>`,
+      action: { label: 'Open my account', url: options.url },
     }),
-    text: options.approved
-      ? `Hello ${options.name},\n\nYour documents have been checked and your ${site} account is now verified. Withdrawals are open.\n\n${options.url}`
-      : `Hello ${options.name},\n\nWe could not verify your account from the documents you sent.${options.reason ? `\n\n${options.reason}` : ''}\n\nSend them again: ${options.url}`,
+    text: `Hello ${options.name},\n\n${body}\n\n${options.url}`,
   };
 }
 
@@ -204,23 +289,33 @@ export function tournamentResult(options: {
   const site = settings.get('general.siteName');
   const placed = options.place !== null;
   const ordinal = placed ? ordinalOf(options.place!) : null;
+  // only the "you placed and won a prize" outcome is CMS copy — the "no
+  // prize" outcome is the fallback branch and stays fixed
+  if (options.prize <= 0) {
+    return {
+      subject: `${options.tournament} has finished`,
+      html: layout({
+        title: `Hello ${options.name},`,
+        body: `<p>${escape(options.tournament)} has finished${placed ? ` and you came ${escape(ordinal!)}` : ''}. There is another one starting soon.</p>`,
+        action: { label: 'See the final table', url: options.url },
+      }),
+      text: `Hello ${options.name},\n\n${options.tournament} has finished${placed ? ` and you came ${ordinal}` : ''}. There is another one starting soon on ${site}.\n\n${options.url}`,
+    };
+  }
+  const { subject, body } = overridden(
+    'tournament-result',
+    { name: options.name, site, tournament: options.tournament, ordinal: ordinal!, prize: dollars(options.prize) },
+    `You finished ${ordinal} in ${options.tournament}`,
+    `You finished ${ordinal} in ${options.tournament} and ${dollars(options.prize)} has been paid to your live balance.`,
+  );
   return {
-    subject:
-      options.prize > 0
-        ? `You finished ${ordinal} in ${options.tournament}`
-        : `${options.tournament} has finished`,
+    subject,
     html: layout({
       title: `Hello ${options.name},`,
-      body:
-        options.prize > 0
-          ? `<p>You finished <strong>${escape(ordinal!)}</strong> in ${escape(options.tournament)} and <strong>${dollars(options.prize)}</strong> has been paid to your live balance.</p>`
-          : `<p>${escape(options.tournament)} has finished${placed ? ` and you came ${escape(ordinal!)}` : ''}. There is another one starting soon.</p>`,
+      body: `<p>${escape(body)}</p>`,
       action: { label: 'See the final table', url: options.url },
     }),
-    text:
-      options.prize > 0
-        ? `Hello ${options.name},\n\nYou finished ${ordinal} in ${options.tournament} and ${dollars(options.prize)} has been paid to your live balance.\n\n${options.url}`
-        : `Hello ${options.name},\n\n${options.tournament} has finished${placed ? ` and you came ${ordinal}` : ''}. There is another one starting soon on ${site}.\n\n${options.url}`,
+    text: `Hello ${options.name},\n\n${body}\n\n${options.url}`,
   };
 }
 

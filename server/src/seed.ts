@@ -7,6 +7,10 @@ import { SCHEDULES, scheduleKeyFor } from './data/schedules.js';
 import { DEFAULT_MARKETPLACE_ITEMS } from './data/marketplace.js';
 import { DEFAULT_BONUS_OFFERS } from './data/bonus-offers.js';
 import { DEFAULT_PAYMENT_METHODS } from './data/payment-methods.js';
+import { DEFAULT_LEGAL_PAGES } from './data/legal-pages.js';
+import { DEFAULT_FAQ } from './data/faq.js';
+import { DEFAULT_HOMEPAGE_SECTIONS } from './data/homepage-sections.js';
+import { LEGAL_PAGES, HOMEPAGE_SECTIONS } from './services/content.js';
 
 async function main() {
   // schedules first: markets reference them
@@ -125,6 +129,46 @@ async function main() {
     await prisma.bonusOffer.upsert({ where: { key: offer.key }, update: {}, create: offer });
   }
 
+  // content CMS: seeded already published, since this is the platform's own
+  // shipped copy rather than a draft in progress — an operator edits and
+  // republishes from the back office when they have their own copy ready
+  const now = new Date();
+  for (const { slug, title } of LEGAL_PAGES) {
+    const body = DEFAULT_LEGAL_PAGES[slug];
+    await prisma.legalPage.upsert({
+      where: { slug },
+      update: {},
+      create: { slug, title, draftBody: body, publishedBody: body, publishedAt: now },
+    });
+  }
+
+  for (const { key } of HOMEPAGE_SECTIONS) {
+    const section = DEFAULT_HOMEPAGE_SECTIONS[key];
+    await prisma.homepageSection.upsert({
+      where: { key },
+      update: {},
+      create: {
+        key,
+        draftTitle: section.title,
+        draftSubtitle: section.subtitle ?? null,
+        draftBody: section.body ?? null,
+        publishedTitle: section.title,
+        publishedSubtitle: section.subtitle ?? null,
+        publishedBody: section.body ?? null,
+        publishedAt: now,
+      },
+    });
+  }
+
+  for (const entry of DEFAULT_FAQ) {
+    const existing = await prisma.faqEntry.findFirst({
+      where: { category: entry.category, question: entry.question },
+    });
+    if (!existing) {
+      await prisma.faqEntry.create({ data: { ...entry, published: true } });
+    }
+  }
+
   const byClass = Object.entries(MARKET_COUNTS.byClass)
     .map(([assetClass, count]) => `${assetClass.toLowerCase()} ${count}`)
     .join(', ');
@@ -133,6 +177,7 @@ async function main() {
   console.log(`Seeded ${DEFAULT_MARKETPLACE_ITEMS.length} marketplace items.`);
   console.log(`Seeded ${DEFAULT_BONUS_OFFERS.length} bonus offers.`);
   console.log(`Seeded ${DEFAULT_PAYMENT_METHODS.length} payment methods.`);
+  console.log(`Seeded ${LEGAL_PAGES.length} legal pages, ${HOMEPAGE_SECTIONS.length} homepage sections, ${DEFAULT_FAQ.length} FAQ entries.`);
   console.log(`Admin:  ${adminEmail} / ${adminPassword}`);
   console.log(`Trader: ${demoEmail} / Trader123!`);
 }

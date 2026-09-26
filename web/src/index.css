@@ -93,6 +93,43 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Rendered CMS markdown: legal pages, FAQ answers, homepage copy. */
+  .markdown-body h1,
+  .markdown-body h2,
+  .markdown-body h3 {
+    @apply mb-2 mt-4 font-bold text-slate-100 first:mt-0;
+  }
+  .markdown-body h1 {
+    @apply text-lg;
+  }
+  .markdown-body h2 {
+    @apply text-base;
+  }
+  .markdown-body h3 {
+    @apply text-sm;
+  }
+  .markdown-body p {
+    @apply mb-3 leading-relaxed last:mb-0;
+  }
+  .markdown-body ul {
+    @apply mb-3 list-disc space-y-1 pl-5;
+  }
+  .markdown-body ol {
+    @apply mb-3 list-decimal space-y-1 pl-5;
+  }
+  .markdown-body a {
+    @apply text-accent underline underline-offset-2;
+  }
+  .markdown-body strong {
+    @apply font-semibold text-slate-100;
+  }
+  .markdown-body code {
+    @apply rounded bg-ink-700 px-1 py-0.5 text-[0.85em];
+  }
+  .markdown-body blockquote {
+    @apply border-l-2 border-ink-500 pl-3 text-slate-400;
+  }
+
   /*
    * The app's fixed chrome, in one place: a 3.5rem header, and on a phone a
    * bottom bar of 3.75rem plus whatever the home indicator needs. Pages reserve

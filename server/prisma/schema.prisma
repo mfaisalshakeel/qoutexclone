@@ -961,3 +961,82 @@ model Candle {
   @@index([symbol, timeframe, time(sort: Desc)])
   @@index([timeframe, time])
 }
+
+/// One of the fixed legal documents (Terms, Privacy, Risk disclosure, AML/KYC,
+/// Cookie policy). `draftBody` is what the editor is working on; `publishedBody`
+/// is what the public site actually shows, so a half-finished edit never goes
+/// live by accident.
+model LegalPage {
+  id            String    @id @default(cuid())
+  slug          String    @unique
+  title         String
+  draftBody     String    @db.Text
+  publishedBody String?   @db.Text
+  publishedAt   DateTime?
+  updatedAt     DateTime  @updatedAt
+}
+
+/// A help-centre question. Short enough that draft and live are the same
+/// content — `published` just gates whether it is visible yet.
+model FaqEntry {
+  id        String   @id @default(cuid())
+  category  String
+  question  String
+  answer    String   @db.Text
+  sortOrder Int      @default(0)
+  published Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([published, category, sortOrder])
+}
+
+/// One block of the homepage, from the fixed list Phase 7 renders in order.
+/// The set of keys is fixed in code (`HOMEPAGE_SECTIONS`); this table only
+/// carries their copy, draft vs published like a legal page.
+model HomepageSection {
+  id                String    @id @default(cuid())
+  key               String    @unique
+  draftTitle        String?
+  draftSubtitle     String?
+  draftBody         String?   @db.Text
+  publishedTitle    String?
+  publishedSubtitle String?
+  publishedBody     String?   @db.Text
+  publishedAt       DateTime?
+  updatedAt         DateTime  @updatedAt
+}
+
+/// A dismissible banner shown across the platform. `active` plus the optional
+/// date window is its whole publish state — there is no separate draft, since
+/// an announcement is written once and switched on, not iterated on in place.
+model Announcement {
+  id        String    @id @default(cuid())
+  message   String    @db.Text
+  style     String    @default("info") // info | warning | success
+  linkLabel String?
+  linkUrl   String?
+  active    Boolean   @default(true)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([active, startsAt, endsAt])
+}
+
+/// A CMS override of one transactional email's subject and intro copy, keyed
+/// to the template ids `email-preview.ts` already names. The surrounding
+/// layout, buttons and any money/status the message reports stay fixed in
+/// code — this overrides the copy, not the structure. Absent, the template's
+/// own hardcoded copy is used, so a template can never go missing.
+model EmailTemplateOverride {
+  id               String    @id @default(cuid())
+  key              String    @unique
+  draftSubject     String?
+  draftBody        String?   @db.Text
+  publishedSubject String?
+  publishedBody    String?   @db.Text
+  publishedAt      DateTime?
+  updatedAt        DateTime  @updatedAt
+}

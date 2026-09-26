@@ -8,6 +8,7 @@ import { settlementEngine } from './engine/settlement.js';
 import { chainWatcher } from './engine/chain-watcher.js';
 import { attachWebsocket } from './ws.js';
 import { settings } from './services/settings.js';
+import { emailOverrideCache } from './services/content.js';
 import { marketHours } from './services/market-hours.js';
 import { StatePersister, loadStates } from './services/otc-state.js';
 import { candleStore } from './services/candles.js';
@@ -32,6 +33,7 @@ const SHUTDOWN_GRACE_MS = 15_000;
 async function main() {
   // runtime configuration first: services read it synchronously afterwards
   await settings.load();
+  await emailOverrideCache.load();
   await marketHours.load();
   await payouts.load();
   // a restart must not quietly un-revoke a device someone signed out

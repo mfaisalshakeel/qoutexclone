@@ -47,6 +47,7 @@ const SECTIONS: {
     label: 'Platform',
     items: [
       { to: '/admin/tournaments', label: 'Tournaments', area: 'content', badge: 'liveTournaments' },
+      { to: '/admin/content', label: 'Content', area: 'content' },
       { to: '/admin/promos', label: 'Promo codes', area: 'content' },
       { to: '/admin/marketplace-orders', label: 'Marketplace orders', area: 'finance' },
       { to: '/admin/assets', label: 'Markets', area: 'risk' },

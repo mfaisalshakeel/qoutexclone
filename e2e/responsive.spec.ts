@@ -60,6 +60,7 @@ test.describe('responsive shell', () => {
       '/admin/referrals',
       '/admin/support',
       '/admin/tournaments',
+      '/admin/content',
       '/admin/promos',
       '/admin/marketplace-orders',
       '/admin/assets',

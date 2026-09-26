@@ -3,6 +3,7 @@ import { ApiError, api } from '../../lib/api';
 import { dateTime } from '../../lib/format';
 import { toast } from '../../store/toast';
 import { Empty, Loading, PageHead, StatusPill, Table, Td } from '../../components/admin/ui';
+import type { EmailTemplateOverride } from '../../lib/types';
 
 interface OutboxRow {
   id: string;
@@ -223,14 +224,19 @@ function Outbox() {
 
 function Templates() {
   const [templates, setTemplates] = useState<TemplatePreview[] | null>(null);
+  const [overrides, setOverrides] = useState<Map<string, EmailTemplateOverride> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<TemplatePreview | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const data = await api.get<{ templates: TemplatePreview[] }>('/admin/email-templates');
-      setTemplates(data.templates);
+      const [previews, overridesData] = await Promise.all([
+        api.get<{ templates: TemplatePreview[] }>('/admin/email-templates'),
+        api.get<{ overrides: EmailTemplateOverride[] }>('/admin/email-templates/overrides'),
+      ]);
+      setTemplates(previews.templates);
+      setOverrides(new Map(overridesData.overrides.map((o) => [o.key, o])));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load the templates');
     }
@@ -251,27 +257,188 @@ function Templates() {
     );
   }
 
-  if (!templates) return <Loading rows={4} cols={3} />;
+  if (!templates || !overrides) return <Loading rows={4} cols={3} />;
 
   return (
     <>
+      <p className="mb-3 text-xs text-slate-500">
+        The layout, buttons and any amount or status a message reports are fixed. What you can change here is
+        the subject line and its intro sentence — the copy, not the structure.
+      </p>
       <div className="grid gap-3 sm:grid-cols-2">
-        {templates.map((template) => (
-          <button
-            key={template.id}
-            onClick={() => setOpen(template)}
-            className="card p-4 text-left transition hover:border-ink-400"
-          >
-            <p className="text-sm font-semibold">{template.label}</p>
-            <p className="mt-0.5 text-xs text-slate-400">{template.when}</p>
-            <p className="mt-2 truncate text-xs text-slate-500">{template.email.subject}</p>
-          </button>
-        ))}
+        {templates.map((template) => {
+          const override = overrides.get(template.id);
+          const customized = Boolean(override?.publishedSubject || override?.publishedBody);
+          return (
+            <button
+              key={template.id}
+              onClick={() => setOpen(template)}
+              className="card p-4 text-left transition hover:border-ink-400"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold">{template.label}</p>
+                {customized && <StatusPill status="active" />}
+              </div>
+              <p className="mt-0.5 text-xs text-slate-400">{template.when}</p>
+              <p className="mt-2 truncate text-xs text-slate-500">
+                {override?.publishedSubject || template.email.subject}
+              </p>
+            </button>
+          );
+        })}
       </div>
-      {open && (
-        <PreviewDrawer title={open.email.subject} html={open.email.html} onClose={() => setOpen(null)} />
+      {open && overrides.get(open.id) && (
+        <EmailTemplateDrawer
+          template={open}
+          override={overrides.get(open.id)!}
+          onClose={() => setOpen(null)}
+          onSaved={load}
+        />
       )}
     </>
+  );
+}
+
+/**
+ * A template's rendered preview alongside its CMS override: subject and intro
+ * copy, with placeholders the underlying template fills in. Publishing takes
+ * effect at once — the next message this template sends uses it.
+ */
+function EmailTemplateDrawer({
+  template,
+  override,
+  onClose,
+  onSaved,
+}: {
+  template: TemplatePreview;
+  override: EmailTemplateOverride;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [subject, setSubject] = useState(override.draftSubject ?? '');
+  const [body, setBody] = useState(override.draftBody ?? '');
+  const [busy, setBusy] = useState<'save' | 'publish' | 'revert' | null>(null);
+  const isCustomized = Boolean(override.publishedSubject || override.publishedBody);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const save = async () => {
+    setBusy('save');
+    try {
+      await api.put(`/admin/email-templates/overrides/${template.id}`, {
+        subject: subject || null,
+        body: body || null,
+      });
+      toast.success('Draft saved');
+      onSaved();
+    } catch (err) {
+      toast.error('Could not save', err instanceof ApiError ? err.message : undefined);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const publish = async () => {
+    setBusy('publish');
+    try {
+      await api.put(`/admin/email-templates/overrides/${template.id}`, {
+        subject: subject || null,
+        body: body || null,
+      });
+      await api.post(`/admin/email-templates/overrides/${template.id}/publish`);
+      toast.success('Template published');
+      onSaved();
+    } catch (err) {
+      toast.error('Could not publish', err instanceof ApiError ? err.message : undefined);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const revert = async () => {
+    setBusy('revert');
+    try {
+      await api.post(`/admin/email-templates/overrides/${template.id}/unpublish`);
+      toast.success('Reverted to the default copy');
+      onSaved();
+    } catch (err) {
+      toast.error('Could not revert it', err instanceof ApiError ? err.message : undefined);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <button aria-label="Close" onClick={onClose} className="flex-1 bg-black/60" />
+      <aside
+        role="dialog"
+        aria-label="Email preview"
+        className="flex w-full max-w-2xl flex-col overflow-y-auto border-l border-ink-600 bg-ink-800"
+      >
+        <header className="flex items-start justify-between gap-3 border-b border-ink-600 p-4">
+          <p className="text-sm font-semibold">{template.label}</p>
+          <button onClick={onClose} className="btn-ghost !py-1.5">
+            Close
+          </button>
+        </header>
+
+        <iframe title="Email preview" srcDoc={template.email.html} sandbox="" className="h-72 bg-white" />
+
+        <div className="space-y-3 p-4">
+          <p className="text-xs text-slate-500">
+            Placeholders: {override.placeholders.map((p) => `{{${p}}}`).join(', ')}
+          </p>
+          <div>
+            <label className="label" htmlFor="et-subject">
+              Subject override
+            </label>
+            <input
+              id="et-subject"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="field"
+              placeholder={template.email.subject}
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="et-body">
+              Intro sentence override
+            </label>
+            <textarea
+              id="et-body"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={3}
+              className="field"
+              placeholder="Leave blank to keep the platform default"
+            />
+          </div>
+          {isCustomized && (
+            <p className="text-[11px] text-accent">This template is live with custom copy.</p>
+          )}
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button onClick={() => void save()} disabled={busy !== null} className="btn-ghost">
+              {busy === 'save' ? 'Saving…' : 'Save draft'}
+            </button>
+            <button onClick={() => void publish()} disabled={busy !== null} className="btn-primary">
+              {busy === 'publish' ? 'Publishing…' : 'Publish'}
+            </button>
+            {isCustomized && (
+              <button onClick={() => void revert()} disabled={busy !== null} className="btn-ghost !text-down">
+                {busy === 'revert' ? 'Reverting…' : 'Revert to default'}
+              </button>
+            )}
+          </div>
+        </div>
+      </aside>
+    </div>
   );
 }
 

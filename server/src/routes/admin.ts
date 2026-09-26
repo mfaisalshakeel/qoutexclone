@@ -34,6 +34,32 @@ import { SETTINGS, settings } from '../services/settings.js';
 import { mailTransportName, sendMail, sendTestEmail, smtpReady } from '../services/mailer.js';
 import { adminMessage } from '../services/email-templates.js';
 import { previewAll } from '../services/email-preview.js';
+import {
+  HOMEPAGE_SECTIONS,
+  assertKnownEmailKey,
+  createAnnouncement,
+  createFaqEntry,
+  deleteAnnouncement,
+  deleteFaqEntry,
+  emailOverrideCache,
+  isAnnouncementStyle,
+  isHomepageSectionKey,
+  isLegalSlug,
+  listAnnouncements,
+  listEmailOverrides,
+  listFaqEntries,
+  listHomepageSections,
+  listLegalPages,
+  publishEmailOverride,
+  publishHomepageSection,
+  publishLegalPage,
+  saveEmailOverrideDraft,
+  saveHomepageSectionDraft,
+  saveLegalPageDraft,
+  unpublishEmailOverride,
+  updateAnnouncement,
+  updateFaqEntry,
+} from '../services/content.js';
 import { levelFor, statusConfig } from '../services/status.js';
 import {
   adminResetTwoFactor,
@@ -87,6 +113,7 @@ router.use('/marketplace/items', requirePermission('content'));
 router.use('/bonus-offers', requirePermission('content'));
 router.use('/emails', requirePermission('content'));
 router.use('/email-templates', requirePermission('content'));
+router.use('/content', requirePermission('content'));
 router.use('/settings', requirePermission('settings'));
 router.use('/audit', requirePermission('settings'));
 router.use('/staff', requirePermission('settings'));
@@ -1884,6 +1911,178 @@ router.get(
   }),
 );
 
+/* ------------------------------- content CMS ------------------------------ */
+
+router.get(
+  '/content/legal',
+  wrap(async (_req, res) => {
+    res.json({ pages: await listLegalPages() });
+  }),
+);
+
+router.put(
+  '/content/legal/:slug',
+  wrap(async (req, res) => {
+    const slug = req.params.slug;
+    if (!isLegalSlug(slug)) throw notFound('No such legal page');
+    const body = z.object({ body: z.string().max(200_000) }).parse(req.body);
+    const page = await saveLegalPageDraft(slug, body.body);
+    await audit(req.user!.id, 'content.legal.draft', 'LegalPage', slug);
+    res.json({ page });
+  }),
+);
+
+router.post(
+  '/content/legal/:slug/publish',
+  wrap(async (req, res) => {
+    const slug = req.params.slug;
+    if (!isLegalSlug(slug)) throw notFound('No such legal page');
+    const page = await publishLegalPage(slug);
+    await audit(req.user!.id, 'content.legal.publish', 'LegalPage', slug);
+    res.json({ page });
+  }),
+);
+
+router.get(
+  '/content/faq',
+  wrap(async (_req, res) => {
+    res.json({ entries: await listFaqEntries() });
+  }),
+);
+
+const FAQ_BODY = {
+  category: z.string().min(1).max(60),
+  question: z.string().min(1).max(300),
+  answer: z.string().min(1).max(10_000),
+  sortOrder: z.number().int().default(0),
+  published: z.boolean().default(false),
+};
+
+router.post(
+  '/content/faq',
+  wrap(async (req, res) => {
+    const body = z.object(FAQ_BODY).parse(req.body);
+    const entry = await createFaqEntry(body);
+    await audit(req.user!.id, 'content.faq.create', 'FaqEntry', entry.id, entry.question);
+    res.status(201).json({ entry });
+  }),
+);
+
+router.patch(
+  '/content/faq/:id',
+  wrap(async (req, res) => {
+    const body = z.object(FAQ_BODY).partial().parse(req.body);
+    const entry = await updateFaqEntry(req.params.id, body);
+    await audit(req.user!.id, 'content.faq.update', 'FaqEntry', entry.id, JSON.stringify(body));
+    res.json({ entry });
+  }),
+);
+
+router.delete(
+  '/content/faq/:id',
+  wrap(async (req, res) => {
+    await deleteFaqEntry(req.params.id);
+    await audit(req.user!.id, 'content.faq.delete', 'FaqEntry', req.params.id);
+    res.status(204).end();
+  }),
+);
+
+router.get(
+  '/content/homepage',
+  wrap(async (_req, res) => {
+    res.json({ sections: await listHomepageSections(), keys: HOMEPAGE_SECTIONS });
+  }),
+);
+
+router.put(
+  '/content/homepage/:key',
+  wrap(async (req, res) => {
+    const key = req.params.key;
+    if (!isHomepageSectionKey(key)) throw notFound('No such homepage section');
+    const body = z
+      .object({
+        title: z.string().max(200).nullable().optional(),
+        subtitle: z.string().max(400).nullable().optional(),
+        body: z.string().max(50_000).nullable().optional(),
+      })
+      .parse(req.body);
+    const section = await saveHomepageSectionDraft(key, body);
+    await audit(req.user!.id, 'content.homepage.draft', 'HomepageSection', key);
+    res.json({ section });
+  }),
+);
+
+router.post(
+  '/content/homepage/:key/publish',
+  wrap(async (req, res) => {
+    const key = req.params.key;
+    if (!isHomepageSectionKey(key)) throw notFound('No such homepage section');
+    const section = await publishHomepageSection(key);
+    await audit(req.user!.id, 'content.homepage.publish', 'HomepageSection', key);
+    res.json({ section });
+  }),
+);
+
+router.get(
+  '/content/announcements',
+  wrap(async (_req, res) => {
+    res.json({ announcements: await listAnnouncements() });
+  }),
+);
+
+const ANNOUNCEMENT_BODY = {
+  message: z.string().min(1).max(2_000),
+  style: z.string().refine(isAnnouncementStyle, 'Invalid style').default('info'),
+  linkLabel: z.string().max(60).nullable().optional(),
+  linkUrl: z.string().max(500).nullable().optional(),
+  active: z.boolean().default(true),
+  startsAt: z.string().datetime().nullable().optional(),
+  endsAt: z.string().datetime().nullable().optional(),
+};
+
+router.post(
+  '/content/announcements',
+  wrap(async (req, res) => {
+    const body = z.object(ANNOUNCEMENT_BODY).parse(req.body);
+    const announcement = await createAnnouncement({
+      message: body.message,
+      style: body.style as 'info' | 'warning' | 'success',
+      linkLabel: body.linkLabel ?? null,
+      linkUrl: body.linkUrl ?? null,
+      active: body.active,
+      startsAt: body.startsAt ? new Date(body.startsAt) : null,
+      endsAt: body.endsAt ? new Date(body.endsAt) : null,
+    });
+    await audit(req.user!.id, 'content.announcement.create', 'Announcement', announcement.id);
+    res.status(201).json({ announcement });
+  }),
+);
+
+router.patch(
+  '/content/announcements/:id',
+  wrap(async (req, res) => {
+    const body = z.object(ANNOUNCEMENT_BODY).partial().parse(req.body);
+    const { startsAt, endsAt, ...rest } = body;
+    const announcement = await updateAnnouncement(req.params.id, {
+      ...rest,
+      style: rest.style as 'info' | 'warning' | 'success' | undefined,
+      ...(startsAt !== undefined && { startsAt: startsAt ? new Date(startsAt) : null }),
+      ...(endsAt !== undefined && { endsAt: endsAt ? new Date(endsAt) : null }),
+    });
+    await audit(req.user!.id, 'content.announcement.update', 'Announcement', announcement.id, JSON.stringify(body));
+    res.json({ announcement });
+  }),
+);
+
+router.delete(
+  '/content/announcements/:id',
+  wrap(async (req, res) => {
+    await deleteAnnouncement(req.params.id);
+    await audit(req.user!.id, 'content.announcement.delete', 'Announcement', req.params.id);
+    res.status(204).end();
+  }),
+);
+
 /* --------------------------------- email ---------------------------------- */
 
 /**
@@ -1954,6 +2153,50 @@ router.get(
   '/email-templates',
   wrap(async (_req, res) => {
     res.json({ templates: previewAll() });
+  }),
+);
+
+/** The CMS side: every overridable template, its draft/published copy and its placeholders. */
+router.get(
+  '/email-templates/overrides',
+  wrap(async (_req, res) => {
+    res.json({ overrides: await listEmailOverrides() });
+  }),
+);
+
+router.put(
+  '/email-templates/overrides/:key',
+  wrap(async (req, res) => {
+    const key = req.params.key;
+    assertKnownEmailKey(key);
+    const body = z
+      .object({ subject: z.string().max(300).nullable(), body: z.string().max(10_000).nullable() })
+      .parse(req.body);
+    const override = await saveEmailOverrideDraft(key, body);
+    await audit(req.user!.id, 'content.email.draft', 'EmailTemplateOverride', key);
+    res.json({ override });
+  }),
+);
+
+router.post(
+  '/email-templates/overrides/:key/publish',
+  wrap(async (req, res) => {
+    const key = req.params.key;
+    assertKnownEmailKey(key);
+    const override = await publishEmailOverride(key);
+    await audit(req.user!.id, 'content.email.publish', 'EmailTemplateOverride', key);
+    res.json({ override });
+  }),
+);
+
+router.post(
+  '/email-templates/overrides/:key/unpublish',
+  wrap(async (req, res) => {
+    const key = req.params.key;
+    assertKnownEmailKey(key);
+    const override = await unpublishEmailOverride(key);
+    await audit(req.user!.id, 'content.email.unpublish', 'EmailTemplateOverride', key);
+    res.json({ override });
   }),
 );
 

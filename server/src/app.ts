@@ -18,6 +18,7 @@ import walletRoutes from './routes/wallet.js';
 import adminRoutes from './routes/admin.js';
 import tournamentRoutes from './routes/tournaments.js';
 import supportRoutes from './routes/support.js';
+import contentRoutes from './routes/content.js';
 import webhookRoutes from './routes/webhooks.js';
 import { marketFeed } from './engine/feed.js';
 
@@ -163,6 +164,7 @@ export function createApp() {
   app.use('/api/wallet', walletRoutes);
   app.use('/api/tournaments', tournamentRoutes);
   app.use('/api/support', supportRoutes);
+  app.use('/api/content', contentRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/webhooks', webhookRoutes);
 

@@ -12,6 +12,7 @@ import { Avatar } from './Avatar';
 import { NotificationCentre } from './NotificationCentre';
 import { Toasts } from './Toasts';
 import { ExclusionBanner, VerifyEmailBanner } from './VerifyEmailBanner';
+import { AnnouncementBanner } from './AnnouncementBanner';
 import { IconChart, IconCup, IconHistory, IconLogo, IconShield, IconUser, IconWallet } from './Icons';
 
 const NAV = [
@@ -200,6 +201,7 @@ export function Layout() {
 
       {/* the terminal is full-bleed and sized to the viewport, so a strip
           above it would push the chart off the screen: it nags everywhere else */}
+      {!isTerminal && <AnnouncementBanner />}
       {!isTerminal && <ExclusionBanner />}
       {!isTerminal && <VerifyEmailBanner />}
 
