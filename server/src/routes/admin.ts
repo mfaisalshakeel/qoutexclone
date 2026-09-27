@@ -74,6 +74,7 @@ import {
   revokeOtherSessions,
 } from '../services/security.js';
 import * as marketplace from '../services/marketplace.js';
+import { eraseUserData, exportUserData } from '../services/gdpr.js';
 import { forfeitAll, listOffers } from '../services/bonuses.js';
 import * as paymentsService from '../services/payments.js';
 import { ITEM_KINDS } from '../services/marketplace.js';
@@ -332,6 +333,29 @@ router.post(
     if (!user) throw notFound('User not found');
     await adminResetTwoFactor(user);
     await audit(req.user!.id, 'user.reset-2fa', 'user', req.params.id);
+    res.json({ ok: true });
+  }),
+);
+
+/** GDPR data portability: everything the platform holds on this account, as one download. */
+router.get(
+  '/users/:id/gdpr-export',
+  requirePermission('users.manage'),
+  wrap(async (req, res) => {
+    const data = await exportUserData(req.params.id);
+    await audit(req.user!.id, 'user.gdpr-export', 'user', req.params.id);
+    res.setHeader('Content-Disposition', `attachment; filename="account-data-${req.params.id}.json"`);
+    res.json(data);
+  }),
+);
+
+/** GDPR right to erasure: anonymises the account and removes what can safely go — see services/gdpr.ts. */
+router.post(
+  '/users/:id/gdpr-erase',
+  requirePermission('users.manage'),
+  wrap(async (req, res) => {
+    await eraseUserData(req.params.id);
+    await audit(req.user!.id, 'user.gdpr-erase', 'user', req.params.id);
     res.json({ ok: true });
   }),
 );

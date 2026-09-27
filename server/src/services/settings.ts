@@ -666,6 +666,13 @@ export const SETTINGS = {
     label: 'Password/2FA changes per hour',
     help: 'Per signed-in account — changing the password, or setting up, enabling, disabling or regenerating two-factor codes.',
   }),
+  'security.loginHistoryRetentionDays': define({
+    schema: z.number().int().min(30).max(1825),
+    default: 180,
+    group: 'security',
+    label: 'Keep sign-in history for (days)',
+    help: "Both successes and failures — this is what a trader's own security page and account lockout read.",
+  }),
   'email.enabled': define({
     schema: z.boolean(),
     default: false,

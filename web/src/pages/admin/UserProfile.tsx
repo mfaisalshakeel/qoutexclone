@@ -130,6 +130,28 @@ async function resetTwoFactor(user: User, reload: () => void) {
   }
 }
 
+async function exportGdprData(user: User) {
+  try {
+    await api.download(`/admin/users/${user.id}/gdpr-export`);
+  } catch (err) {
+    toast.error('Could not export data', err instanceof ApiError ? err.message : undefined);
+  }
+}
+
+async function eraseGdprData(user: User, reload: () => void) {
+  const typed = window.prompt(
+    `This permanently scrubs ${user.name}'s personal details (name, email, login history, KYC documents) and cannot be undone. Trades and the wallet ledger are kept, unnamed. Type DELETE to confirm.`,
+  );
+  if (typed !== 'DELETE') return;
+  try {
+    await api.post(`/admin/users/${user.id}/gdpr-erase`, {});
+    reload();
+    toast.success('Account data erased');
+  } catch (err) {
+    toast.error('Could not erase this account', err instanceof ApiError ? err.message : undefined);
+  }
+}
+
 /** Full trader profile: everything about one account in one place, reached from the traders list. */
 export function AdminUserProfile() {
   const { id } = useParams<{ id: string }>();
@@ -287,6 +309,19 @@ export function AdminUserProfile() {
           {canManage && (
             <button onClick={() => setEmailOpen((v) => !v)} className="btn-ghost !px-3 !py-1.5 text-xs">
               Send email
+            </button>
+          )}
+          {canManage && (
+            <button onClick={() => void exportGdprData(user)} className="btn-ghost !px-3 !py-1.5 text-xs">
+              Export data
+            </button>
+          )}
+          {canManage && user.role !== 'ADMIN' && (
+            <button
+              onClick={() => void eraseGdprData(user, load)}
+              className="btn-ghost !px-3 !py-1.5 text-xs !text-down"
+            >
+              Erase account data
             </button>
           )}
         </span>

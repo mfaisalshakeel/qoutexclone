@@ -110,6 +110,10 @@ model User {
   @@index([referredById])
   /// admin dashboard: registrations within a period
   @@index([createdAt])
+  /// the admin trader list's two enum filters, both usually combined with
+  /// the implicit `role: 'USER'` scope
+  @@index([role, status])
+  @@index([role, kycStatus])
 }
 
 /// One line in a trader's notification centre. `dedupeKey` is the natural key of
@@ -151,6 +155,8 @@ model RefreshToken {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  /// backs the retention sweep: long-expired sessions are pruned periodically
+  @@index([expiresAt])
 }
 
 model EmailVerificationToken {
@@ -508,6 +514,9 @@ model Transaction {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  /// the admin ledger view has no userId filter by default — without this,
+  /// its "newest first" sort is a full scan of the platform's largest table
+  @@index([createdAt])
 }
 
 model DepositAddress {
@@ -558,6 +567,8 @@ model Deposit {
   @@index([txHash])
   /// admin dashboard: deposit volume within a period
   @@index([status, confirmedAt])
+  /// the admin deposits list, unfiltered and sorted newest first
+  @@index([createdAt])
 }
 
 model Withdrawal {
@@ -585,6 +596,9 @@ model Withdrawal {
   @@index([status, createdAt])
   /// admin dashboard: withdrawal volume within a period
   @@index([status, processedAt])
+  /// admin support lookups by the on-chain reference — Deposit already had
+  /// this, Withdrawal never did
+  @@index([txHash])
 }
 
 model AuditLog {
@@ -599,6 +613,9 @@ model AuditLog {
   actor User? @relation("AuditActor", fields: [actorId], references: [id])
 
   @@index([createdAt])
+  /// the audit log's own search: "every time someone did X", low write
+  /// volume (admin actions only) makes this cheap to keep
+  @@index([action, createdAt])
 }
 
 /// A back-office note pinned to a trader, for context the next admin who
@@ -704,6 +721,8 @@ model ReferralCommission {
 
   @@unique([depositId])
   @@index([referrerId, createdAt])
+  /// the admin referrals list, unfiltered and sorted newest first
+  @@index([createdAt])
 }
 
 model Tournament {

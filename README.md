@@ -140,6 +140,11 @@ does, so only run it locally.
 
 Change them immediately (`ADMIN_EMAIL` / `ADMIN_PASSWORD` before seeding).
 
+### Backups
+
+See [docs/backups.md](docs/backups.md) for `mysqldump`-based backup/restore of
+the database and the KYC document store, for every deployment path above.
+
 ## Development
 
 ```bash
