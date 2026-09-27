@@ -136,7 +136,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **Public pages:** Markets, Tournaments, Status levels, Affiliate programme, Help centre/FAQ with search, Contact (form into support tickets), About, and the legal set (Terms, Privacy, Risk disclosure, AML/KYC policy, Cookie policy) with a cookie consent banner. Plus 404 and 500 pages.
 - [x] **Rendering for SEO.** Public routes are server-rendered or prerendered at build (e.g. vite SSR/prerender) so crawlers get full HTML. The app shell stays a SPA.
 - [x] **Meta.** Per-route title, description, canonical, Open Graph and Twitter tags, generated from CMS/settings. JSON-LD for Organization, WebSite (with SearchAction) and FAQPage.
-- [ ] **`/sitemap.xml` and `/robots.txt`** are generated from routes and settings. Clean URLs, correct status codes, and `hreflang` when multiple languages are enabled.
+- [x] **`/sitemap.xml` and `/robots.txt`** are generated from routes and settings. Clean URLs, correct status codes, and `hreflang` when multiple languages are enabled.
 - [ ] **Internationalisation.** i18n framework across app and site, with English complete and at least one more language wired end to end (RTL-safe layout).
 - [ ] **Performance and quality.** Lighthouse mobile on the homepage scores ≥ 90 for Performance, Accessibility, Best Practices and SEO (record the scores in PROGRESS). Images are optimised (AVIF/WebP, sizes), fonts preloaded, code split per route, and there's no CLS from late-loading content.
 

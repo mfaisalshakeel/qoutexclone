@@ -22,6 +22,7 @@ import webhookRoutes from './routes/webhooks.js';
 import { marketFeed } from './engine/feed.js';
 import { settings } from './services/settings.js';
 import { isCrawlerUserAgent } from './lib/crawlers.js';
+import { buildRobotsTxt, buildSitemapXml } from './lib/sitemap.js';
 
 /**
  * Single-port deployment: when the web client has been built, the API serves
@@ -184,6 +185,23 @@ export function createApp() {
   app.use('/api/content', contentRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/webhooks', webhookRoutes);
+
+  app.get('/sitemap.xml', (_req, res) => {
+    if (!settings.get('seo.sitemapEnabled')) {
+      res.status(404).json({ error: { code: 'not_found', message: 'Endpoint not found' } });
+      return;
+    }
+    res.type('application/xml').send(buildSitemapXml(settings.get('seo.canonicalBaseUrl')));
+  });
+
+  app.get('/robots.txt', (_req, res) => {
+    const indexingAllowed = settings.get('seo.robotsIndexing');
+    const sitemapUrl =
+      indexingAllowed && settings.get('seo.sitemapEnabled')
+        ? `${settings.get('seo.canonicalBaseUrl').replace(/\/$/, '')}/sitemap.xml`
+        : null;
+    res.type('text/plain').send(buildRobotsTxt({ indexingAllowed, sitemapUrl }));
+  });
 
   serveWebClient(app);
 
