@@ -23,6 +23,8 @@ import { completeDeposit, rejectDeposit } from '../services/deposits.js';
 import { approveWithdrawal, priorityOrder, rejectWithdrawal } from '../services/withdrawals.js';
 import { marketFeed } from '../engine/feed.js';
 import { latestKycSubmission, reviewKyc } from '../services/kyc.js';
+import { storage } from '../services/storage.js';
+import { detectDocumentType } from '../lib/file-validation.js';
 import { PROMO_KINDS, describe } from '../services/promos.js';
 import {
   adminLeaderboardPage,
@@ -828,6 +830,21 @@ router.get(
       pageSize: page.pageSize,
       pageCount: page.pageCount,
     });
+  }),
+);
+
+/** The document image itself, for a reviewer — never exposed by a static route. */
+router.get(
+  '/kyc/:id/document',
+  wrap(async (req, res) => {
+    const submission = await prisma.kycSubmission.findUnique({ where: { id: req.params.id } });
+    if (!submission?.documentRef) throw notFound('No document on file for this submission');
+    const buffer = await storage.read(submission.documentRef);
+    if (!buffer) throw notFound('No document on file for this submission');
+    const { mimeType, extension } = detectDocumentType(buffer);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Content-Disposition', `inline; filename="kyc-${submission.id}${extension}"`);
+    res.type(mimeType).send(buffer);
   }),
 );
 

@@ -18,6 +18,7 @@ import { settings } from '../services/settings.js';
 import { completeReset, requestReset } from '../services/password-reset.js';
 import {
   alertNewDevice,
+  assertAccountNotLockedOut,
   assertPasswordAllowed,
   confirmEmail,
   contextOf,
@@ -141,6 +142,7 @@ router.post(
       await recordLogin({ email, outcome: 'UNKNOWN_EMAIL', context });
       throw unauthorized('Invalid email or password');
     }
+    await assertAccountNotLockedOut(user.id);
     if (!(await bcrypt.compare(body.password, user.passwordHash))) {
       await recordLogin({ email, outcome: 'BAD_PASSWORD', context, userId: user.id });
       throw unauthorized('Invalid email or password');
@@ -204,6 +206,7 @@ router.post(
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user || user.status !== 'ACTIVE') throw unauthorized('This account is suspended');
+    await assertAccountNotLockedOut(user.id);
 
     const context = contextOf(req);
     if (!(await verifySecondFactor(user, body.code))) {

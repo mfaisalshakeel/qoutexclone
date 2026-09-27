@@ -15,3 +15,4 @@ server/prisma/dev.db*
 *.tsbuildinfo
 playwright-report/
 e2e-results/
+server/storage/

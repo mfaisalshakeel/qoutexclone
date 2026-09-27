@@ -17,6 +17,7 @@ export interface KycSubmission {
   address: string;
   documentType: string;
   documentNumber: string;
+  documentRef: string | null;
   status: string;
   note: string | null;
   createdAt: string;
@@ -121,7 +122,9 @@ export function AdminUsers() {
       label: 'Deposited',
       sortable: true,
       align: 'right',
-      render: (user) => <span className="tabular text-[11px] text-slate-400">{money(user.totalDeposited)}</span>,
+      render: (user) => (
+        <span className="tabular text-[11px] text-slate-400">{money(user.totalDeposited)}</span>
+      ),
     },
     {
       key: 'totalWithdrawn',
@@ -129,7 +132,9 @@ export function AdminUsers() {
       sortable: true,
       align: 'right',
       hiddenByDefault: true,
-      render: (user) => <span className="tabular text-[11px] text-slate-400">{money(user.totalWithdrawn)}</span>,
+      render: (user) => (
+        <span className="tabular text-[11px] text-slate-400">{money(user.totalWithdrawn)}</span>
+      ),
     },
     {
       key: 'kycStatus',
@@ -289,7 +294,10 @@ function UserDrawer({
         </div>
       )}
 
-      <Link to={`/admin/users/${user.id}`} className="btn-primary mt-2 block w-full !py-2 text-center text-xs">
+      <Link
+        to={`/admin/users/${user.id}`}
+        className="btn-primary mt-2 block w-full !py-2 text-center text-xs"
+      >
         View full profile →
       </Link>
     </div>
@@ -374,6 +382,19 @@ export function AdminKyc() {
             {row.documentType.replace(/_/g, ' ').toLowerCase()}
           </span>
           <span className="block font-mono text-[11px] text-slate-400">{row.documentNumber}</span>
+          {row.documentRef ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void api.download(`/admin/kyc/${row.id}/document`);
+              }}
+              className="mt-1 text-[11px] text-accent hover:underline"
+            >
+              View document
+            </button>
+          ) : (
+            <span className="mt-1 block text-[11px] text-slate-600">No file uploaded</span>
+          )}
         </>
       ),
     },

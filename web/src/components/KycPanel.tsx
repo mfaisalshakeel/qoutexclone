@@ -46,6 +46,30 @@ export function KycPanel() {
     documentType: 'PASSPORT',
     documentNumber: '',
   });
+  const [document, setDocument] = useState<File | null>(null);
+  const [documentError, setDocumentError] = useState<string | null>(null);
+
+  const MAX_DOCUMENT_MB = 10;
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
+
+  const pickDocument = (file: File | null) => {
+    setDocumentError(null);
+    if (!file) {
+      setDocument(null);
+      return;
+    }
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setDocumentError('Only JPEG, PNG or PDF files are accepted.');
+      setDocument(null);
+      return;
+    }
+    if (file.size > MAX_DOCUMENT_MB * 1024 * 1024) {
+      setDocumentError(`That file is larger than the ${MAX_DOCUMENT_MB}MB limit.`);
+      setDocument(null);
+      return;
+    }
+    setDocument(file);
+  };
 
   const load = () =>
     api
@@ -60,7 +84,11 @@ export function KycPanel() {
     event.preventDefault();
     setBusy(true);
     try {
-      await api.post('/me/kyc', form);
+      const body = new FormData();
+      for (const [key, value] of Object.entries(form)) body.set(key, value);
+      if (document) body.set('document', document);
+      await api.uploadForm('/me/kyc', body);
+      setDocument(null);
       await load();
       await refreshUser();
       toast.success('Verification submitted', 'We will review your documents shortly');
@@ -199,10 +227,28 @@ export function KycPanel() {
                 className="field"
               />
             </div>
+            <div className="sm:col-span-2">
+              <label className="label" htmlFor="kyc-document">
+                Document photo or scan
+              </label>
+              <input
+                id="kyc-document"
+                type="file"
+                accept="image/jpeg,image/png,application/pdf"
+                onChange={(e) => pickDocument(e.target.files?.[0] ?? null)}
+                className="field file:mr-3 file:rounded-md file:border-0 file:bg-ink-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-100"
+              />
+              {document && !documentError && (
+                <p className="mt-1 text-[11px] text-slate-500">
+                  {document.name} ({(document.size / (1024 * 1024)).toFixed(1)}MB)
+                </p>
+              )}
+              {documentError && <p className="mt-1 text-[11px] text-down">{documentError}</p>}
+            </div>
           </div>
           <p className="text-[11px] leading-relaxed text-slate-500">
-            Document images are uploaded to your operator's document store, never to the trading database.
-            Submitting confirms the details above are yours.
+            JPEG, PNG or PDF, up to {MAX_DOCUMENT_MB}MB. Uploaded to your operator's document store, never to
+            the trading database. Submitting confirms the details above are yours.
           </p>
           <button type="submit" disabled={busy} className="btn-primary">
             {busy ? 'Submitting…' : state.status === 'REJECTED' ? 'Submit again' : 'Submit for verification'}

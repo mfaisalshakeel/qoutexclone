@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Trans, useTranslation } from 'react-i18next';
+import { useAuth } from '../../store/auth';
 
 const STORAGE_KEY = 'quantex.cookies.accepted';
 
@@ -25,6 +26,10 @@ export function CookieConsent() {
   // the terminal is full-bleed and suppresses every banner, same as
   // MaintenanceBanner/AnnouncementBanner in the authenticated shell
   const isTerminal = useLocation().pathname.startsWith('/trade');
+  // a signed-in trader already accepted this at registration, on the public
+  // site — repeating it mid-session is not a second consent, just a fixed
+  // banner sitting over the authenticated app's own controls
+  const signedIn = useAuth((s) => s.user !== null);
 
   useEffect(() => {
     setVisible(!alreadyAccepted());
@@ -39,7 +44,7 @@ export function CookieConsent() {
     setVisible(false);
   };
 
-  if (!visible || isTerminal) return null;
+  if (!visible || isTerminal || signedIn) return null;
 
   return (
     <div

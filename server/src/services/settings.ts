@@ -10,7 +10,16 @@ export const settingsEvents = new EventEmitter();
 interface Definition<T extends z.ZodTypeAny> {
   schema: T;
   default: z.infer<T>;
-  group: 'general' | 'trading' | 'wallet' | 'growth' | 'compliance' | 'security' | 'email' | 'seo' | 'localisation';
+  group:
+    | 'general'
+    | 'trading'
+    | 'wallet'
+    | 'growth'
+    | 'compliance'
+    | 'security'
+    | 'email'
+    | 'seo'
+    | 'localisation';
   label: string;
   help?: string;
   /** Safe to expose to unauthenticated clients and broadcast over ws. */
@@ -628,6 +637,34 @@ export const SETTINGS = {
     group: 'security',
     label: 'Sign-in and sign-up attempts per 15 minutes',
     help: 'Per IP address. Keep this low in production.',
+  }),
+  'security.accountLockoutAttempts': define({
+    schema: z.number().int().min(3).max(100),
+    default: 10,
+    group: 'security',
+    label: 'Failed attempts before an account locks',
+    help: 'Counts wrong passwords and wrong 2FA codes together, for this one account, regardless of which address they came from — on top of the per-IP limit above.',
+  }),
+  'security.accountLockoutMinutes': define({
+    schema: z.number().int().min(1).max(1440),
+    default: 15,
+    group: 'security',
+    label: 'Account lockout window (minutes)',
+    help: 'How far back failed attempts are counted, and how long a locked account has to wait once it trips.',
+  }),
+  'security.walletActionsPerHour': define({
+    schema: z.number().int().min(5).max(1000),
+    default: 30,
+    group: 'security',
+    label: 'Deposit/withdrawal requests per hour',
+    help: 'Per signed-in account, not per address — creating or cancelling a deposit or withdrawal.',
+  }),
+  'security.accountActionsPerHour': define({
+    schema: z.number().int().min(5).max(1000),
+    default: 20,
+    group: 'security',
+    label: 'Password/2FA changes per hour',
+    help: 'Per signed-in account — changing the password, or setting up, enabling, disabling or regenerating two-factor codes.',
   }),
   'email.enabled': define({
     schema: z.boolean(),

@@ -5,7 +5,13 @@ import { badRequest, forbidden, notFound, wrap } from '../lib/errors.js';
 import { NETWORKS } from '../lib/crypto-networks.js';
 import { publicDeposit, publicTransaction, publicWithdrawal } from '../lib/serialize.js';
 import { prisma } from '../lib/prisma.js';
-import { requireActiveUser, requireAuth, requireNotInMaintenance, requireVerifiedEmail } from '../middleware/auth.js';
+import {
+  requireActiveUser,
+  requireAuth,
+  requireNotInMaintenance,
+  requireVerifiedEmail,
+} from '../middleware/auth.js';
+import { perAccountLimiter } from '../middleware/rate-limit.js';
 import { bonusesEnabled, holdFor, listOffers, quoteOffer } from '../services/bonuses.js';
 import { cryptoMethodKey, findMethod } from '../services/payments.js';
 import { createProviderDeposit, simulateProviderPayment } from '../services/provider-deposits.js';
@@ -28,6 +34,12 @@ import { mockTxHash } from '../lib/crypto-networks.js';
 
 const router = Router();
 router.use(requireAuth);
+
+const walletActionLimiter = perAccountLimiter({
+  windowMs: 60 * 60 * 1000,
+  settingKey: 'security.walletActionsPerHour',
+  message: 'Too many wallet requests. Try again in a while.',
+});
 
 /**
  * Currencies, networks, limits and live rates the wallet UI renders from.
@@ -195,7 +207,10 @@ router.get(
       res.setHeader('content-disposition', `attachment; filename="statement-${stamp}.csv"`);
       res.send(renderStatementCsv(rows));
     } else {
-      const pdf = await renderStatementPdf(rows, { email: user.email, range: { from: query.from, to: query.to } });
+      const pdf = await renderStatementPdf(rows, {
+        email: user.email,
+        range: { from: query.from, to: query.to },
+      });
       res.setHeader('content-type', 'application/pdf');
       res.setHeader('content-disposition', `attachment; filename="statement-${stamp}.pdf"`);
       res.send(pdf);
@@ -228,6 +243,7 @@ router.get(
 
 router.post(
   '/deposits',
+  walletActionLimiter,
   requireActiveUser,
   requireVerifiedEmail,
   requireNotInMaintenance,
@@ -256,6 +272,7 @@ router.post(
 /** The provider-framework deposit path: a checkout session, not an address. */
 router.post(
   '/deposits/provider',
+  walletActionLimiter,
   requireActiveUser,
   requireVerifiedEmail,
   requireNotInMaintenance,
@@ -371,6 +388,7 @@ router.get(
 
 router.post(
   '/withdrawals',
+  walletActionLimiter,
   requireActiveUser,
   requireVerifiedEmail,
   requireNotInMaintenance,
@@ -399,6 +417,7 @@ router.post(
 /** The provider-framework withdrawal path: an e-wallet handle, not an address. */
 router.post(
   '/withdrawals/provider',
+  walletActionLimiter,
   requireActiveUser,
   requireNotInMaintenance,
   requireVerifiedEmail,
@@ -428,6 +447,7 @@ router.get(
 
 router.post(
   '/withdrawals/:id/cancel',
+  walletActionLimiter,
   wrap(async (req, res) => {
     const withdrawal = await cancelWithdrawal(req.user!.id, req.params.id);
     const balances = await getBalances(req.user!.id);

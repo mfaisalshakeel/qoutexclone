@@ -1,5 +1,6 @@
 // side-effect import: finds server/.env from any working directory
 import './lib/load-env.js';
+import path from 'node:path';
 import { z } from 'zod';
 
 /** "1" | "true" | "yes" | "on" -> true, anything else falsy. */
@@ -72,6 +73,11 @@ const schema = z.object({
   REFERRAL_COMMISSION_PCT: decimal(5, 0, 100),
 
   RESET_TOKEN_MINUTES: int(30, 1, 1440),
+
+  // where the local-disk storage provider keeps uploaded files (KYC documents
+  // today, avatars later) — outside the web root, never served directly
+  STORAGE_DIR: z.string().optional().default(''),
+  MAX_UPLOAD_MB: int(10, 1, 100),
 
   // SMTP bootstrap: these seed the defaults of the email settings, which an
   // operator edits in the back office afterwards
@@ -164,6 +170,9 @@ function load() {
     referralCommissionPct: raw.REFERRAL_COMMISSION_PCT,
 
     resetTokenMinutes: raw.RESET_TOKEN_MINUTES,
+
+    storageDir: path.resolve(process.cwd(), raw.STORAGE_DIR || 'storage'),
+    maxUploadMb: raw.MAX_UPLOAD_MB,
 
     smtp: {
       host: raw.SMTP_HOST,

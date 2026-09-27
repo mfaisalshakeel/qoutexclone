@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
+import multer from 'multer';
 import { ZodError } from 'zod';
 import { AppError } from '../lib/errors.js';
 import { env } from '../env.js';
@@ -21,6 +22,14 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   }
   if (err instanceof AppError) {
     res.status(err.status).json({ error: { code: err.code, message: err.message, details: err.details } });
+    return;
+  }
+  if (err instanceof multer.MulterError) {
+    const message =
+      err.code === 'LIMIT_FILE_SIZE'
+        ? `That file is larger than the ${env.maxUploadMb}MB limit`
+        : 'Could not read that upload';
+    res.status(400).json({ error: { code: 'invalid_upload', message } });
     return;
   }
   // 500s are the only errors worth a stack trace; the rest are client mistakes

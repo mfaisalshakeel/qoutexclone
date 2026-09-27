@@ -1,13 +1,18 @@
 import bcrypt from 'bcryptjs';
 import { Router } from 'express';
+import multer from 'multer';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { badRequest, notFound, wrap } from '../lib/errors.js';
 import { publicNotification, publicUser } from '../lib/serialize.js';
 import { requireAuth } from '../middleware/auth.js';
+import { perAccountLimiter } from '../middleware/rate-limit.js';
+import { detectDocumentType } from '../lib/file-validation.js';
+import { env } from '../env.js';
 import { tradingStats } from '../services/trading.js';
 import { DOCUMENT_TYPES, latestKycSubmission, submitKyc } from '../services/kyc.js';
+import { storage } from '../services/storage.js';
 import { referralSummary } from '../services/referrals.js';
 import { settings } from '../services/settings.js';
 import { leaderboard } from '../services/leaderboard.js';
@@ -32,6 +37,19 @@ import {
 // mounted at /api/me — every route here needs a signed-in user
 const router = Router();
 router.use(requireAuth);
+
+const accountActionLimiter = perAccountLimiter({
+  windowMs: 60 * 60 * 1000,
+  settingKey: 'security.accountActionsPerHour',
+  message: 'Too many account security requests. Try again in a while.',
+});
+
+// held in memory only long enough to sniff its real type and hand the buffer
+// to the storage provider — never written to local disk by multer itself
+const kycUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: env.maxUploadMb * 1024 * 1024, files: 1 },
+}).single('document');
 
 router.get(
   '/',
@@ -296,6 +314,7 @@ router.patch(
 
 router.post(
   '/password',
+  accountActionLimiter,
   wrap(async (req, res) => {
     const body = z
       .object({ currentPassword: z.string().min(1), newPassword: z.string().min(8).max(128) })
@@ -383,6 +402,8 @@ router.get(
 
 router.post(
   '/kyc',
+  accountActionLimiter,
+  kycUpload,
   wrap(async (req, res) => {
     const body = z
       .object({
@@ -392,10 +413,16 @@ router.post(
         address: z.string().min(5).max(300),
         documentType: z.enum(DOCUMENT_TYPES),
         documentNumber: z.string().min(3).max(60),
-        documentRef: z.string().max(300).optional(),
       })
       .parse(req.body);
-    const submission = await submitKyc({ userId: req.user!.id, ...body });
+
+    let documentRef: string | undefined;
+    if (req.file) {
+      const { extension } = detectDocumentType(req.file.buffer);
+      documentRef = (await storage.save('kyc', req.file.buffer, extension)).ref;
+    }
+
+    const submission = await submitKyc({ userId: req.user!.id, ...body, documentRef });
     res.status(201).json({ submission: { id: submission.id, status: submission.status } });
   }),
 );
@@ -601,6 +628,7 @@ router.get(
 /** Starts enrolment: a secret to scan and a code to prove it arrived. */
 router.post(
   '/2fa/setup',
+  accountActionLimiter,
   wrap(async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
     if (!user) throw notFound('Account not found');
@@ -610,6 +638,7 @@ router.post(
 
 router.post(
   '/2fa/enable',
+  accountActionLimiter,
   wrap(async (req, res) => {
     const body = z.object({ code: z.string().min(6).max(10) }).parse(req.body);
     const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
@@ -621,6 +650,7 @@ router.post(
 
 router.post(
   '/2fa/disable',
+  accountActionLimiter,
   wrap(async (req, res) => {
     const body = z.object({ password: z.string().min(1), code: z.string().min(6).max(20) }).parse(req.body);
     const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
@@ -632,6 +662,7 @@ router.post(
 
 router.post(
   '/2fa/backup-codes',
+  accountActionLimiter,
   wrap(async (req, res) => {
     const body = z.object({ code: z.string().min(6).max(20) }).parse(req.body);
     const user = await prisma.user.findUnique({ where: { id: req.user!.id } });

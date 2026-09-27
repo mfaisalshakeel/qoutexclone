@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import type { User } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
-import { badRequest, unauthorized } from '../lib/errors.js';
+import { badRequest, tooManyRequests, unauthorized } from '../lib/errors.js';
 import { describeDevice, fingerprint } from '../lib/device.js';
 import { generateSecret, otpauthUri, verifyTotp } from '../lib/totp.js';
 import { checkPassword, type PasswordPolicy } from '../lib/password-policy.js';
@@ -165,6 +165,30 @@ export async function recordLogin(options: {
   });
 
   return { newDevice, fingerprint: print };
+}
+
+/**
+ * Blocks proving-you-are-this-account attempts (a password, a 2FA code) once
+ * an account has racked up too many recent failures — on top of the IP-based
+ * `authLimiter`, which an attacker spreading guesses across many addresses
+ * would otherwise never trip. Counts `BAD_PASSWORD` and `TWO_FACTOR_FAILED`
+ * together, since both are the same thing: someone failing to prove they are
+ * this account. Every failure is already in `LoginEvent`, so no extra column
+ * or counter is needed — a trader can see exactly the same history that
+ * triggered their own lockout on the security page.
+ */
+export async function assertAccountNotLockedOut(userId: string): Promise<void> {
+  const minutes = settings.get('security.accountLockoutMinutes');
+  const since = new Date(Date.now() - minutes * 60 * 1000);
+  const failures = await prisma.loginEvent.count({
+    where: { userId, outcome: { in: ['BAD_PASSWORD', 'TWO_FACTOR_FAILED'] }, createdAt: { gte: since } },
+  });
+  if (failures >= settings.get('security.accountLockoutAttempts')) {
+    throw tooManyRequests(
+      `Too many failed attempts on this account. Try again in ${minutes} minutes, or reset your password.`,
+      'account_locked',
+    );
+  }
 }
 
 /** Tells a trader their account was reached from somewhere it has not been. */

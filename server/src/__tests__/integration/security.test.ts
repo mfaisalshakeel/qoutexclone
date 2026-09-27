@@ -214,6 +214,57 @@ suite('account security', () => {
     expect(events[0].newDevice).toBe(false);
   });
 
+  it('locks an account out after too many recent failures, from any address', async () => {
+    const user = await makeUser();
+    for (let i = 0; i < 9; i++) {
+      await security.recordLogin({
+        email: user.email,
+        outcome: 'BAD_PASSWORD',
+        context: { ip: `203.0.113.${i}`, userAgent: 'curl/8.4.0' },
+        userId: user.id,
+      });
+    }
+    await expect(security.assertAccountNotLockedOut(user.id)).resolves.toBeUndefined();
+
+    await security.recordLogin({
+      email: user.email,
+      outcome: 'BAD_PASSWORD',
+      context: { ip: '203.0.113.99', userAgent: 'curl/8.4.0' },
+      userId: user.id,
+    });
+    await expect(security.assertAccountNotLockedOut(user.id)).rejects.toMatchObject({
+      status: 429,
+      code: 'account_locked',
+    });
+  });
+
+  it('never locks one account out for another account’s failures', async () => {
+    const stranger = await makeUser();
+    const bystander = await makeUser();
+    for (let i = 0; i < 12; i++) {
+      await security.recordLogin({
+        email: stranger.email,
+        outcome: 'BAD_PASSWORD',
+        context: { ip: '203.0.113.1', userAgent: 'curl/8.4.0' },
+        userId: stranger.id,
+      });
+    }
+    await expect(security.assertAccountNotLockedOut(bystander.id)).resolves.toBeUndefined();
+  });
+
+  it('counts a run of wrong two-factor codes toward the same lockout as wrong passwords', async () => {
+    const user = await makeUser();
+    for (let i = 0; i < 10; i++) {
+      await security.recordLogin({
+        email: user.email,
+        outcome: 'TWO_FACTOR_FAILED',
+        context: { ip: '203.0.113.1', userAgent: 'curl/8.4.0' },
+        userId: user.id,
+      });
+    }
+    await expect(security.assertAccountNotLockedOut(user.id)).rejects.toMatchObject({ status: 429 });
+  });
+
   it("lists only this account's sessions, and revokes another account's never", async () => {
     const mine = await makeUser();
     const theirs = await makeUser();

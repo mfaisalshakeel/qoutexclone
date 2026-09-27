@@ -156,6 +156,35 @@ async function request<T>(
 }
 
 /**
+ * A POST carrying a file, as `multipart/form-data` — the KYC document upload,
+ * so far. The browser sets its own `Content-Type` with the multipart
+ * boundary, so this never sets one itself the way `request` does for JSON.
+ */
+async function uploadForm<T>(path: string, form: FormData, refreshed = false): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/api${path}`, {
+      method: 'POST',
+      headers: tokens.access ? { authorization: `Bearer ${tokens.access}` } : {},
+      body: form,
+    });
+  } catch {
+    throw new ApiError(0, 'Cannot reach the server. Check your connection and try again.', 'network_error');
+  }
+
+  if (res.status === 401 && !refreshed && tokens.refresh) {
+    if (await refreshSession()) return uploadForm<T>(path, form, true);
+  }
+
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const error = payload?.error ?? {};
+    throw new ApiError(res.status, error.message ?? 'Request failed', error.code ?? 'error', error.details);
+  }
+  return payload as T;
+}
+
+/**
  * A GET that returns a file rather than JSON — a statement download, say.
  * Triggers the browser's own save flow via a throwaway object URL rather than
  * returning the blob, since every caller wants exactly that.
@@ -192,6 +221,7 @@ async function downloadFile(path: string, refreshed = false): Promise<void> {
 export const api = {
   get: <T>(path: string, options?: RequestOptions) => request<T>('GET', path, undefined, options),
   download: downloadFile,
+  uploadForm,
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>('POST', path, body ?? {}, options),
   patch: <T>(path: string, body: unknown, options?: RequestOptions) =>
