@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { renderMarkdown } from '../../lib/markdown';
 import { money, price, percent } from '../../lib/format';
 import { useSettings } from '../../store/settings';
+import { changeLanguage, TRANSLATED_LANGUAGES } from '../../i18n';
 import { Avatar } from '../Avatar';
 import { RowSkeletons } from '../Skeleton';
 import type { Asset, FaqEntry, Testimonial, Tournament } from '../../lib/types';
@@ -46,13 +48,14 @@ function SectionHead({ copy, center = true }: { copy: SectionCopy; center?: bool
 /* ------------------------------ markets strip ------------------------------ */
 
 export function MarketsStripSection({ copy, assets }: { copy: SectionCopy; assets: Asset[] | null }) {
+  const { t } = useTranslation();
   return (
     <section className="mx-auto max-w-6xl px-4 py-16">
       <SectionHead copy={copy} />
       <Prose body={copy.body} className="mx-auto mt-2 max-w-2xl text-center" />
       <div className="card mt-8 overflow-hidden">
         <ul
-          aria-label="Live markets"
+          aria-label={t('home.marketsStrip.ariaLabel')}
           className="grid grid-cols-1 divide-y divide-ink-700 sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4"
         >
           {assets === null &&
@@ -63,7 +66,7 @@ export function MarketsStripSection({ copy, assets }: { copy: SectionCopy; asset
             ))}
           {assets !== null && assets.length === 0 && (
             <li className="col-span-full p-6 text-center text-sm text-slate-500">
-              Markets are loading — check back in a moment.
+              {t('home.marketsStrip.loading')}
             </li>
           )}
           {assets?.map((asset) => (
@@ -90,24 +93,21 @@ export function MarketsStripSection({ copy, assets }: { copy: SectionCopy; asset
 
 /* ------------------------------ how it works ------------------------------ */
 
-const STEPS = [
-  { n: 1, title: 'Pick a market and a direction' },
-  { n: 2, title: 'Set your stake and an expiry' },
-  { n: 3, title: 'Watch it settle' },
-];
+const STEP_KEYS = ['step1', 'step2', 'step3'] as const;
 
 export function HowItWorksSection({ copy }: { copy: SectionCopy }) {
+  const { t } = useTranslation();
   return (
     <section className="border-y border-ink-700 bg-ink-800/40">
       <div className="mx-auto max-w-6xl px-4 py-16">
         <SectionHead copy={copy} />
         <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-3">
-          {STEPS.map((step) => (
-            <div key={step.n} className="card p-5 text-center">
+          {STEP_KEYS.map((key, i) => (
+            <div key={key} className="card p-5 text-center">
               <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-accent-soft text-lg font-bold text-accent">
-                {step.n}
+                {i + 1}
               </span>
-              <p className="mt-3 text-sm font-semibold">{step.title}</p>
+              <p className="mt-3 text-sm font-semibold">{t(`home.howItWorks.${key}`)}</p>
             </div>
           ))}
         </div>
@@ -120,6 +120,7 @@ export function HowItWorksSection({ copy }: { copy: SectionCopy }) {
 /* --------------------------- platform showcase --------------------------- */
 
 export function PlatformShowcaseSection({ copy }: { copy: SectionCopy }) {
+  const { t } = useTranslation();
   return (
     <section className="mx-auto max-w-6xl px-4 py-16">
       <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
@@ -129,11 +130,15 @@ export function PlatformShowcaseSection({ copy }: { copy: SectionCopy }) {
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="card aspect-[4/3] min-w-0 p-4">
-            <p className="text-xs font-semibold text-slate-400">Desktop terminal</p>
+            <p className="text-xs font-semibold text-slate-400">
+              {t('home.platformShowcase.desktopTerminal')}
+            </p>
             <div className="mt-2 h-full rounded-lg border border-ink-600 bg-ink-900/60" />
           </div>
           <div className="card mx-auto aspect-[9/16] w-2/3 min-w-0 p-3 sm:w-full">
-            <p className="text-xs font-semibold text-slate-400">Mobile terminal</p>
+            <p className="text-xs font-semibold text-slate-400">
+              {t('home.platformShowcase.mobileTerminal')}
+            </p>
             <div className="mt-2 h-full rounded-lg border border-ink-600 bg-ink-900/60" />
           </div>
         </div>
@@ -144,37 +149,21 @@ export function PlatformShowcaseSection({ copy }: { copy: SectionCopy }) {
 
 /* ------------------------------ features grid ------------------------------ */
 
-const FEATURES = [
-  { title: 'Fast crypto deposits', body: 'Fund with BTC, ETH or USDT and start trading within minutes.' },
-  { title: 'OTC markets, 24/7', body: 'Broker-priced OTC twins never close, weekends included.' },
-  {
-    title: '20+ chart indicators',
-    body: 'SMA, RSI, MACD, Bollinger Bands and more, built into the terminal.',
-  },
-  {
-    title: 'Live tournaments',
-    body: 'Trade a fresh stack of chips against the field for a real prize pool.',
-  },
-  {
-    title: 'Free practice account',
-    body: '$10,000 in simulated funds on the exact same engine as live trading.',
-  },
-  {
-    title: 'A mobile terminal that keeps up',
-    body: 'Every tool from the desktop terminal, reflowed for a phone.',
-  },
-];
+const FEATURE_KEYS = [1, 2, 3, 4, 5, 6] as const;
 
 export function FeaturesGridSection({ copy }: { copy: SectionCopy }) {
+  const { t } = useTranslation();
   return (
     <section className="border-y border-ink-700 bg-ink-800/40">
       <div className="mx-auto max-w-6xl px-4 py-16">
         <SectionHead copy={copy} />
         <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map((feature) => (
-            <div key={feature.title} className="card p-5">
-              <p className="text-sm font-semibold">{feature.title}</p>
-              <p className="mt-2 text-sm leading-relaxed text-slate-400">{feature.body}</p>
+          {FEATURE_KEYS.map((n) => (
+            <div key={n} className="card p-5">
+              <p className="text-sm font-semibold">{t(`home.featuresGrid.feature${n}Title`)}</p>
+              <p className="mt-2 text-sm leading-relaxed text-slate-400">
+                {t(`home.featuresGrid.feature${n}Body`)}
+              </p>
             </div>
           ))}
         </div>
@@ -186,12 +175,13 @@ export function FeaturesGridSection({ copy }: { copy: SectionCopy }) {
 /* ------------------------------- status levels ------------------------------ */
 
 export function StatusLevelsSection({ copy }: { copy: SectionCopy }) {
+  const { t } = useTranslation();
   const values = useSettings((s) => s.values);
   const enabled = values['growth.statusEnabled'] !== false;
   if (!enabled) return null;
 
   const levels = [
-    { name: 'Standard', threshold: 0, payoutBonus: 0, depositBonus: 0 },
+    { name: t('home.statusLevels.standard'), threshold: 0, payoutBonus: 0, depositBonus: 0 },
     {
       name: (values['growth.statusProName'] as string) ?? 'Pro',
       threshold: (values['growth.statusProThreshold'] as number) ?? 100_000,
@@ -215,13 +205,15 @@ export function StatusLevelsSection({ copy }: { copy: SectionCopy }) {
             <p className="text-sm font-semibold">{level.name}</p>
             <p className="mt-1 text-xs text-slate-500">
               {level.threshold === 0
-                ? 'From your first trade'
-                : `From ${money(level.threshold)} lifetime deposits`}
+                ? t('home.statusLevels.fromFirstTrade')
+                : t('home.statusLevels.fromLifetimeDeposits', { amount: money(level.threshold) })}
             </p>
             <ul className="mt-4 space-y-2 text-sm text-slate-400">
-              <li>+{level.payoutBonus}% payout bonus</li>
-              {level.depositBonus > 0 && <li>+{level.depositBonus}% deposit bonus</li>}
-              {i > 0 && <li>Priority withdrawals</li>}
+              <li>{t('home.statusLevels.payoutBonus', { pct: level.payoutBonus })}</li>
+              {level.depositBonus > 0 && (
+                <li>{t('home.statusLevels.depositBonus', { pct: level.depositBonus })}</li>
+              )}
+              {i > 0 && <li>{t('home.statusLevels.priorityWithdrawals')}</li>}
             </ul>
           </div>
         ))}
@@ -239,8 +231,9 @@ export function TournamentsTeaserSection({
   copy: SectionCopy;
   tournaments: Tournament[] | null;
 }) {
+  const { t } = useTranslation();
   const upcoming =
-    tournaments?.filter((t) => t.status === 'SCHEDULED' || t.status === 'RUNNING').slice(0, 3) ?? [];
+    tournaments?.filter((tt) => tt.status === 'SCHEDULED' || tt.status === 'RUNNING').slice(0, 3) ?? [];
 
   return (
     <section className="border-y border-ink-700 bg-ink-800/40">
@@ -249,22 +242,26 @@ export function TournamentsTeaserSection({
         <div className="mt-10">
           {tournaments === null && <RowSkeletons rows={3} className="space-y-3" rowClassName="card p-4" />}
           {tournaments !== null && upcoming.length === 0 && (
-            <p className="text-center text-sm text-slate-500">
-              New tournaments are announced regularly — check back soon, or create an account to be notified.
-            </p>
+            <p className="text-center text-sm text-slate-500">{t('home.tournamentsTeaser.empty')}</p>
           )}
           {upcoming.length > 0 && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {upcoming.map((t) => (
-                <div key={t.id} className="card p-4">
+              {upcoming.map((tournament) => (
+                <div key={tournament.id} className="card p-4">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-semibold">{t.name}</p>
+                    <p className="truncate text-sm font-semibold">{tournament.name}</p>
                     <span className="chip bg-accent-soft text-accent">
-                      {t.status === 'RUNNING' ? 'Live' : 'Soon'}
+                      {tournament.status === 'RUNNING'
+                        ? t('home.tournamentsTeaser.live')
+                        : t('home.tournamentsTeaser.soon')}
                     </span>
                   </div>
-                  <p className="mt-2 text-xs text-slate-500">Prize pool {money(t.prizePool)}</p>
-                  <p className="text-xs text-slate-500">{t.entrants} entered</p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    {t('home.tournamentsTeaser.prizePool', { amount: money(tournament.prizePool) })}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {t('home.tournamentsTeaser.entered', { count: tournament.entrants })}
+                  </p>
                 </div>
               ))}
             </div>
@@ -272,7 +269,7 @@ export function TournamentsTeaserSection({
         </div>
         <div className="mt-8 text-center">
           <Link to="/register" className="btn-ghost !px-5 !py-2.5">
-            Join a tournament
+            {t('home.tournamentsTeaser.joinTournament')}
           </Link>
         </div>
       </div>
@@ -290,6 +287,7 @@ export function PaymentMethodsSection({
   methods:
     { key: string; label: string; provider: string; currency: string; network: string | null }[] | null;
 }) {
+  const { t } = useTranslation();
   return (
     <section className="mx-auto max-w-6xl px-4 py-16">
       <SectionHead copy={copy} />
@@ -298,7 +296,7 @@ export function PaymentMethodsSection({
         {methods === null &&
           Array.from({ length: 4 }, (_, i) => <div key={i} aria-hidden className="skeleton h-11 w-32" />)}
         {methods !== null && methods.length === 0 && (
-          <p className="text-sm text-slate-500">Payment methods are being configured.</p>
+          <p className="text-sm text-slate-500">{t('home.paymentMethods.loading')}</p>
         )}
         {methods?.map((method) => (
           <span
@@ -338,6 +336,7 @@ export function TestimonialsSection({
   copy: SectionCopy;
   testimonials: Testimonial[] | null;
 }) {
+  const { t } = useTranslation();
   return (
     <section className="mx-auto max-w-6xl px-4 py-16">
       <SectionHead copy={copy} />
@@ -352,29 +351,29 @@ export function TestimonialsSection({
           </div>
         )}
         {testimonials !== null && testimonials.length === 0 && (
-          <p className="text-center text-sm text-slate-500">Trader stories are on their way.</p>
+          <p className="text-center text-sm text-slate-500">{t('home.testimonials.empty')}</p>
         )}
         {testimonials !== null && testimonials.length > 0 && (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {testimonials.map((t) => (
-              <figure key={t.id} className="card flex flex-col p-5">
+            {testimonials.map((testimonial) => (
+              <figure key={testimonial.id} className="card flex flex-col p-5">
                 <div className="flex items-center gap-3">
-                  <Avatar name={t.name} avatar={t.avatar} />
+                  <Avatar name={testimonial.name} avatar={testimonial.avatar} />
                   <div className="min-w-0">
-                    <figcaption className="truncate text-sm font-semibold">{t.name}</figcaption>
-                    <p className="truncate text-xs text-slate-500">{t.role}</p>
+                    <figcaption className="truncate text-sm font-semibold">{testimonial.name}</figcaption>
+                    <p className="truncate text-xs text-slate-500">{testimonial.role}</p>
                   </div>
                 </div>
                 <blockquote className="mt-3 flex-1 text-sm leading-relaxed text-slate-400">
-                  “{t.quote}”
+                  “{testimonial.quote}”
                 </blockquote>
                 <p
-                  aria-label={`${t.rating} out of 5 stars`}
+                  aria-label={`${testimonial.rating} out of 5 stars`}
                   className="mt-3 text-amber-400"
                   aria-hidden="false"
                 >
-                  {'★'.repeat(t.rating)}
-                  <span className="text-ink-500">{'★'.repeat(5 - t.rating)}</span>
+                  {'★'.repeat(testimonial.rating)}
+                  <span className="text-ink-500">{'★'.repeat(5 - testimonial.rating)}</span>
                 </p>
               </figure>
             ))}
@@ -388,6 +387,7 @@ export function TestimonialsSection({
 /* -------------------------------- FAQ accordion -------------------------------- */
 
 export function FaqAccordionSection({ copy, entries }: { copy: SectionCopy; entries: FaqEntry[] | null }) {
+  const { t } = useTranslation();
   const [openId, setOpenId] = useState<string | null>(null);
 
   return (
@@ -397,9 +397,7 @@ export function FaqAccordionSection({ copy, entries }: { copy: SectionCopy; entr
         <div className="mt-8 divide-y divide-ink-700 rounded-xl border border-ink-700 bg-ink-800">
           {entries === null && <RowSkeletons rows={4} rowClassName="p-4" />}
           {entries !== null && entries.length === 0 && (
-            <p className="p-6 text-center text-sm text-slate-500">
-              Answers are being written up — try Help & Support.
-            </p>
+            <p className="p-6 text-center text-sm text-slate-500">{t('home.faq.empty')}</p>
           )}
           {entries?.map((entry) => {
             const open = openId === entry.id;
@@ -408,7 +406,7 @@ export function FaqAccordionSection({ copy, entries }: { copy: SectionCopy; entr
                 <button
                   onClick={() => setOpenId(open ? null : entry.id)}
                   aria-expanded={open}
-                  className="flex w-full items-center justify-between gap-3 p-4 text-left text-sm font-semibold hover:bg-ink-700/40"
+                  className="flex w-full items-center justify-between gap-3 p-4 text-start text-sm font-semibold hover:bg-ink-700/40"
                 >
                   {entry.question}
                   <span aria-hidden className="text-slate-500">
@@ -425,13 +423,13 @@ export function FaqAccordionSection({ copy, entries }: { copy: SectionCopy; entr
           })}
         </div>
         <p className="mt-6 text-center text-sm text-slate-500">
-          Can't find yours?{' '}
+          {t('home.faq.cantFindYours')}{' '}
           <Link to="/help" className="text-accent hover:underline">
-            Search the help centre
+            {t('home.faq.searchHelpCentre')}
           </Link>{' '}
-          or{' '}
+          {t('home.faq.or')}{' '}
           <Link to="/contact" className="text-accent hover:underline">
-            contact us
+            {t('home.faq.contactUs')}
           </Link>
           .
         </p>
@@ -443,16 +441,17 @@ export function FaqAccordionSection({ copy, entries }: { copy: SectionCopy; entr
 /* --------------------------------- final CTA --------------------------------- */
 
 export function FinalCtaSection({ copy }: { copy: SectionCopy }) {
+  const { t } = useTranslation();
   return (
     <section className="mx-auto max-w-4xl px-4 py-20 text-center">
       <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{copy.title}</h2>
       {copy.subtitle && <p className="mt-3 text-base text-slate-400">{copy.subtitle}</p>}
       <div className="mt-7 flex flex-wrap justify-center gap-3">
         <Link to="/register" className="btn-primary !px-6 !py-3">
-          Create free account
+          {t('common.createFreeAccount')}
         </Link>
         <Link to="/login" className="btn-ghost !px-6 !py-3">
-          I already have one
+          {t('common.iAlreadyHaveOne')}
         </Link>
       </div>
     </section>
@@ -461,23 +460,23 @@ export function FinalCtaSection({ copy }: { copy: SectionCopy }) {
 
 /* ----------------------------------- footer ----------------------------------- */
 
-const SITE_LINKS: { to: string; label: string }[] = [
-  { to: '/markets', label: 'Markets' },
-  { to: '/tournaments/overview', label: 'Tournaments' },
-  { to: '/status', label: 'Status levels' },
-  { to: '/affiliate', label: 'Affiliate' },
-  { to: '/help', label: 'Help centre' },
-  { to: '/about', label: 'About' },
-  { to: '/contact', label: 'Contact' },
-];
+const SITE_LINKS = [
+  { to: '/markets', key: 'markets' },
+  { to: '/tournaments/overview', key: 'tournaments' },
+  { to: '/status', key: 'statusLevels' },
+  { to: '/affiliate', key: 'affiliate' },
+  { to: '/help', key: 'helpCentre' },
+  { to: '/about', key: 'about' },
+  { to: '/contact', key: 'contact' },
+] as const;
 
-const LEGAL_LINKS: { slug: string; label: string }[] = [
-  { slug: 'terms', label: 'Terms of Service' },
-  { slug: 'privacy', label: 'Privacy Policy' },
-  { slug: 'risk-disclosure', label: 'Risk Disclosure' },
-  { slug: 'aml-kyc', label: 'AML / KYC Policy' },
-  { slug: 'cookie-policy', label: 'Cookie Policy' },
-];
+const LEGAL_LINKS = [
+  { slug: 'terms', key: 'terms' },
+  { slug: 'privacy', key: 'privacy' },
+  { slug: 'risk-disclosure', key: 'risk-disclosure' },
+  { slug: 'aml-kyc', key: 'aml-kyc' },
+  { slug: 'cookie-policy', key: 'cookie-policy' },
+] as const;
 
 const LANGUAGE_NAMES: Record<string, string> = {
   en: 'English',
@@ -490,42 +489,50 @@ const LANGUAGE_NAMES: Record<string, string> = {
 };
 
 export function SiteFooter({ copy = EMPTY_COPY }: { copy?: SectionCopy }) {
+  const { t, i18n } = useTranslation();
   const values = useSettings((s) => s.values);
   const languages = (values['localisation.enabledLanguages'] as string[] | undefined) ?? ['en'];
-  const [chosen, setChosen] = useState(languages[0] ?? 'en');
+  const [chosen, setChosen] = useState(
+    languages.includes(i18n.language) ? i18n.language : (languages[0] ?? 'en'),
+  );
+
+  function selectLanguage(code: string) {
+    setChosen(code);
+    if (TRANSLATED_LANGUAGES.has(code)) changeLanguage(code);
+  }
 
   return (
     <footer className="border-t border-ink-700">
       <div className="mx-auto max-w-6xl px-4 py-10">
         <p className="text-xs leading-relaxed text-slate-500">
-          {copy.body ?? 'Trading fixed-payout options carries risk and you can lose the money you put in.'}
+          {copy.body ?? t('footer.riskWarningDefault')}
         </p>
         <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-400">
           {SITE_LINKS.map((link) => (
             <Link key={link.to} to={link.to} className="hover:text-slate-200 hover:underline">
-              {link.label}
+              {t(`nav.${link.key}`)}
             </Link>
           ))}
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-400">
           {LEGAL_LINKS.map((link) => (
             <Link key={link.slug} to={`/legal/${link.slug}`} className="hover:text-slate-200 hover:underline">
-              {link.label}
+              {t(`legalLinks.${link.key}`)}
             </Link>
           ))}
         </div>
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-slate-500">
-            © {new Date().getFullYear()} {copy.title ?? 'Quantex'}. All rights reserved.
+            © {new Date().getFullYear()} {copy.title ?? 'Quantex'}. {t('footer.allRightsReserved')}
           </p>
           {languages.length > 1 ? (
-            <div className="text-right">
+            <div className="text-end">
               <label className="flex items-center gap-2 text-xs text-slate-500">
-                Language
+                {t('footer.language')}
                 <select
-                  aria-label="Interface language"
+                  aria-label={t('footer.languageAriaLabel')}
                   value={chosen}
-                  onChange={(e) => setChosen(e.target.value)}
+                  onChange={(e) => selectLanguage(e.target.value)}
                   className="field !w-auto !py-1 text-xs"
                 >
                   {languages.map((code) => (
@@ -535,10 +542,9 @@ export function SiteFooter({ copy = EMPTY_COPY }: { copy?: SectionCopy }) {
                   ))}
                 </select>
               </label>
-              {chosen !== 'en' && (
+              {!TRANSLATED_LANGUAGES.has(chosen) && (
                 <p className="mt-1 text-[11px] text-slate-500">
-                  Full {LANGUAGE_NAMES[chosen] ?? chosen} translation is on the way — the interface stays in
-                  English until then.
+                  {t('footer.translationOnTheWay', { language: LANGUAGE_NAMES[chosen] ?? chosen })}
                 </p>
               )}
             </div>

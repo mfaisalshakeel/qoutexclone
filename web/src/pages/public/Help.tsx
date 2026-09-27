@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Trans, useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { renderMarkdown } from '../../lib/markdown';
 import { usePageMeta } from '../../hooks/usePageMeta';
@@ -11,11 +12,12 @@ import type { FaqEntry } from '../../lib/types';
 
 /** The full help centre: every published FAQ entry, searchable and grouped by category. */
 export function PublicHelp() {
+  const { t } = useTranslation();
   const [entries, setEntries] = useState<FaqEntry[] | null>(null);
 
   usePageMeta({
-    title: 'Help centre',
-    description: 'Answers to the questions traders ask most, searchable in one place.',
+    title: t('help.title'),
+    description: t('help.subtitle'),
     jsonLd: entries?.length
       ? faqPageJsonLd(entries.map((e) => ({ question: e.question, answer: e.answer })))
       : undefined,
@@ -55,14 +57,14 @@ export function PublicHelp() {
     <div className="min-h-dvh">
       <PublicHeader />
       <main className="mx-auto max-w-3xl px-4 pb-20 pt-4">
-        <h1 className="text-3xl font-bold tracking-tight">Help centre</h1>
-        <p className="mt-2 text-sm text-slate-400">Answers to the questions traders ask most.</p>
+        <h1 className="text-3xl font-bold tracking-tight">{t('help.title')}</h1>
+        <p className="mt-2 text-sm text-slate-400">{t('help.subtitle')}</p>
 
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search the help centre"
-          aria-label="Search the help centre"
+          placeholder={t('help.searchPlaceholder')}
+          aria-label={t('help.searchPlaceholder')}
           className="field mt-6"
         />
 
@@ -70,11 +72,13 @@ export function PublicHelp() {
           {entries === null && <RowSkeletons rows={6} rowClassName="card mb-3 p-4" />}
           {entries !== null && filtered.length === 0 && (
             <p className="card p-6 text-center text-sm text-slate-500">
-              No answers match “{query}”. Try a different search, or{' '}
-              <Link to="/contact" className="text-accent hover:underline">
-                contact us
-              </Link>
-              .
+              <Trans
+                i18nKey="help.noMatch"
+                values={{ query }}
+                components={{
+                  contactLink: <Link to="/contact" className="text-accent hover:underline" />,
+                }}
+              />
             </p>
           )}
           {[...byCategory.entries()].map(([category, items]) => (
@@ -90,7 +94,7 @@ export function PublicHelp() {
                       <button
                         onClick={() => setOpenId(open ? null : entry.id)}
                         aria-expanded={open}
-                        className="flex w-full items-center justify-between gap-3 p-4 text-left text-sm font-semibold hover:bg-ink-700/40"
+                        className="flex w-full items-center justify-between gap-3 p-4 text-start text-sm font-semibold hover:bg-ink-700/40"
                       >
                         {entry.question}
                         <span aria-hidden className="text-slate-500">
@@ -112,10 +116,10 @@ export function PublicHelp() {
         </div>
 
         <div className="card mt-4 p-6 text-center">
-          <p className="text-sm font-semibold">Still stuck?</p>
-          <p className="mt-1 text-sm text-slate-400">Our support team can take it from here.</p>
+          <p className="text-sm font-semibold">{t('help.stillStuckTitle')}</p>
+          <p className="mt-1 text-sm text-slate-400">{t('help.stillStuckBody')}</p>
           <Link to="/contact" className="btn-primary mt-4 inline-flex !px-5 !py-2.5">
-            Contact support
+            {t('help.contactSupport')}
           </Link>
         </div>
       </main>

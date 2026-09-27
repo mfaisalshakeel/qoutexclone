@@ -1,18 +1,20 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { IconLogo } from '../Icons';
 
 const NAV_LINKS = [
-  { to: '/markets', label: 'Markets' },
-  { to: '/tournaments/overview', label: 'Tournaments' },
-  { to: '/status', label: 'Status levels' },
-  { to: '/affiliate', label: 'Affiliate' },
-  { to: '/help', label: 'Help' },
-  { to: '/about', label: 'About' },
-];
+  { to: '/markets', key: 'markets' },
+  { to: '/tournaments/overview', key: 'tournaments' },
+  { to: '/status', key: 'statusLevels' },
+  { to: '/affiliate', key: 'affiliate' },
+  { to: '/help', key: 'help' },
+  { to: '/about', key: 'about' },
+] as const;
 
 /** The header every public (logged-out) page shares, with a mobile menu below `md`. */
 export function PublicHeader() {
+  const { t } = useTranslation();
   const location = useLocation();
   const [open, setOpen] = useState(false);
 
@@ -34,17 +36,17 @@ export function PublicHeader() {
                 active ? 'text-white' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {link.label}
+              {t(`nav.${link.key}`)}
             </Link>
           );
         })}
       </nav>
-      <nav className="ml-auto hidden shrink-0 items-center gap-2 md:flex">
+      <nav className="ms-auto hidden shrink-0 items-center gap-2 md:flex">
         <Link to="/login" className="btn-ghost !px-3 !py-2">
-          Sign in
+          {t('common.signIn')}
         </Link>
         <Link to="/register" className="btn-primary !px-3 !py-2">
-          Start trading
+          {t('common.startTrading')}
         </Link>
       </nav>
 
@@ -52,8 +54,8 @@ export function PublicHeader() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls="public-nav-menu"
-        aria-label={open ? 'Close menu' : 'Open menu'}
-        className="btn-ghost ml-auto !px-3 !py-2 md:hidden"
+        aria-label={open ? t('common.closeMenu') : t('common.openMenu')}
+        className="btn-ghost ms-auto !px-3 !py-2 md:hidden"
       >
         {open ? '✕' : '☰'}
       </button>
@@ -70,15 +72,15 @@ export function PublicHeader() {
               onClick={() => setOpen(false)}
               className="block rounded-lg px-3 py-2.5 text-sm font-medium text-slate-300 hover:bg-ink-700"
             >
-              {link.label}
+              {t(`nav.${link.key}`)}
             </Link>
           ))}
           <div className="mt-2 flex gap-2 border-t border-ink-700 pt-2">
             <Link to="/login" onClick={() => setOpen(false)} className="btn-ghost flex-1 justify-center">
-              Sign in
+              {t('common.signIn')}
             </Link>
             <Link to="/register" onClick={() => setOpen(false)} className="btn-primary flex-1 justify-center">
-              Start trading
+              {t('common.startTrading')}
             </Link>
           </div>
         </div>

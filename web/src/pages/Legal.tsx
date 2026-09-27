@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ApiError, api } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
 import { usePageMeta } from '../hooks/usePageMeta';
@@ -16,6 +17,7 @@ interface PublicLegalPage {
 
 /** One of the fixed legal documents, rendered from whatever the content CMS has published. */
 export function Legal() {
+  const { t } = useTranslation();
   const { slug = '' } = useParams();
   const [page, setPage] = useState<PublicLegalPage | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -30,12 +32,12 @@ export function Legal() {
       .then(({ page: data }) => setPage(data))
       .catch((err) => {
         if (err instanceof ApiError && err.status === 404) setNotFound(true);
-        else setError(err instanceof ApiError ? err.message : 'Could not load this page');
+        else setError(err instanceof ApiError ? err.message : t('legal.loadError'));
       });
-  }, [slug]);
+  }, [slug, t]);
 
   usePageMeta({
-    title: page?.title ?? 'Legal',
+    title: page?.title ?? t('legal.fallbackTitle'),
     description: page?.title ? `${page.title} — Quantex.` : undefined,
     noindex: notFound,
   });
@@ -52,9 +54,9 @@ export function Legal() {
         )}
         {notFound && !error && (
           <div className="card p-6 text-center">
-            <p className="text-sm font-semibold">This page has not been published yet.</p>
+            <p className="text-sm font-semibold">{t('legal.notPublished')}</p>
             <Link to="/" className="mt-3 inline-block text-sm text-accent hover:underline">
-              Back to the homepage
+              {t('legal.backHome')}
             </Link>
           </div>
         )}
@@ -69,7 +71,9 @@ export function Legal() {
         {page && (
           <article>
             <h1 className="text-2xl font-bold tracking-tight">{page.title}</h1>
-            <p className="mt-1 text-xs text-slate-500">Last updated {dateTime(page.publishedAt)}</p>
+            <p className="mt-1 text-xs text-slate-500">
+              {t('legal.lastUpdated', { date: dateTime(page.publishedAt) })}
+            </p>
             <div
               className="markdown-body mt-6 text-sm text-slate-400"
               dangerouslySetInnerHTML={{ __html: renderMarkdown(page.body ?? '') }}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Trans, useTranslation } from 'react-i18next';
 import { ApiError, api } from '../../lib/api';
 import { useSettings } from '../../store/settings';
 import { usePageMeta } from '../../hooks/usePageMeta';
@@ -8,7 +9,8 @@ import { SiteFooter } from '../../components/home/Sections';
 
 /** A real, working contact form — a submission is delivered straight to the support inbox. */
 export function PublicContact() {
-  usePageMeta({ title: 'Contact us', description: 'Reach the Quantex support team directly.' });
+  const { t } = useTranslation();
+  usePageMeta({ title: t('contact.title'), description: t('contact.description') });
 
   const supportEmail = useSettings((s) => s.values['general.supportEmail'] as string | undefined);
   const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' });
@@ -24,7 +26,7 @@ export function PublicContact() {
       setState('sent');
     } catch (err) {
       setState('error');
-      setError(err instanceof ApiError ? err.message : 'Could not send your message. Try again in a moment.');
+      setError(err instanceof ApiError ? err.message : t('contact.genericError'));
     }
   };
 
@@ -32,27 +34,26 @@ export function PublicContact() {
     <div className="min-h-dvh">
       <PublicHeader />
       <main className="mx-auto max-w-2xl px-4 pb-20 pt-4">
-        <h1 className="text-3xl font-bold tracking-tight">Contact us</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t('contact.title')}</h1>
         <p className="mt-2 text-sm text-slate-400">
-          Already have an account? Sign in and reach support directly for a faster answer that's tied to your
-          own account.{' '}
+          {t('contact.signInPrompt')}{' '}
           <Link to="/login" className="text-accent hover:underline">
-            Sign in
+            {t('common.signIn')}
           </Link>
           .
         </p>
 
         {state === 'sent' ? (
           <div className="card mt-8 p-6 text-center">
-            <p className="text-sm font-semibold">Message sent.</p>
-            <p className="mt-1 text-sm text-slate-400">We'll reply to the address you gave us.</p>
+            <p className="text-sm font-semibold">{t('contact.sent')}</p>
+            <p className="mt-1 text-sm text-slate-400">{t('contact.sentBody')}</p>
           </div>
         ) : (
           <form onSubmit={submit} className="card mt-8 space-y-4 p-6">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="label" htmlFor="c-name">
-                  Name
+                  {t('contact.name')}
                 </label>
                 <input
                   id="c-name"
@@ -64,7 +65,7 @@ export function PublicContact() {
               </div>
               <div>
                 <label className="label" htmlFor="c-email">
-                  Email
+                  {t('contact.email')}
                 </label>
                 <input
                   id="c-email"
@@ -78,7 +79,7 @@ export function PublicContact() {
             </div>
             <div>
               <label className="label" htmlFor="c-subject">
-                Subject
+                {t('contact.subject')}
               </label>
               <input
                 id="c-subject"
@@ -90,7 +91,7 @@ export function PublicContact() {
             </div>
             <div>
               <label className="label" htmlFor="c-message">
-                Message
+                {t('contact.message')}
               </label>
               <textarea
                 id="c-message"
@@ -104,18 +105,23 @@ export function PublicContact() {
             </div>
             {error && <p className="text-sm text-down">{error}</p>}
             <button type="submit" disabled={state === 'sending'} className="btn-primary w-full">
-              {state === 'sending' ? 'Sending…' : 'Send message'}
+              {state === 'sending' ? t('contact.sending') : t('contact.send')}
             </button>
           </form>
         )}
 
         {supportEmail && (
           <p className="mt-6 text-center text-sm text-slate-500">
-            Or email us directly at{' '}
-            <a href={`mailto:${supportEmail}`} className="text-accent hover:underline">
-              {supportEmail}
-            </a>
-            .
+            <Trans
+              i18nKey="contact.emailUsDirectly"
+              values={{ email: supportEmail }}
+              components={{
+                emailLink: (
+                  // eslint-disable-next-line jsx-a11y/anchor-has-content -- Trans fills this from the translation string
+                  <a href={`mailto:${supportEmail}`} className="text-accent hover:underline" />
+                ),
+              }}
+            />
           </p>
         )}
       </main>

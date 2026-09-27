@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { useSettings } from '../store/settings';
@@ -39,6 +40,7 @@ type PaymentMethodSummary = {
  * skeleton, never a placeholder dressed up as the real thing.
  */
 export function Landing() {
+  const { t } = useTranslation();
   const [assets, setAssets] = useState<Asset[] | null>(null);
   const [sections, setSections] = useState<PublicHomepageSections | null>(null);
   const [faq, setFaq] = useState<FaqEntry[] | null>(null);
@@ -73,14 +75,14 @@ export function Landing() {
       .catch(() => setTournaments([]));
   }, []);
 
-  const hero = copyFor(sections, 'hero', 'Trade the next tick, not the next quarter');
+  const hero = copyFor(sections, 'hero', t('home.hero.title'));
 
   const settingsValues = useSettings((s) => s.values);
   const siteName = (settingsValues['general.siteName'] as string | undefined) ?? 'Quantex';
   const baseUrl = ((settingsValues['seo.canonicalBaseUrl'] as string | undefined) ?? '').replace(/\/$/, '');
   const metaDescription = settingsValues['seo.metaDescription'] as string | undefined;
   usePageMeta({
-    title: 'Fixed-payout trading on crypto, forex, stocks and more',
+    title: t('home.hero.title'),
     description: metaDescription,
     jsonLd: [
       organizationJsonLd({ siteName, baseUrl, description: metaDescription ?? '' }),
@@ -95,64 +97,64 @@ export function Landing() {
       <HeroSection copy={hero} />
 
       <MarketsStripSection
-        copy={copyFor(sections, 'markets_strip', 'Live markets, live payouts')}
+        copy={copyFor(sections, 'markets_strip', t('home.marketsStrip.fallbackTitle'))}
         assets={assets}
       />
-      <HowItWorksSection copy={copyFor(sections, 'how_it_works', 'Three steps, start to finish')} />
-      <PlatformShowcaseSection copy={copyFor(sections, 'platform_showcase', 'One terminal, every screen')} />
-      <FeaturesGridSection
-        copy={copyFor(sections, 'features_grid', 'Built for traders who watch the clock')}
+      <HowItWorksSection copy={copyFor(sections, 'how_it_works', t('home.howItWorks.fallbackTitle'))} />
+      <PlatformShowcaseSection
+        copy={copyFor(sections, 'platform_showcase', t('home.platformShowcase.fallbackTitle'))}
       />
-      <StatusLevelsSection
-        copy={copyFor(sections, 'status_levels', 'The more you trade, the more you keep')}
-      />
+      <FeaturesGridSection copy={copyFor(sections, 'features_grid', t('home.featuresGrid.fallbackTitle'))} />
+      <StatusLevelsSection copy={copyFor(sections, 'status_levels', t('home.statusLevels.fallbackTitle'))} />
       <TournamentsTeaserSection
-        copy={copyFor(sections, 'tournaments_teaser', 'Trade the leaderboard, not just the market')}
+        copy={copyFor(sections, 'tournaments_teaser', t('home.tournamentsTeaser.fallbackTitle'))}
         tournaments={tournaments}
       />
       <PaymentMethodsSection
-        copy={copyFor(sections, 'payment_methods', 'Deposit your way')}
+        copy={copyFor(sections, 'payment_methods', t('home.paymentMethods.fallbackTitle'))}
         methods={methods}
       />
-      <SecuritySection copy={copyFor(sections, 'security', 'Trade with your eyes open')} />
+      <SecuritySection copy={copyFor(sections, 'security', t('home.security.fallbackTitle'))} />
       <TestimonialsSection
-        copy={copyFor(sections, 'testimonials', 'What traders say')}
+        copy={copyFor(sections, 'testimonials', t('home.testimonials.fallbackTitle'))}
         testimonials={testimonials}
       />
-      <FaqAccordionSection copy={copyFor(sections, 'faq_accordion', 'Questions, answered')} entries={faq} />
-      <FinalCtaSection copy={copyFor(sections, 'final_cta', 'Your first trade is on the house')} />
+      <FaqAccordionSection
+        copy={copyFor(sections, 'faq_accordion', t('home.faq.fallbackTitle'))}
+        entries={faq}
+      />
+      <FinalCtaSection copy={copyFor(sections, 'final_cta', t('home.finalCta.fallbackTitle'))} />
       <SiteFooter copy={copyFor(sections, 'footer', 'Quantex')} />
     </div>
   );
 }
 
 function HeroSection({ copy }: { copy: SectionCopy }) {
+  const { t } = useTranslation();
   return (
     <section className="mx-auto max-w-6xl px-4 pb-14 pt-8 sm:pt-16">
       <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
         <div className="min-w-0">
-          <span className="chip bg-accent-soft text-accent">Fixed-payout trading</span>
+          <span className="chip bg-accent-soft text-accent">{t('home.hero.badge')}</span>
           <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight sm:text-5xl">{copy.title}</h1>
           {copy.subtitle && (
             <p className="mt-4 max-w-lg text-base leading-relaxed text-slate-400">{copy.subtitle}</p>
           )}
           <div className="mt-7 flex flex-wrap gap-3">
             <Link to="/register" className="btn-primary !px-5 !py-3">
-              Create free account
+              {t('common.createFreeAccount')}
             </Link>
             <Link to="/login" className="btn-ghost !px-5 !py-3">
-              I already have one
+              {t('common.iAlreadyHaveOne')}
             </Link>
           </div>
-          <p className="mt-4 text-xs text-slate-500">
-            No deposit required to use the $10,000 practice account.
-          </p>
+          <p className="mt-4 text-xs text-slate-500">{t('home.hero.noDeposit')}</p>
         </div>
 
         <div className="card overflow-hidden">
           <div className="border-b border-ink-600 px-4 py-3">
-            <p className="text-sm font-semibold">BTC/USDT · live</p>
-            <p className="text-xs text-slate-500">Real ticks from the platform's own feed</p>
+            <p className="text-sm font-semibold">{t('home.hero.liveLabel')}</p>
+            <p className="text-xs text-slate-500">{t('home.hero.liveCaption')}</p>
           </div>
           <div className="p-4">
             <HomeChart className="h-[160px] w-full" />

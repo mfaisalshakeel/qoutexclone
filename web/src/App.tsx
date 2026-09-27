@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
-import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
+import { Navigate, Route, BrowserRouter as Router, Routes, useLocation } from 'react-router-dom';
+import i18n from './i18n';
+import { applyDocumentDirection, isTranslatedRoute } from './i18n/config';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { RequireArea } from './components/admin/RequireArea';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -57,6 +59,17 @@ import { Wallet } from './pages/Wallet';
 import { useAuth } from './store/auth';
 import { useSettings } from './store/settings';
 
+/** Keeps the document's text direction correct as the trader moves between the
+ *  translated public site and the pages that stay English-only regardless of
+ *  the language they picked (see `isTranslatedRoute`). */
+function DirectionSync() {
+  const location = useLocation();
+  useEffect(() => {
+    applyDocumentDirection(isTranslatedRoute(location.pathname) ? i18n.language : 'en');
+  }, [location.pathname]);
+  return null;
+}
+
 export default function App() {
   const { bootstrap, user, ready } = useAuth();
   const loadSettings = useSettings((state) => state.load);
@@ -78,6 +91,7 @@ export default function App() {
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <ErrorBoundary>
+        <DirectionSync />
         <Routes>
           <Route path="/" element={ready && user ? <Navigate to="/trade" replace /> : <Landing />} />
           <Route path="/legal/:slug" element={<Legal />} />

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { api } from '../../lib/api';
 import { percent, price, untilShort } from '../../lib/format';
 import {
@@ -23,10 +24,10 @@ const TAB_LABEL = (tab: PickerTab) =>
 
 /** Every market on the platform, with its live payout — the same catalogue the terminal trades, open to anyone. */
 export function PublicMarkets() {
+  const { t } = useTranslation();
   usePageMeta({
-    title: 'Markets',
-    description:
-      'Currencies, crypto, commodities, stocks and indices, including OTC twins that trade around the clock. See every live payout before you trade.',
+    title: t('markets.title'),
+    description: t('markets.description'),
   });
 
   const [assets, setAssets] = useState<Asset[] | null>(null);
@@ -52,18 +53,15 @@ export function PublicMarkets() {
     <div className="min-h-dvh">
       <PublicHeader />
       <main className="mx-auto max-w-5xl px-4 pb-20 pt-4">
-        <h1 className="text-3xl font-bold tracking-tight">Markets</h1>
-        <p className="mt-2 max-w-2xl text-sm text-slate-400">
-          Currencies, crypto, commodities, stocks and indices, including OTC twins that trade around the
-          clock. Every payout shown here updates live, the same figure the ticket quotes.
-        </p>
+        <h1 className="text-3xl font-bold tracking-tight">{t('markets.title')}</h1>
+        <p className="mt-2 max-w-2xl text-sm text-slate-400">{t('markets.description')}</p>
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search markets"
-            aria-label="Search markets"
+            placeholder={t('markets.searchPlaceholder')}
+            aria-label={t('markets.searchPlaceholder')}
             className="field sm:max-w-xs"
           />
           <div role="tablist" aria-label="Market classes" className="flex flex-wrap gap-1">
@@ -81,12 +79,12 @@ export function PublicMarkets() {
               </button>
             ))}
           </div>
-          <label className="flex items-center gap-2 text-xs text-slate-500 sm:ml-auto">
-            Sort
+          <label className="flex items-center gap-2 text-xs text-slate-500 sm:ms-auto">
+            {t('markets.sort')}
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as SortKey)}
-              aria-label="Sort markets"
+              aria-label={t('markets.sort')}
               className="field !w-auto !py-1.5 text-xs"
             >
               {SORTS.map((key) => (
@@ -101,7 +99,7 @@ export function PublicMarkets() {
         <div className="card mt-5 divide-y divide-ink-700 overflow-hidden">
           {assets === null && <RowSkeletons rows={10} avatar rowClassName="p-4" />}
           {assets !== null && shown.length === 0 && (
-            <p className="p-6 text-center text-sm text-slate-500">No markets match “{query}”.</p>
+            <p className="p-6 text-center text-sm text-slate-500">{t('markets.noMatch', { query })}</p>
           )}
           {shown.map((asset) => (
             <div
@@ -115,17 +113,19 @@ export function PublicMarkets() {
                 <span className="flex items-center gap-2">
                   <span className="truncate text-sm font-semibold">{asset.pair.replace(' (OTC)', '')}</span>
                   {asset.isOtc && <span className="chip bg-accent-soft text-accent">OTC</span>}
-                  {!asset.isOpen && <span className="chip bg-ink-600 text-slate-400">closed</span>}
+                  {!asset.isOpen && (
+                    <span className="chip bg-ink-600 text-slate-400">{t('markets.closed')}</span>
+                  )}
                 </span>
                 <span className="block text-xs text-slate-500">
                   {asset.isOpen
                     ? asset.name.replace(' (OTC)', '')
                     : asset.nextOpen
-                      ? `Opens ${untilShort(asset.nextOpen)}`
-                      : 'Closed'}
+                      ? t('markets.opensIn', { time: untilShort(asset.nextOpen) })
+                      : t('markets.closed')}
                 </span>
               </span>
-              <span className="text-right">
+              <span className="text-end">
                 <span className="tabular block text-sm font-semibold">
                   {price(asset.price, asset.precision)}
                 </span>
@@ -146,7 +146,7 @@ export function PublicMarkets() {
 
         <div className="mt-8 text-center">
           <Link to="/register" className="btn-primary !px-6 !py-3">
-            Trade these markets
+            {t('markets.tradeTheseMarkets')}
           </Link>
         </div>
       </main>

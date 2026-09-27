@@ -1,0 +1,236 @@
+{
+  "common": {
+    "signIn": "Sign in",
+    "startTrading": "Start trading",
+    "createFreeAccount": "Create free account",
+    "iAlreadyHaveOne": "I already have one",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
+  },
+  "nav": {
+    "markets": "Markets",
+    "tournaments": "Tournaments",
+    "statusLevels": "Status levels",
+    "affiliate": "Affiliate",
+    "help": "Help",
+    "helpCentre": "Help centre",
+    "about": "About",
+    "contact": "Contact"
+  },
+  "footer": {
+    "riskWarningDefault": "Trading fixed-payout options carries risk and you can lose the money you put in.",
+    "allRightsReserved": "All rights reserved.",
+    "language": "Language",
+    "languageAriaLabel": "Interface language",
+    "translationOnTheWay": "Full {{language}} translation is on the way — the interface stays in English until then."
+  },
+  "legalLinks": {
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy",
+    "risk-disclosure": "Risk Disclosure",
+    "aml-kyc": "AML / KYC Policy",
+    "cookie-policy": "Cookie Policy"
+  },
+  "cookieConsent": {
+    "ariaLabel": "Cookie notice",
+    "message": "We use cookies to keep you signed in and remember your preferences. See our <link>Cookie Policy</link> for details.",
+    "accept": "Accept"
+  },
+  "home": {
+    "hero": {
+      "badge": "Fixed-payout trading",
+      "title": "Fixed-payout trading on crypto, forex, stocks and more",
+      "noDeposit": "No deposit required to use the $10,000 practice account.",
+      "liveLabel": "BTC/USDT · live",
+      "liveCaption": "Real ticks from the platform's own feed"
+    },
+    "marketsStrip": {
+      "fallbackTitle": "Live markets, live payouts",
+      "ariaLabel": "Live markets",
+      "loading": "Markets are loading — check back in a moment."
+    },
+    "howItWorks": {
+      "fallbackTitle": "Three steps, start to finish",
+      "step1": "Pick a market and a direction",
+      "step2": "Set your stake and an expiry",
+      "step3": "Watch it settle"
+    },
+    "platformShowcase": {
+      "fallbackTitle": "One terminal, every screen",
+      "desktopTerminal": "Desktop terminal",
+      "mobileTerminal": "Mobile terminal"
+    },
+    "featuresGrid": {
+      "fallbackTitle": "Built for traders who watch the clock",
+      "feature1Title": "Fast crypto deposits",
+      "feature1Body": "Fund with BTC, ETH or USDT and start trading within minutes.",
+      "feature2Title": "OTC markets, 24/7",
+      "feature2Body": "Broker-priced OTC twins never close, weekends included.",
+      "feature3Title": "20+ chart indicators",
+      "feature3Body": "SMA, RSI, MACD, Bollinger Bands and more, built into the terminal.",
+      "feature4Title": "Live tournaments",
+      "feature4Body": "Trade a fresh stack of chips against the field for a real prize pool.",
+      "feature5Title": "Free practice account",
+      "feature5Body": "$10,000 in simulated funds on the exact same engine as live trading.",
+      "feature6Title": "A mobile terminal that keeps up",
+      "feature6Body": "Every tool from the desktop terminal, reflowed for a phone."
+    },
+    "statusLevels": {
+      "fallbackTitle": "The more you trade, the more you keep",
+      "standard": "Standard",
+      "fromFirstTrade": "From your first trade",
+      "fromLifetimeDeposits": "From {{amount}} lifetime deposits",
+      "payoutBonus": "+{{pct}}% payout bonus",
+      "depositBonus": "+{{pct}}% deposit bonus",
+      "priorityWithdrawals": "Priority withdrawals"
+    },
+    "tournamentsTeaser": {
+      "fallbackTitle": "Trade the leaderboard, not just the market",
+      "empty": "New tournaments are announced regularly — check back soon, or create an account to be notified.",
+      "live": "Live",
+      "soon": "Soon",
+      "prizePool": "Prize pool {{amount}}",
+      "entered": "{{count}} entered",
+      "joinTournament": "Join a tournament"
+    },
+    "paymentMethods": {
+      "fallbackTitle": "Deposit your way",
+      "loading": "Payment methods are being configured."
+    },
+    "security": {
+      "fallbackTitle": "Trade with your eyes open"
+    },
+    "testimonials": {
+      "fallbackTitle": "What traders say",
+      "empty": "Trader stories are on their way."
+    },
+    "faq": {
+      "fallbackTitle": "Questions, answered",
+      "empty": "Answers are being written up — try Help & Support.",
+      "cantFindYours": "Can't find yours?",
+      "searchHelpCentre": "Search the help centre",
+      "or": "or",
+      "contactUs": "contact us"
+    },
+    "finalCta": {
+      "fallbackTitle": "Your first trade is on the house"
+    }
+  },
+  "markets": {
+    "title": "Markets",
+    "description": "Currencies, crypto, commodities, stocks and indices, including OTC twins that trade around the clock. Every payout shown here updates live, the same figure the ticket quotes.",
+    "searchPlaceholder": "Search markets",
+    "sort": "Sort",
+    "noMatch": "No markets match “{{query}}”.",
+    "closed": "closed",
+    "opensIn": "Opens {{time}}",
+    "tradeTheseMarkets": "Trade these markets"
+  },
+  "tournamentsOverview": {
+    "title": "Tournaments",
+    "description": "Trade the leaderboard, not just the market. Join a tournament, get a fresh stack of chips, and climb the board against everyone else entered — top finishers split a real prize pool.",
+    "step1Title": "Join with a click",
+    "step1Body": "No separate sign-up — join from your account with any entry fee the tournament asks for, or free.",
+    "step2Title": "Trade a fresh stack of chips",
+    "step2Body": "A tournament balance never mixes with your practice or live money. Trade it exactly like a live account.",
+    "step3Title": "Climb the board",
+    "step3Body": "The leaderboard ranks every entrant by chip balance in real time, until the tournament ends.",
+    "step4Title": "Top finishers split the pool",
+    "step4Body": "Prizes are paid out by finishing position once the tournament closes, straight to your live balance.",
+    "openRightNow": "Open right now",
+    "empty": "Nothing scheduled at the moment — new tournaments are announced regularly. Create an account to be notified when one opens.",
+    "starts": "Starts {{date}}",
+    "entered": "{{count}} entered",
+    "enteredOf": "{{count}} entered of {{max}}",
+    "prizePool": "{{amount}} pool",
+    "entryFee": "{{amount}} entry",
+    "freeEntry": "Free entry",
+    "createAccountToJoin": "Create an account to join",
+    "statusScheduled": "Starts soon",
+    "statusRunning": "Live now",
+    "statusFinished": "Finished",
+    "statusCancelled": "Cancelled"
+  },
+  "statusLevels": {
+    "title": "Status levels",
+    "description": "The more you trade, the more you keep. Status is based on your lifetime deposits and is applied automatically — no forms to fill in, no request to make.",
+    "notEnabled": "Status levels are not currently active on this platform.",
+    "fromFirstTrade": "From your first trade",
+    "fromLifetimeDeposits": "From {{amount}} lifetime deposits",
+    "payoutBonusOnEveryTrade": "+{{pct}}% payout bonus on every trade",
+    "depositBonusOnFuture": "+{{pct}}% bonus on future deposits",
+    "priorityWithdrawalReview": "Priority withdrawal review",
+    "howCalculatedTitle": "How it's calculated",
+    "howCalculatedBody": "Your level is based on how much you have deposited in total, ever — not your balance, and not what you have traded. It only ever moves up.",
+    "payoutBonusTitle": "What the payout bonus does",
+    "payoutBonusBody": "It is applied to your own position from your level alone. The market's own payout is unchanged, and nothing about it depends on what you or anyone else is trading.",
+    "startBuildingStatus": "Start building your status"
+  },
+  "affiliate": {
+    "title": "Affiliate programme",
+    "description": "Earn {{pct}}% of what the traders you refer deposit — for as long as they keep trading. No approval process, no minimum audience.",
+    "step1Title": "Create your account",
+    "step1Body": "Every account gets its own referral code, ready to share from day one.",
+    "step2Title": "Share your link",
+    "step2Body": "Send it to anyone — friends, a community, a following. There is no cap on how many people you can refer.",
+    "step3Title": "They trade, you earn",
+    "step3Body": "A commission on what they deposit lands in your own balance automatically, no monthly claim or minimum.",
+    "commissionTitle": "{{pct}}% commission, straight to your balance",
+    "commissionBody": "There is nothing to apply for and nothing to claim: once someone registers with your link and deposits, your commission is credited automatically. Your own account page shows every trader you've referred and what you've earned from each of them.",
+    "cta": "Create an account and get your link"
+  },
+  "help": {
+    "title": "Help centre",
+    "subtitle": "Answers to the questions traders ask most.",
+    "searchPlaceholder": "Search the help centre",
+    "noMatch": "No answers match “{{query}}”. Try a different search, or <contactLink>contact us</contactLink>.",
+    "contactLinkText": "contact us",
+    "stillStuckTitle": "Still stuck?",
+    "stillStuckBody": "Our support team can take it from here.",
+    "contactSupport": "Contact support"
+  },
+  "contact": {
+    "title": "Contact us",
+    "description": "Reach the Quantex support team directly.",
+    "signInPrompt": "Already have an account? Sign in and reach support directly for a faster answer that's tied to your own account.",
+    "sent": "Message sent.",
+    "sentBody": "We'll reply to the address you gave us.",
+    "name": "Name",
+    "email": "Email",
+    "subject": "Subject",
+    "message": "Message",
+    "send": "Send message",
+    "sending": "Sending…",
+    "emailUsDirectly": "Or email us directly at <emailLink>{{email}}</emailLink>.",
+    "genericError": "Could not send your message. Try again in a moment."
+  },
+  "about": {
+    "title": "About Quantex",
+    "intro1": "Quantex is a fixed-payout trading platform: pick a direction, set a stake, and know your exact profit before you trade. We built it around one idea — a trader should be able to see the whole shape of a decision, the risk and the reward, before they make it.",
+    "intro2": "The platform covers currencies, crypto, commodities, stocks and indices, including broker-priced OTC markets that trade around the clock. Every account starts with a free practice balance on the same engine as live trading, so there is a real way to learn the platform before any money is at risk.",
+    "valuesTitle": "What we build around",
+    "value1Title": "Prices belong to the market, not to your position",
+    "value1Body": "Our pricing engine never reads a trade, a position or an exposure to decide where a quote goes. What you are holding never moves the price of what you are holding.",
+    "value2Title": "Know the payout before you commit",
+    "value2Body": "Every trade shows its exact payout percentage before you confirm it, and that figure is locked in the moment your position opens — not adjusted after the fact.",
+    "value3Title": "Practice on the real thing",
+    "value3Body": "The practice account runs on the same engine, the same prices and the same terminal as live trading. What you learn there is what you will actually see.",
+    "riskTitle": "A serious risk warning, not a footnote",
+    "riskBody": "Fixed-payout trading is high-risk. You can lose your entire stake on a single trade, and past results never guarantee future ones. We put the risk warning where you'll actually read it — on every public page and in the terminal itself — because a platform that hides the downside is not one we would want to trade on either.",
+    "cta": "Try the practice account"
+  },
+  "notFound": {
+    "eyebrow": "404",
+    "title": "Page not found",
+    "body": "The page you're looking for doesn't exist, or the link that brought you here is out of date.",
+    "backHome": "Back to the homepage",
+    "reportIt": "Tell us what's broken"
+  },
+  "legal": {
+    "fallbackTitle": "Legal",
+    "notPublished": "This page has not been published yet.",
+    "backHome": "Back to the homepage",
+    "lastUpdated": "Last updated {{date}}",
+    "loadError": "Could not load this page."
+  }
+}
