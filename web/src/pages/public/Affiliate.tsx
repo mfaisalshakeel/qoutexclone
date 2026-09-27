@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useSettings } from '../../store/settings';
+import { usePageMeta } from '../../hooks/usePageMeta';
 import { PublicHeader } from '../../components/home/PublicHeader';
 import { SiteFooter } from '../../components/home/Sections';
 
@@ -20,6 +21,12 @@ const STEPS = [
 
 /** The referral programme, explained generically — the commission rate reads from the live platform setting. */
 export function PublicAffiliate() {
+  usePageMeta({
+    title: 'Affiliate programme',
+    description:
+      'Earn a commission on every trader you refer, credited automatically with no minimum audience.',
+  });
+
   const commissionPct =
     useSettings((s) => s.values['growth.referralCommissionPct'] as number | undefined) ?? 10;
 

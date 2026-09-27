@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, api } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
+import { usePageMeta } from '../hooks/usePageMeta';
 import { PublicHeader } from '../components/home/PublicHeader';
 import { SiteFooter } from '../components/home/Sections';
 import { dateTime } from '../lib/format';
@@ -32,6 +33,12 @@ export function Legal() {
         else setError(err instanceof ApiError ? err.message : 'Could not load this page');
       });
   }, [slug]);
+
+  usePageMeta({
+    title: page?.title ?? 'Legal',
+    description: page?.title ? `${page.title} — Quantex.` : undefined,
+    noindex: notFound,
+  });
 
   return (
     <div className="min-h-dvh">

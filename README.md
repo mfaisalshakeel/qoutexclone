@@ -115,6 +115,7 @@ npm run db:migrate                     # or: npm run db:push
 npm run seed
 npm run build
 npm start                              # serves the API and the web client on one port
+npm run prerender                      # optional: snapshots the public pages for crawlers, see below
 ```
 
 ### Creating the database
@@ -149,6 +150,27 @@ npm run typecheck
 
 In production `npm start` serves the built client from the API process, so the whole
 platform is one Node process plus MySQL, behind one domain and one port.
+
+### Prerendering for crawlers
+
+The public marketing pages (`/`, `/markets`, `/help`, the legal pages, and the rest of
+the public site) fetch their content client-side, same as everything else — a market's
+price, a testimonial, an FAQ answer are all live data, not something a build step can
+bake in once and leave stale. `npm run prerender` (`scripts/prerender.mjs`) opens each
+public route in a real headless browser against your **already-running** server, waits
+for it to finish loading, and saves the fully-rendered HTML to
+`web/dist/__prerendered__/`. The server then hands that snapshot to a recognised
+crawler (Googlebot, Bingbot, the social-preview bots) instead of the bare SPA shell it
+has no JavaScript engine to fill in — every other visitor keeps getting the live app,
+unchanged. Run it once after each deploy, pointed at the URL the server is actually
+answering on:
+
+```bash
+PRERENDER_BASE_URL=https://your-domain.example npm run prerender
+```
+
+It is not wired into `npm run build` or the Docker image on purpose — prerendering
+needs a live database and API behind it, which a build step does not have.
 
 ## Configuration
 

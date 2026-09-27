@@ -3,8 +3,11 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../store/auth';
 import { IconLogo } from '../components/Icons';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 export function Login() {
+  usePageMeta({ title: 'Sign in', noindex: true });
+
   const { login, submitSecondFactor, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation() as { state?: { from?: string } };

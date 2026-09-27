@@ -2,11 +2,14 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, api } from '../../lib/api';
 import { useSettings } from '../../store/settings';
+import { usePageMeta } from '../../hooks/usePageMeta';
 import { PublicHeader } from '../../components/home/PublicHeader';
 import { SiteFooter } from '../../components/home/Sections';
 
 /** A real, working contact form — a submission is delivered straight to the support inbox. */
 export function PublicContact() {
+  usePageMeta({ title: 'Contact us', description: 'Reach the Quantex support team directly.' });
+
   const supportEmail = useSettings((s) => s.values['general.supportEmail'] as string | undefined);
   const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' });
   const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');

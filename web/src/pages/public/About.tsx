@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { usePageMeta } from '../../hooks/usePageMeta';
 import { PublicHeader } from '../../components/home/PublicHeader';
 import { SiteFooter } from '../../components/home/Sections';
 
@@ -19,6 +20,11 @@ const VALUES = [
 
 /** Original copy about the product and how it approaches trading — no borrowed branding or screenshots. */
 export function PublicAbout() {
+  usePageMeta({
+    title: 'About',
+    description: 'What Quantex is, and the ideas we build the platform around.',
+  });
+
   return (
     <div className="min-h-dvh">
       <PublicHeader />

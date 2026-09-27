@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import { usePageMeta } from '../hooks/usePageMeta';
+import { useSettings } from '../store/settings';
+import { organizationJsonLd, websiteJsonLd } from '../lib/structuredData';
 import { HomeChart } from '../components/home/HomeChart';
 import { PublicHeader } from '../components/home/PublicHeader';
 import {
@@ -71,6 +74,19 @@ export function Landing() {
   }, []);
 
   const hero = copyFor(sections, 'hero', 'Trade the next tick, not the next quarter');
+
+  const settingsValues = useSettings((s) => s.values);
+  const siteName = (settingsValues['general.siteName'] as string | undefined) ?? 'Quantex';
+  const baseUrl = ((settingsValues['seo.canonicalBaseUrl'] as string | undefined) ?? '').replace(/\/$/, '');
+  const metaDescription = settingsValues['seo.metaDescription'] as string | undefined;
+  usePageMeta({
+    title: 'Fixed-payout trading on crypto, forex, stocks and more',
+    description: metaDescription,
+    jsonLd: [
+      organizationJsonLd({ siteName, baseUrl, description: metaDescription ?? '' }),
+      websiteJsonLd({ siteName, baseUrl }),
+    ],
+  });
 
   return (
     <div className="min-h-dvh">

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { dateTime, money } from '../../lib/format';
+import { usePageMeta } from '../../hooks/usePageMeta';
 import { PublicHeader } from '../../components/home/PublicHeader';
 import { SiteFooter } from '../../components/home/Sections';
 import { RowSkeletons } from '../../components/Skeleton';
@@ -35,6 +36,12 @@ const STATUS_LABEL: Record<Tournament['status'], string> = {
 
 /** What tournaments are and how they work, plus whatever is scheduled or running right now. */
 export function PublicTournamentsOverview() {
+  usePageMeta({
+    title: 'Tournaments',
+    description:
+      'Trade a fresh stack of chips against the field. Join a tournament and climb the leaderboard for a share of a real prize pool.',
+  });
+
   const [tournaments, setTournaments] = useState<Tournament[] | null>(null);
 
   useEffect(() => {

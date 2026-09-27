@@ -22,6 +22,7 @@ test.describe('content CMS', () => {
         .get('/api/admin/content/homepage', { headers: { authorization: `Bearer ${token}` } })
         .then(async (res) => (await res.json()).sections.find((s: { key: string }) => s.key === 'hero')),
     ]);
+    const question = `Is this a real question ${Date.now()}?`;
 
     try {
       // legal pages: a draft alone changes nothing until it is published
@@ -51,7 +52,6 @@ test.describe('content CMS', () => {
 
       // FAQ: added as a draft, then published from the list
       await page.getByRole('tab', { name: 'FAQ' }).click();
-      const question = `Is this a real question ${Date.now()}?`;
       await page.fill('#faq-category', 'Testing');
       await page.fill('#faq-question', question);
       await page.fill('#faq-answer', 'Yes, and here is the answer.');
@@ -65,6 +65,17 @@ test.describe('content CMS', () => {
 
       expect(errors).toEqual([]);
     } finally {
+      // the FAQ entry this test created and published is real, public content
+      // once live — delete it so it never lingers on the help centre
+      const faqEntries = await request
+        .get('/api/admin/content/faq', { headers: { authorization: `Bearer ${token}` } })
+        .then((res) => res.json());
+      const created = faqEntries.entries.find((e: { question: string }) => e.question === question);
+      if (created) {
+        await request.delete(`/api/admin/content/faq/${created.id}`, {
+          headers: { authorization: `Bearer ${token}` },
+        });
+      }
       await request.put('/api/admin/content/legal/terms', {
         headers: { authorization: `Bearer ${token}` },
         data: { body: originalLegal.draftBody },

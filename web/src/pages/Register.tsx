@@ -4,8 +4,14 @@ import { ApiError } from '../lib/api';
 import { useAuth } from '../store/auth';
 import { AuthShell } from './Login';
 import { PasswordMeter } from '../components/PasswordMeter';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 export function Register() {
+  usePageMeta({
+    title: 'Create your account',
+    description: 'Start with a free $10,000 practice balance, no deposit required.',
+  });
+
   const { register, loading } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();

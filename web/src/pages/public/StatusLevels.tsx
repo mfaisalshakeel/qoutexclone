@@ -1,11 +1,18 @@
 import { Link } from 'react-router-dom';
 import { money } from '../../lib/format';
 import { useSettings } from '../../store/settings';
+import { usePageMeta } from '../../hooks/usePageMeta';
 import { PublicHeader } from '../../components/home/PublicHeader';
 import { SiteFooter } from '../../components/home/Sections';
 
 /** How status levels work, built entirely from the same public settings the terminal reads. */
 export function PublicStatusLevels() {
+  usePageMeta({
+    title: 'Status levels',
+    description:
+      'The more you trade, the more you keep. See how payout bonuses and priority withdrawals unlock as you go.',
+  });
+
   const values = useSettings((s) => s.values);
   const enabled = values['growth.statusEnabled'] !== false;
 

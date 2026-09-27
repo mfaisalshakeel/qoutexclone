@@ -21,6 +21,7 @@ import contentRoutes from './routes/content.js';
 import webhookRoutes from './routes/webhooks.js';
 import { marketFeed } from './engine/feed.js';
 import { settings } from './services/settings.js';
+import { isCrawlerUserAgent } from './lib/crawlers.js';
 
 /**
  * Single-port deployment: when the web client has been built, the API serves
@@ -38,11 +39,26 @@ function serveWebClient(app: express.Express): void {
   const dist = candidates.find((dir) => fs.existsSync(path.join(dir, 'index.html')));
   if (!dist) return;
 
+  const prerenderedDir = path.join(dist, '__prerendered__');
   app.use(express.static(dist, { index: false, maxAge: '1h' }));
-  app.get(/^(?!\/api).*/, (_req, res) => {
+  app.get(/^(?!\/api).*/, (req, res) => {
+    // a recognised crawler gets whatever this route's own build-time
+    // snapshot last captured — the real, fully-loaded content, not an empty
+    // shell it has no JavaScript engine to fill in. Every other visitor
+    // gets the live SPA, unchanged.
+    if (isCrawlerUserAgent(req.get('user-agent'))) {
+      const snapshotName = req.path === '/' ? 'index' : req.path.replace(/^\//, '').replace(/\/$/, '');
+      const snapshotPath = path.resolve(prerenderedDir, `${snapshotName}.html`);
+      // req.path is untrusted; confirm the resolved file still lives inside
+      // the snapshot directory before ever touching the filesystem with it
+      if (snapshotPath.startsWith(prerenderedDir + path.sep) && fs.existsSync(snapshotPath)) {
+        res.sendFile(snapshotPath);
+        return;
+      }
+    }
     res.sendFile(path.join(dist, 'index.html'));
   });
-  log.boot.info({ dist }, 'serving web client');
+  log.boot.info({ dist, prerendered: fs.existsSync(prerenderedDir) }, 'serving web client');
 }
 
 /** A feed quieter than this means the price engine has stalled. */

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { renderMarkdown } from '../../lib/markdown';
+import { usePageMeta } from '../../hooks/usePageMeta';
+import { faqPageJsonLd } from '../../lib/structuredData';
 import { PublicHeader } from '../../components/home/PublicHeader';
 import { SiteFooter } from '../../components/home/Sections';
 import { RowSkeletons } from '../../components/Skeleton';
@@ -10,6 +12,14 @@ import type { FaqEntry } from '../../lib/types';
 /** The full help centre: every published FAQ entry, searchable and grouped by category. */
 export function PublicHelp() {
   const [entries, setEntries] = useState<FaqEntry[] | null>(null);
+
+  usePageMeta({
+    title: 'Help centre',
+    description: 'Answers to the questions traders ask most, searchable in one place.',
+    jsonLd: entries?.length
+      ? faqPageJsonLd(entries.map((e) => ({ question: e.question, answer: e.answer })))
+      : undefined,
+  });
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
 

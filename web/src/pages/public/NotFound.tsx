@@ -1,9 +1,12 @@
 import { Link } from 'react-router-dom';
+import { usePageMeta } from '../../hooks/usePageMeta';
 import { PublicHeader } from '../../components/home/PublicHeader';
 import { SiteFooter } from '../../components/home/Sections';
 
 /** A real 404 for an unknown route — replaces the old silent redirect-to-home. */
 export function NotFound() {
+  usePageMeta({ title: 'Page not found', description: 'This page does not exist.', noindex: true });
+
   return (
     <div className="min-h-dvh">
       <PublicHeader />

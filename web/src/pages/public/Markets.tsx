@@ -11,6 +11,7 @@ import {
   type PickerTab,
   type SortKey,
 } from '../../lib/watchlist';
+import { usePageMeta } from '../../hooks/usePageMeta';
 import { PublicHeader } from '../../components/home/PublicHeader';
 import { SiteFooter } from '../../components/home/Sections';
 import { RowSkeletons } from '../../components/Skeleton';
@@ -22,6 +23,12 @@ const TAB_LABEL = (tab: PickerTab) =>
 
 /** Every market on the platform, with its live payout — the same catalogue the terminal trades, open to anyone. */
 export function PublicMarkets() {
+  usePageMeta({
+    title: 'Markets',
+    description:
+      'Currencies, crypto, commodities, stocks and indices, including OTC twins that trade around the clock. See every live payout before you trade.',
+  });
+
   const [assets, setAssets] = useState<Asset[] | null>(null);
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<PickerTab>('ALL');
