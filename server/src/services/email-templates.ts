@@ -210,7 +210,11 @@ export function depositCredited(options: {
     : `Your ${options.currency} deposit on ${options.network} has confirmed and ${dollars(options.amount)} is on your live balance.${bonusLine}`;
   return {
     subject,
-    html: layout({ title: `Hello ${options.name},`, body: bodyHtml, action: { label: 'Open my wallet', url: options.url } }),
+    html: layout({
+      title: `Hello ${options.name},`,
+      body: bodyHtml,
+      action: { label: 'Open my wallet', url: options.url },
+    }),
     text: `Hello ${options.name},\n\n${bodyText}\n\n${options.url}`,
   };
 }
@@ -314,7 +318,13 @@ export function tournamentResult(options: {
   }
   const { subject, body } = overridden(
     'tournament-result',
-    { name: options.name, site, tournament: options.tournament, ordinal: ordinal!, prize: dollars(options.prize) },
+    {
+      name: options.name,
+      site,
+      tournament: options.tournament,
+      ordinal: ordinal!,
+      prize: dollars(options.prize),
+    },
     `You finished ${ordinal} in ${options.tournament}`,
     `You finished ${ordinal} in ${options.tournament} and ${dollars(options.prize)} has been paid to your live balance.`,
   );
@@ -341,6 +351,32 @@ export function adminMessage(options: { name: string; subject: string; body: str
     subject: options.subject,
     html: layout({ title: `Hello ${options.name},`, body: paragraphs }),
     text: `Hello ${options.name},\n\n${options.body}`,
+  };
+}
+
+/**
+ * A public Contact page submission, addressed to the support inbox rather
+ * than a trader. Not overridable copy: this is a plumbing message between
+ * the platform and its own operator, not a template a CMS override should
+ * be able to reword.
+ */
+export function contactMessage(options: {
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+}): RenderedEmail {
+  const paragraphs = options.message
+    .split(/\n{2,}/)
+    .map((p) => `<p>${escape(p).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+  return {
+    subject: `Contact form: ${options.subject}`,
+    html: layout({
+      title: `New message from ${escape(options.name)}`,
+      body: `<p>From: ${escape(options.name)} &lt;${escape(options.email)}&gt;</p>${paragraphs}`,
+    }),
+    text: `From: ${options.name} <${options.email}>\n\n${options.message}`,
   };
 }
 

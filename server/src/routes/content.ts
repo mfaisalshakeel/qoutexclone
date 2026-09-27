@@ -1,4 +1,6 @@
+import rateLimit from 'express-rate-limit';
 import { Router } from 'express';
+import { z } from 'zod';
 import { notFound, wrap } from '../lib/errors.js';
 import {
   activeAnnouncements,
@@ -9,6 +11,9 @@ import {
   publicTestimonials,
 } from '../services/content.js';
 import { listMethods } from '../services/payments.js';
+import { contactMessage } from '../services/email-templates.js';
+import { sendMail } from '../services/mailer.js';
+import { settings } from '../services/settings.js';
 
 /**
  * Public, unauthenticated content: everything the marketing site and help
@@ -71,6 +76,35 @@ router.get(
         network: m.network,
       })),
     });
+  }),
+);
+
+const contactLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: { code: 'rate_limited', message: 'Too many messages sent, try again later' } },
+});
+
+const contactSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  email: z.string().trim().email().max(160),
+  subject: z.string().trim().min(1).max(200),
+  message: z.string().trim().min(10).max(4_000),
+});
+
+router.post(
+  '/contact',
+  contactLimiter,
+  wrap(async (req, res) => {
+    const body = contactSchema.parse(req.body);
+    await sendMail({
+      to: settings.get('general.supportEmail'),
+      template: 'contact-form',
+      ...contactMessage(body),
+    });
+    res.status(202).json({ ok: true });
   }),
 );
 

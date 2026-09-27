@@ -52,6 +52,14 @@ test.describe('responsive shell', () => {
       '/verify-email',
       '/legal/terms',
       '/legal/privacy',
+      '/markets',
+      '/tournaments/overview',
+      '/status',
+      '/affiliate',
+      '/help',
+      '/contact',
+      '/about',
+      '/this-page-does-not-exist',
     ]) {
       await page.goto(path);
       await page.waitForLoadState('networkidle');

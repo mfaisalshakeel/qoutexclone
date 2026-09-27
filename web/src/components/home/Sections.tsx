@@ -426,8 +426,12 @@ export function FaqAccordionSection({ copy, entries }: { copy: SectionCopy; entr
         </div>
         <p className="mt-6 text-center text-sm text-slate-500">
           Can't find yours?{' '}
-          <Link to="/register" className="text-accent hover:underline">
-            Sign in to reach support
+          <Link to="/help" className="text-accent hover:underline">
+            Search the help centre
+          </Link>{' '}
+          or{' '}
+          <Link to="/contact" className="text-accent hover:underline">
+            contact us
           </Link>
           .
         </p>
@@ -457,6 +461,16 @@ export function FinalCtaSection({ copy }: { copy: SectionCopy }) {
 
 /* ----------------------------------- footer ----------------------------------- */
 
+const SITE_LINKS: { to: string; label: string }[] = [
+  { to: '/markets', label: 'Markets' },
+  { to: '/tournaments/overview', label: 'Tournaments' },
+  { to: '/status', label: 'Status levels' },
+  { to: '/affiliate', label: 'Affiliate' },
+  { to: '/help', label: 'Help centre' },
+  { to: '/about', label: 'About' },
+  { to: '/contact', label: 'Contact' },
+];
+
 const LEGAL_LINKS: { slug: string; label: string }[] = [
   { slug: 'terms', label: 'Terms of Service' },
   { slug: 'privacy', label: 'Privacy Policy' },
@@ -475,7 +489,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
   hi: 'हिन्दी',
 };
 
-export function SiteFooter({ copy }: { copy: SectionCopy }) {
+export function SiteFooter({ copy = EMPTY_COPY }: { copy?: SectionCopy }) {
   const values = useSettings((s) => s.values);
   const languages = (values['localisation.enabledLanguages'] as string[] | undefined) ?? ['en'];
   const [chosen, setChosen] = useState(languages[0] ?? 'en');
@@ -487,14 +501,18 @@ export function SiteFooter({ copy }: { copy: SectionCopy }) {
           {copy.body ?? 'Trading fixed-payout options carries risk and you can lose the money you put in.'}
         </p>
         <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-400">
+          {SITE_LINKS.map((link) => (
+            <Link key={link.to} to={link.to} className="hover:text-slate-200 hover:underline">
+              {link.label}
+            </Link>
+          ))}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-400">
           {LEGAL_LINKS.map((link) => (
             <Link key={link.slug} to={`/legal/${link.slug}`} className="hover:text-slate-200 hover:underline">
               {link.label}
             </Link>
           ))}
-          <a href="#faq" className="hover:text-slate-200 hover:underline">
-            Help centre
-          </a>
         </div>
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-slate-500">

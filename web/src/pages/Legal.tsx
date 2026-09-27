@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, api } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
-import { IconLogo } from '../components/Icons';
+import { PublicHeader } from '../components/home/PublicHeader';
+import { SiteFooter } from '../components/home/Sections';
 import { dateTime } from '../lib/format';
 
 interface PublicLegalPage {
@@ -34,12 +35,7 @@ export function Legal() {
 
   return (
     <div className="min-h-dvh">
-      <header className="mx-auto flex max-w-3xl items-center px-4 py-5">
-        <Link to="/" className="flex items-center gap-2">
-          <IconLogo className="h-8 w-8" />
-          <span className="text-lg font-bold tracking-tight">Quantex</span>
-        </Link>
-      </header>
+      <PublicHeader />
 
       <main className="mx-auto max-w-3xl px-4 pb-20">
         {error && (
@@ -74,6 +70,8 @@ export function Legal() {
           </article>
         )}
       </main>
+
+      <SiteFooter />
     </div>
   );
 }

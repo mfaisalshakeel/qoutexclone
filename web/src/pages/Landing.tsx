@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import { IconLogo } from '../components/Icons';
 import { HomeChart } from '../components/home/HomeChart';
+import { PublicHeader } from '../components/home/PublicHeader';
 import {
   FaqAccordionSection,
   FeaturesGridSection,
@@ -74,20 +74,7 @@ export function Landing() {
 
   return (
     <div className="min-h-dvh">
-      <header className="mx-auto flex max-w-6xl items-center px-4 py-5">
-        <span className="flex items-center gap-2">
-          <IconLogo className="h-8 w-8" />
-          <span className="text-lg font-bold tracking-tight">Quantex</span>
-        </span>
-        <nav className="ml-auto flex items-center gap-2">
-          <Link to="/login" className="btn-ghost !px-3 !py-2">
-            Sign in
-          </Link>
-          <Link to="/register" className="btn-primary !px-3 !py-2">
-            Start trading
-          </Link>
-        </nav>
-      </header>
+      <PublicHeader />
 
       <HeroSection copy={hero} />
 

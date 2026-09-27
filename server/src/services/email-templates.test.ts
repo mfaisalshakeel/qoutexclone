@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   adminMessage,
+  contactMessage,
   depositCredited,
   kycResult,
   newDeviceAlert,
@@ -124,7 +125,11 @@ describe('templates', () => {
 
 describe('adminMessage', () => {
   it('carries the subject and body an admin wrote, verbatim in the text version', () => {
-    const message = adminMessage({ name: 'Amelia', subject: 'About your account', body: 'Everything checks out.' });
+    const message = adminMessage({
+      name: 'Amelia',
+      subject: 'About your account',
+      body: 'Everything checks out.',
+    });
     expect(message.subject).toBe('About your account');
     expect(message.html).toContain('<html');
     expect(message.text).toContain('Everything checks out.');
@@ -136,6 +141,33 @@ describe('adminMessage', () => {
       name: 'Amelia',
       subject: 'Note',
       body: 'First line.\n\n<script>alert(1)</script>',
+    });
+    expect(message.html).not.toContain('<script>');
+    expect(message.html).toContain('&lt;script&gt;');
+    expect(message.html).toContain('First line.');
+  });
+});
+
+describe('contactMessage', () => {
+  it('carries the visitor identity and message, escaped where a person typed it', () => {
+    const message = contactMessage({
+      name: 'Amelia',
+      email: 'amelia@example.test',
+      subject: 'Question about deposits',
+      message: 'How long does a crypto deposit take?',
+    });
+    expect(message.subject).toBe('Contact form: Question about deposits');
+    expect(message.html).toContain('Amelia');
+    expect(message.html).toContain('amelia@example.test');
+    expect(message.text).toContain('How long does a crypto deposit take?');
+  });
+
+  it('escapes what a visitor typed, keeping paragraph breaks', () => {
+    const message = contactMessage({
+      name: '<script>alert(1)</script>',
+      email: 'x@example.test',
+      subject: 'Hi',
+      message: 'First line.\n\n<script>alert(2)</script>',
     });
     expect(message.html).not.toContain('<script>');
     expect(message.html).toContain('&lt;script&gt;');

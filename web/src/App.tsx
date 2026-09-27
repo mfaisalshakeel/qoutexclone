@@ -33,6 +33,15 @@ import { History } from './pages/History';
 import { Leaderboard } from './pages/Leaderboard';
 import { Landing } from './pages/Landing';
 import { Legal } from './pages/Legal';
+import { PublicMarkets } from './pages/public/Markets';
+import { PublicTournamentsOverview } from './pages/public/TournamentsOverview';
+import { PublicStatusLevels } from './pages/public/StatusLevels';
+import { PublicAffiliate } from './pages/public/Affiliate';
+import { PublicHelp } from './pages/public/Help';
+import { PublicContact } from './pages/public/Contact';
+import { PublicAbout } from './pages/public/About';
+import { NotFound } from './pages/public/NotFound';
+import { CookieConsent } from './components/home/CookieConsent';
 import { ForgotPassword, ResetPassword } from './pages/ForgotPassword';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
@@ -72,6 +81,13 @@ export default function App() {
         <Routes>
           <Route path="/" element={ready && user ? <Navigate to="/trade" replace /> : <Landing />} />
           <Route path="/legal/:slug" element={<Legal />} />
+          <Route path="/markets" element={<PublicMarkets />} />
+          <Route path="/tournaments/overview" element={<PublicTournamentsOverview />} />
+          <Route path="/status" element={<PublicStatusLevels />} />
+          <Route path="/affiliate" element={<PublicAffiliate />} />
+          <Route path="/help" element={<PublicHelp />} />
+          <Route path="/contact" element={<PublicContact />} />
+          <Route path="/about" element={<PublicAbout />} />
           <Route path="/login" element={ready && user ? <Navigate to="/trade" replace /> : <Login />} />
           <Route path="/register" element={ready && user ? <Navigate to="/trade" replace /> : <Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -160,8 +176,9 @@ export default function App() {
             <Route path="audit" element={<RequireArea area="settings"><AdminAudit /></RequireArea>} />
           </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
+        <CookieConsent />
       </ErrorBoundary>
     </Router>
   );
