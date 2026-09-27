@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import compression from 'compression';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
@@ -70,17 +71,22 @@ export function createApp() {
 
   app.set('trust proxy', 1);
   app.use(requestLog);
+  // gzip/brotli every response this process sends — the built JS bundles are
+  // the biggest win (roughly a third of their raw size over the wire), and it
+  // costs nothing dynamic content wasn't already going to pay in bandwidth
+  app.use(compression());
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },
-      // the single-port build serves the SPA from here: allow its socket,
-      // Google Fonts and canvas-generated images
+      // the single-port build serves the SPA from here: allow its socket and
+      // canvas-generated images. Fonts are self-hosted (see web/src/index.css),
+      // so no third-party font origin needs to be allowed any more.
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-          fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          fontSrc: ["'self'", 'data:'],
           imgSrc: ["'self'", 'data:', 'blob:'],
           connectSrc: ["'self'", 'ws:', 'wss:'],
           objectSrc: ["'none'"],

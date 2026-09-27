@@ -52,7 +52,7 @@ export function CookieConsent() {
           <Trans
             i18nKey="cookieConsent.message"
             components={{
-              link: <Link to="/legal/cookie-policy" className="text-accent hover:underline" />,
+              policyLink: <Link to="/legal/cookie-policy" className="text-accent hover:underline" />,
             }}
           />
         </p>

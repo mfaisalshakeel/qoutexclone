@@ -138,7 +138,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **Meta.** Per-route title, description, canonical, Open Graph and Twitter tags, generated from CMS/settings. JSON-LD for Organization, WebSite (with SearchAction) and FAQPage.
 - [x] **`/sitemap.xml` and `/robots.txt`** are generated from routes and settings. Clean URLs, correct status codes, and `hreflang` when multiple languages are enabled.
 - [x] **Internationalisation.** i18n framework across app and site, with English complete and at least one more language wired end to end (RTL-safe layout).
-- [ ] **Performance and quality.** Lighthouse mobile on the homepage scores ≥ 90 for Performance, Accessibility, Best Practices and SEO (record the scores in PROGRESS). Images are optimised (AVIF/WebP, sizes), fonts preloaded, code split per route, and there's no CLS from late-loading content.
+- [x] **Performance and quality.** Lighthouse mobile on the homepage scores ≥ 90 for Performance, Accessibility, Best Practices and SEO (record the scores in PROGRESS). Images are optimised (AVIF/WebP, sizes), fonts preloaded, code split per route, and there's no CLS from late-loading content.
 
 ## Phase 8 — Hardening and release
 

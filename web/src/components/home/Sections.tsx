@@ -13,20 +13,35 @@ export interface SectionCopy {
   title: string | null;
   subtitle: string | null;
   body: string | null;
+  /** True until the CMS fetch resolves. A skeleton line holds the subtitle/body's
+   *  rough shape while `true`, so a section published with either never shifts the
+   *  layout of everything below it the moment its copy arrives — the same "no CLS
+   *  from late-loading content" rule the rest of the page's own skeletons follow. */
+  loading: boolean;
 }
 
-const EMPTY_COPY: SectionCopy = { title: null, subtitle: null, body: null };
+const EMPTY_COPY: Omit<SectionCopy, 'loading'> = { title: null, subtitle: null, body: null };
 
 /** Section copy comes from the CMS; this only fills a gap left by a section nobody has published yet. */
 export function copyFor(
-  sections: Record<string, SectionCopy> | null,
+  sections: Record<string, Omit<SectionCopy, 'loading'>> | null,
   key: string,
   fallbackTitle: string,
 ): SectionCopy {
-  return sections?.[key] ?? { ...EMPTY_COPY, title: fallbackTitle };
+  if (sections === null) return { ...EMPTY_COPY, title: fallbackTitle, loading: true };
+  return { ...(sections[key] ?? { ...EMPTY_COPY, title: fallbackTitle }), loading: false };
 }
 
-function Prose({ body, className = '' }: { body: string | null; className?: string }) {
+function Prose({
+  body,
+  loading = false,
+  className = '',
+}: {
+  body: string | null;
+  loading?: boolean;
+  className?: string;
+}) {
+  if (loading) return <div aria-hidden className={`skeleton h-16 ${className}`} />;
   if (!body) return null;
   return (
     <div
@@ -36,11 +51,19 @@ function Prose({ body, className = '' }: { body: string | null; className?: stri
   );
 }
 
+export function SectionSubtitle({ copy, center = true }: { copy: SectionCopy; center?: boolean }) {
+  if (copy.loading) {
+    return <div aria-hidden className={`skeleton mt-3 h-5 w-2/3 ${center ? 'mx-auto' : ''}`} />;
+  }
+  if (!copy.subtitle) return null;
+  return <p className="mt-3 text-base text-slate-400">{copy.subtitle}</p>;
+}
+
 function SectionHead({ copy, center = true }: { copy: SectionCopy; center?: boolean }) {
   return (
     <div className={center ? 'mx-auto max-w-2xl text-center' : 'max-w-2xl'}>
       <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{copy.title}</h2>
-      {copy.subtitle && <p className="mt-3 text-base text-slate-400">{copy.subtitle}</p>}
+      <SectionSubtitle copy={copy} center={center} />
     </div>
   );
 }
@@ -52,7 +75,7 @@ export function MarketsStripSection({ copy, assets }: { copy: SectionCopy; asset
   return (
     <section className="mx-auto max-w-6xl px-4 py-16">
       <SectionHead copy={copy} />
-      <Prose body={copy.body} className="mx-auto mt-2 max-w-2xl text-center" />
+      <Prose body={copy.body} loading={copy.loading} className="mx-auto mt-2 max-w-2xl text-center" />
       <div className="card mt-8 overflow-hidden">
         <ul
           aria-label={t('home.marketsStrip.ariaLabel')}
@@ -111,7 +134,7 @@ export function HowItWorksSection({ copy }: { copy: SectionCopy }) {
             </div>
           ))}
         </div>
-        {copy.body && <Prose body={copy.body} className="mx-auto mt-6 max-w-2xl text-center" />}
+        <Prose body={copy.body} loading={copy.loading} className="mx-auto mt-6 max-w-2xl text-center" />
       </div>
     </section>
   );
@@ -126,7 +149,7 @@ export function PlatformShowcaseSection({ copy }: { copy: SectionCopy }) {
       <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
         <div className="min-w-0">
           <SectionHead copy={copy} center={false} />
-          {copy.body && <Prose body={copy.body} className="mt-4" />}
+          <Prose body={copy.body} loading={copy.loading} className="mt-4" />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="card aspect-[4/3] min-w-0 p-4">
@@ -291,7 +314,7 @@ export function PaymentMethodsSection({
   return (
     <section className="mx-auto max-w-6xl px-4 py-16">
       <SectionHead copy={copy} />
-      <Prose body={copy.body} className="mx-auto mt-2 max-w-2xl text-center" />
+      <Prose body={copy.body} loading={copy.loading} className="mx-auto mt-2 max-w-2xl text-center" />
       <div className="mt-8 flex flex-wrap justify-center gap-3">
         {methods === null &&
           Array.from({ length: 4 }, (_, i) => <div key={i} aria-hidden className="skeleton h-11 w-32" />)}
@@ -321,7 +344,7 @@ export function SecuritySection({ copy }: { copy: SectionCopy }) {
     <section className="border-y border-ink-700 bg-ink-800/40">
       <div className="mx-auto max-w-3xl px-4 py-16 text-center">
         <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{copy.title}</h2>
-        <Prose body={copy.body} className="mt-4" />
+        <Prose body={copy.body} loading={copy.loading} className="mt-4" />
       </div>
     </section>
   );
@@ -445,7 +468,7 @@ export function FinalCtaSection({ copy }: { copy: SectionCopy }) {
   return (
     <section className="mx-auto max-w-4xl px-4 py-20 text-center">
       <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{copy.title}</h2>
-      {copy.subtitle && <p className="mt-3 text-base text-slate-400">{copy.subtitle}</p>}
+      <SectionSubtitle copy={copy} />
       <div className="mt-7 flex flex-wrap justify-center gap-3">
         <Link to="/register" className="btn-primary !px-6 !py-3">
           {t('common.createFreeAccount')}
@@ -488,7 +511,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
   hi: 'हिन्दी',
 };
 
-export function SiteFooter({ copy = EMPTY_COPY }: { copy?: SectionCopy }) {
+export function SiteFooter({ copy = { ...EMPTY_COPY, loading: false } }: { copy?: SectionCopy }) {
   const { t, i18n } = useTranslation();
   const values = useSettings((s) => s.values);
   const languages = (values['localisation.enabledLanguages'] as string[] | undefined) ?? ['en'];

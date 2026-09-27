@@ -94,36 +94,42 @@ export function Landing() {
     <div className="min-h-dvh">
       <PublicHeader />
 
-      <HeroSection copy={hero} />
+      <main>
+        <HeroSection copy={hero} />
 
-      <MarketsStripSection
-        copy={copyFor(sections, 'markets_strip', t('home.marketsStrip.fallbackTitle'))}
-        assets={assets}
-      />
-      <HowItWorksSection copy={copyFor(sections, 'how_it_works', t('home.howItWorks.fallbackTitle'))} />
-      <PlatformShowcaseSection
-        copy={copyFor(sections, 'platform_showcase', t('home.platformShowcase.fallbackTitle'))}
-      />
-      <FeaturesGridSection copy={copyFor(sections, 'features_grid', t('home.featuresGrid.fallbackTitle'))} />
-      <StatusLevelsSection copy={copyFor(sections, 'status_levels', t('home.statusLevels.fallbackTitle'))} />
-      <TournamentsTeaserSection
-        copy={copyFor(sections, 'tournaments_teaser', t('home.tournamentsTeaser.fallbackTitle'))}
-        tournaments={tournaments}
-      />
-      <PaymentMethodsSection
-        copy={copyFor(sections, 'payment_methods', t('home.paymentMethods.fallbackTitle'))}
-        methods={methods}
-      />
-      <SecuritySection copy={copyFor(sections, 'security', t('home.security.fallbackTitle'))} />
-      <TestimonialsSection
-        copy={copyFor(sections, 'testimonials', t('home.testimonials.fallbackTitle'))}
-        testimonials={testimonials}
-      />
-      <FaqAccordionSection
-        copy={copyFor(sections, 'faq_accordion', t('home.faq.fallbackTitle'))}
-        entries={faq}
-      />
-      <FinalCtaSection copy={copyFor(sections, 'final_cta', t('home.finalCta.fallbackTitle'))} />
+        <MarketsStripSection
+          copy={copyFor(sections, 'markets_strip', t('home.marketsStrip.fallbackTitle'))}
+          assets={assets}
+        />
+        <HowItWorksSection copy={copyFor(sections, 'how_it_works', t('home.howItWorks.fallbackTitle'))} />
+        <PlatformShowcaseSection
+          copy={copyFor(sections, 'platform_showcase', t('home.platformShowcase.fallbackTitle'))}
+        />
+        <FeaturesGridSection
+          copy={copyFor(sections, 'features_grid', t('home.featuresGrid.fallbackTitle'))}
+        />
+        <StatusLevelsSection
+          copy={copyFor(sections, 'status_levels', t('home.statusLevels.fallbackTitle'))}
+        />
+        <TournamentsTeaserSection
+          copy={copyFor(sections, 'tournaments_teaser', t('home.tournamentsTeaser.fallbackTitle'))}
+          tournaments={tournaments}
+        />
+        <PaymentMethodsSection
+          copy={copyFor(sections, 'payment_methods', t('home.paymentMethods.fallbackTitle'))}
+          methods={methods}
+        />
+        <SecuritySection copy={copyFor(sections, 'security', t('home.security.fallbackTitle'))} />
+        <TestimonialsSection
+          copy={copyFor(sections, 'testimonials', t('home.testimonials.fallbackTitle'))}
+          testimonials={testimonials}
+        />
+        <FaqAccordionSection
+          copy={copyFor(sections, 'faq_accordion', t('home.faq.fallbackTitle'))}
+          entries={faq}
+        />
+        <FinalCtaSection copy={copyFor(sections, 'final_cta', t('home.finalCta.fallbackTitle'))} />
+      </main>
       <SiteFooter copy={copyFor(sections, 'footer', 'Quantex')} />
     </div>
   );
@@ -137,8 +143,12 @@ function HeroSection({ copy }: { copy: SectionCopy }) {
         <div className="min-w-0">
           <span className="chip bg-accent-soft text-accent">{t('home.hero.badge')}</span>
           <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight sm:text-5xl">{copy.title}</h1>
-          {copy.subtitle && (
-            <p className="mt-4 max-w-lg text-base leading-relaxed text-slate-400">{copy.subtitle}</p>
+          {copy.loading ? (
+            <div aria-hidden className="skeleton mt-4 h-6 w-full max-w-lg" />
+          ) : (
+            copy.subtitle && (
+              <p className="mt-4 max-w-lg text-base leading-relaxed text-slate-400">{copy.subtitle}</p>
+            )
           )}
           <div className="mt-7 flex flex-wrap gap-3">
             <Link to="/register" className="btn-primary !px-5 !py-3">
@@ -159,10 +169,16 @@ function HeroSection({ copy }: { copy: SectionCopy }) {
           <div className="p-4">
             <HomeChart className="h-[160px] w-full" />
           </div>
-          {copy.body && (
-            <p className="border-t border-ink-700 px-4 py-3 text-xs leading-relaxed text-slate-500">
-              {copy.body}
-            </p>
+          {copy.loading ? (
+            <div className="border-t border-ink-700 px-4 py-3">
+              <div aria-hidden className="skeleton h-4 w-3/4" />
+            </div>
+          ) : (
+            copy.body && (
+              <p className="border-t border-ink-700 px-4 py-3 text-xs leading-relaxed text-slate-500">
+                {copy.body}
+              </p>
+            )
           )}
         </div>
       </div>
