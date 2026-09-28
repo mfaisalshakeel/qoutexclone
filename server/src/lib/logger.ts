@@ -52,4 +52,5 @@ export const log = {
   notify: logger.child({ component: 'notify' }),
   auth: logger.child({ component: 'auth' }),
   mail: logger.child({ component: 'mail' }),
+  pubsub: logger.child({ component: 'pubsub' }),
 };

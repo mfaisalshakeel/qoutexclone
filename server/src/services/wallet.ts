@@ -51,15 +51,32 @@ function balanceField(accountType: AccountType): 'demoBalance' | 'realBalance' {
  * Single choke point for every balance change: applies the delta, refuses to
  * overdraw, and writes the matching ledger row. Always call inside a
  * `prisma.$transaction` so balance and ledger move together.
+ *
+ * The balance read below is `SELECT ... FOR UPDATE`, not a plain read. MySQL's
+ * default REPEATABLE READ isolation gives a plain `SELECT` inside a
+ * transaction a snapshot taken when the transaction started — it does not
+ * block a concurrent transaction from reading the same stale snapshot, so two
+ * trades staking the same account at once could each compute "current minus
+ * my stake" from the same before-either-committed number and the second
+ * `UPDATE` would silently overwrite the first's, losing a debit or a credit
+ * with no error at all (not even Prisma's own P2034: that only fires for a
+ * conflict InnoDB's deadlock/serialization detector actually catches, which a
+ * lost update like this one is not guaranteed to be). `FOR UPDATE` takes a
+ * real row lock on the read, so a second concurrent call blocks until the
+ * first's transaction resolves and then reads the value it actually left
+ * behind — the ordinary, correct way to serialise a read-modify-write in SQL.
+ * Found by the "Scale" load test at 1,000 concurrent traders; a unit test
+ * cannot reproduce it; `__tests__/integration/scale.test.ts` proves the fix
+ * with real concurrent database transactions.
  */
 export async function applyLedger(tx: TxClient, entry: LedgerEntry): Promise<number> {
-  const user = await tx.user.findUnique({
-    where: { id: entry.userId },
-    select: { demoBalance: true, realBalance: true },
-  });
+  const field = balanceField(entry.accountType);
+  const rows = await tx.$queryRaw<{ demoBalance: number; realBalance: number }[]>`
+    SELECT demoBalance, realBalance FROM User WHERE id = ${entry.userId} FOR UPDATE
+  `;
+  const user = rows[0];
   if (!user) throw new AppError(404, 'Account not found', 'not_found');
 
-  const field = balanceField(entry.accountType);
   const current = user[field];
   const next = current + entry.amount;
   if (next < 0) {

@@ -2,6 +2,7 @@ import type { ErrorRequestHandler, RequestHandler } from 'express';
 import multer from 'multer';
 import { ZodError } from 'zod';
 import { AppError } from '../lib/errors.js';
+import { isConflict } from '../lib/retry.js';
 import { env } from '../env.js';
 import { logger } from '../lib/logger.js';
 
@@ -30,6 +31,17 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
         ? `That file is larger than the ${env.maxUploadMb}MB limit`
         : 'Could not read that upload';
     res.status(400).json({ error: { code: 'invalid_upload', message } });
+    return;
+  }
+  // A write that raced another update on the same row and lost — see
+  // lib/retry.ts. Callers on the hot money paths already retry this a few
+  // times; this is only the residual case under contention severe enough to
+  // exhaust those attempts too. Either way the transaction rolled back
+  // cleanly, so this is exactly "try again", not a server fault.
+  if (isConflict(err)) {
+    res
+      .status(409)
+      .json({ error: { code: 'write_conflict', message: 'That collided with another update — try again' } });
     return;
   }
   // 500s are the only errors worth a stack trace; the rest are client mistakes

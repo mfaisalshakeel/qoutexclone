@@ -13,6 +13,7 @@ import { assertCanStake } from './responsible.js';
 import { marketHours, otcAlternative } from './market-hours.js';
 import { payouts } from './payouts.js';
 import { assessStake } from './risk.js';
+import { retryOnConflict } from '../lib/retry.js';
 import {
   clockSlots,
   validateAgainstClose,
@@ -174,7 +175,11 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
   // inside a contest trades on the same terms.
   const config = statusConfig();
   const chips = input.accountType === 'TOURNAMENT';
-  const level = levelFor(chips ? 0 : trader.totalDeposited, config, chips ? null : trader.statusLevelOverride);
+  const level = levelFor(
+    chips ? 0 : trader.totalDeposited,
+    config,
+    chips ? null : trader.statusLevelOverride,
+  );
   // a booster bought in the marketplace stacks on the status bonus under the
   // same ceiling. Like status, it reads nothing but what this trader holds —
   // never a position, an exposure or a result.
@@ -184,60 +189,68 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
   // is the operator's decision, not something a perk should quietly lower
   const quotedPct = booster > 0 ? Math.min(withStatus + booster, config.maxPayoutPct) : withStatus;
 
-  const trade = await prisma.$transaction(async (tx) => {
-    // Risk is checked here, inside the transaction, so the aggregate it reads
-    // and the position it guards are one unit of work. It rejects a *new*
-    // stake and nothing else: the price and the payout above are already
-    // settled and cannot be influenced by what anyone holds.
-    const rejection = await assessStake(tx, {
-      assetId: asset.id,
-      userId: input.userId,
-      accountType: input.accountType,
-      direction: input.direction,
-      stake: input.stake,
-      asset,
-    });
-    if (rejection) {
-      throw rejection.code === 'stake_too_low' || rejection.code === 'stake_too_high'
-        ? badRequest(rejection.message, rejection.code)
-        : conflict(rejection.message, rejection.code, { remaining: rejection.remaining });
-    }
-
-    const created = await tx.trade.create({
-      data: {
-        userId: input.userId,
+  // Many traders opening a position on the same account row (repeat-clicking,
+  // or simply many concurrent instances under real load) can lose a race MySQL
+  // reports as P2034. The transaction below has no effect outside itself —
+  // `tradeEvents.emit` fires only after it resolves — so a conflict means
+  // nothing committed at all, and asking again is exactly correct rather than
+  // surfacing a 500 for a trade that never happened.
+  const trade = await retryOnConflict(() =>
+    prisma.$transaction(async (tx) => {
+      // Risk is checked here, inside the transaction, so the aggregate it reads
+      // and the position it guards are one unit of work. It rejects a *new*
+      // stake and nothing else: the price and the payout above are already
+      // settled and cannot be influenced by what anyone holds.
+      const rejection = await assessStake(tx, {
         assetId: asset.id,
-        symbol: asset.symbol,
+        userId: input.userId,
         accountType: input.accountType,
         direction: input.direction,
-        expiryMode: mode,
         stake: input.stake,
-        payoutPct: quotedPct,
-        entryPrice,
-        durationSec,
-        openedAt,
-        expiresAt,
-        status: 'OPEN',
-        entryId: entry?.id,
-        tournamentId: entry?.tournamentId,
-      },
-    });
-
-    if (entry) {
-      await adjustEntryBalance(tx, entry.id, -input.stake);
-    } else {
-      await applyLedger(tx, {
-        userId: input.userId,
-        accountType: input.accountType,
-        type: 'TRADE_STAKE',
-        amount: -input.stake,
-        refType: 'trade',
-        refId: created.id,
-        note: `${input.direction} ${asset.symbol} @ ${entryPrice}`,
+        asset,
       });
-    }
-    return created;
-  });
+      if (rejection) {
+        throw rejection.code === 'stake_too_low' || rejection.code === 'stake_too_high'
+          ? badRequest(rejection.message, rejection.code)
+          : conflict(rejection.message, rejection.code, { remaining: rejection.remaining });
+      }
+
+      const created = await tx.trade.create({
+        data: {
+          userId: input.userId,
+          assetId: asset.id,
+          symbol: asset.symbol,
+          accountType: input.accountType,
+          direction: input.direction,
+          expiryMode: mode,
+          stake: input.stake,
+          payoutPct: quotedPct,
+          entryPrice,
+          durationSec,
+          openedAt,
+          expiresAt,
+          status: 'OPEN',
+          entryId: entry?.id,
+          tournamentId: entry?.tournamentId,
+        },
+      });
+
+      if (entry) {
+        await adjustEntryBalance(tx, entry.id, -input.stake);
+      } else {
+        await applyLedger(tx, {
+          userId: input.userId,
+          accountType: input.accountType,
+          type: 'TRADE_STAKE',
+          amount: -input.stake,
+          refType: 'trade',
+          refId: created.id,
+          note: `${input.direction} ${asset.symbol} @ ${entryPrice}`,
+        });
+      }
+      return created;
+    }),
+  );
 
   tradeEvents.emit('opened', trade);
   return trade;
@@ -362,50 +375,56 @@ export async function settleTrade(tradeId: string): Promise<SettlementResult | n
     payoutPct: trade.payoutPct,
   });
 
-  const result = await prisma.$transaction(async (tx) => {
-    // Guard against a concurrent settlement pass paying the same trade twice.
-    const claimed = await tx.trade.updateMany({
-      where: { id: trade.id, status: 'OPEN' },
-      data: { status, exitPrice, profit, settledAt: new Date() },
-    });
-    if (claimed.count === 0) return null;
-
-    let balance: number | null = null;
-    if (trade.entryId) {
-      balance = await adjustEntryBalance(tx, trade.entryId, credit, status);
-    } else if (credit > 0) {
-      balance = await applyLedger(tx, {
-        userId: trade.userId,
-        accountType: trade.accountType as AccountType,
-        type: status === 'WON' ? 'TRADE_PAYOUT' : 'TRADE_REFUND',
-        amount: credit,
-        refType: 'trade',
-        refId: trade.id,
-        note: `${trade.symbol} ${trade.direction} ${status.toLowerCase()} @ ${exitPrice}`,
+  // Same reasoning as placeTrade: nothing outside this transaction observes
+  // it until it resolves (`tradeEvents.emit` is below, after the await), so a
+  // P2034 from many settlement passes converging on the same rows under load
+  // means nothing committed — asking again is correct, not a double-pay risk.
+  const result = await retryOnConflict(() =>
+    prisma.$transaction(async (tx) => {
+      // Guard against a concurrent settlement pass paying the same trade twice.
+      const claimed = await tx.trade.updateMany({
+        where: { id: trade.id, status: 'OPEN' },
+        data: { status, exitPrice, profit, settledAt: new Date() },
       });
-    } else {
-      // a loss pays nothing back — unless the trader is holding risk-free
-      // cover, which refunds the stake here, inside the same transaction that
-      // settled the position and spent the use that paid for it
-      if (status === 'LOST' && !trade.entryId) {
-        await coverLoss(tx, {
+      if (claimed.count === 0) return null;
+
+      let balance: number | null = null;
+      if (trade.entryId) {
+        balance = await adjustEntryBalance(tx, trade.entryId, credit, status);
+      } else if (credit > 0) {
+        balance = await applyLedger(tx, {
           userId: trade.userId,
-          tradeId: trade.id,
-          stake: trade.stake,
-          accountType: trade.accountType,
+          accountType: trade.accountType as AccountType,
+          type: status === 'WON' ? 'TRADE_PAYOUT' : 'TRADE_REFUND',
+          amount: credit,
+          refType: 'trade',
+          refId: trade.id,
+          note: `${trade.symbol} ${trade.direction} ${status.toLowerCase()} @ ${exitPrice}`,
         });
+      } else {
+        // a loss pays nothing back — unless the trader is holding risk-free
+        // cover, which refunds the stake here, inside the same transaction that
+        // settled the position and spent the use that paid for it
+        if (status === 'LOST' && !trade.entryId) {
+          await coverLoss(tx, {
+            userId: trade.userId,
+            tradeId: trade.id,
+            stake: trade.stake,
+            accountType: trade.accountType,
+          });
+        }
+        // read after the refund, so the balance announced is the one that stands
+        const user = await tx.user.findUnique({
+          where: { id: trade.userId },
+          select: { demoBalance: true, realBalance: true },
+        });
+        balance = trade.accountType === 'DEMO' ? (user?.demoBalance ?? 0) : (user?.realBalance ?? 0);
       }
-      // read after the refund, so the balance announced is the one that stands
-      const user = await tx.user.findUnique({
-        where: { id: trade.userId },
-        select: { demoBalance: true, realBalance: true },
-      });
-      balance = trade.accountType === 'DEMO' ? (user?.demoBalance ?? 0) : (user?.realBalance ?? 0);
-    }
 
-    const settled = await tx.trade.findUnique({ where: { id: trade.id } });
-    return { trade: settled as Trade, balance: balance ?? 0 };
-  });
+      const settled = await tx.trade.findUnique({ where: { id: trade.id } });
+      return { trade: settled as Trade, balance: balance ?? 0 };
+    }),
+  );
 
   if (result) tradeEvents.emit('settled', result);
   return result;

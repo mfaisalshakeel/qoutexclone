@@ -287,7 +287,10 @@ export function AdminUserProfile() {
         <span className="text-[11px] text-slate-500">joined {dateTime(user.createdAt)}</span>
         <span className="ml-auto flex flex-wrap gap-2">
           {canFinance && (
-            <button onClick={() => void adjustBalance(user, load)} className="btn-ghost !px-3 !py-1.5 text-xs">
+            <button
+              onClick={() => void adjustBalance(user, load)}
+              className="btn-ghost !px-3 !py-1.5 text-xs"
+            >
               Adjust balance
             </button>
           )}
@@ -302,7 +305,10 @@ export function AdminUserProfile() {
             </button>
           )}
           {canManage && user.twoFactorEnabled && (
-            <button onClick={() => void resetTwoFactor(user, load)} className="btn-ghost !px-3 !py-1.5 text-xs">
+            <button
+              onClick={() => void resetTwoFactor(user, load)}
+              className="btn-ghost !px-3 !py-1.5 text-xs"
+            >
               Reset 2FA
             </button>
           )}
@@ -359,7 +365,11 @@ export function AdminUserProfile() {
       )}
 
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Live balance" value={money(user.realBalance)} hint={user.lockedBalance > 0 ? `${money(user.lockedBalance)} held` : undefined} />
+        <StatCard
+          label="Live balance"
+          value={money(user.realBalance)}
+          hint={user.lockedBalance > 0 ? `${money(user.lockedBalance)} held` : undefined}
+        />
         <StatCard label="Practice balance" value={money(user.demoBalance)} />
         <StatCard label="Deposited" value={money(user.totalDeposited)} />
         <StatCard label="Withdrawn" value={money(user.totalWithdrawn)} />

@@ -49,10 +49,27 @@ export class SettlementEngine {
         select: { id: true },
         take: 200,
       });
+      // Settling one at a time was the real bottleneck a k6 run at 1,000
+      // concurrent traders found: at that scale, trades expire faster than a
+      // sequential loop can clear them, so unsettled positions pile up and
+      // trip the per-account open-position cap even though nothing is
+      // actually broken. Each trade's `settleTrade` is its own independent,
+      // idempotent transaction (see the module doc and
+      // `__tests__/integration/scale.test.ts`'s concurrent-settlement
+      // coverage), so there is nothing gained by waiting for one before
+      // starting the next — different accounts' settlements only ever
+      // contend with each other at the database's own row-lock level, which
+      // now resolves correctly under contention (see `applyLedger`).
+      // allSettled, not all: one trade's settlement failing (a residual write
+      // conflict that outlasted its own retries, say) must not cost the rest
+      // of the pass — every other trade in `due` is an independent
+      // transaction and nothing here depends on this one succeeding first.
+      const outcomes = await Promise.allSettled(due.map((trade) => settleTrade(trade.id)));
       let settled = 0;
-      for (const trade of due) {
-        const result = await settleTrade(trade.id);
-        if (result) settled += 1;
+      for (const outcome of outcomes) {
+        if (outcome.status === 'fulfilled' && outcome.value) settled += 1;
+        else if (outcome.status === 'rejected')
+          log.settlement.error({ err: outcome.reason }, 'trade settlement failed');
       }
 
       // pending orders ride the same loop: both read the feed and both claim a

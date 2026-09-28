@@ -274,13 +274,22 @@ export async function activeEntry(userId: string, tournamentId?: string) {
 }
 
 /** Moves tournament chips. Chips never touch a cash balance. */
+/**
+ * Same lost-update hazard `applyLedger` has, and the same fix: `FOR UPDATE`
+ * takes a real row lock on the read, so a second stake against this entry
+ * racing this one blocks and then reads what the first actually left behind,
+ * rather than a stale snapshot it would silently overwrite.
+ */
 export async function adjustEntryBalance(
   tx: TxClient,
   entryId: string,
   delta: number,
   outcome?: 'WON' | 'LOST' | 'REFUNDED',
 ): Promise<number> {
-  const entry = await tx.tournamentEntry.findUnique({ where: { id: entryId } });
+  const rows = await tx.$queryRaw<
+    { id: string; balance: number }[]
+  >`SELECT id, balance FROM TournamentEntry WHERE id = ${entryId} FOR UPDATE`;
+  const entry = rows[0];
   if (!entry) throw notFound('Tournament entry not found');
   const next = entry.balance + delta;
   if (next < 0) throw badRequest('Not enough tournament balance', 'insufficient_funds');

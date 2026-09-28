@@ -68,4 +68,25 @@ describe('retrying a write that lost its race', () => {
     ).toBe(false);
     expect(isConflict(new Error('boom'))).toBe(false);
   });
+
+  it('also recognises a raw query’s MySQL deadlock or lock-wait-timeout, wrapped as P2010', () => {
+    const deadlock = new Prisma.PrismaClientKnownRequestError('Raw query failed. Code: `1213`.', {
+      code: 'P2010',
+      clientVersion: 'test',
+      meta: { code: '1213', message: 'Deadlock found when trying to get lock; try restarting transaction' },
+    });
+    const lockTimeout = new Prisma.PrismaClientKnownRequestError('Raw query failed. Code: `1205`.', {
+      code: 'P2010',
+      clientVersion: 'test',
+      meta: { code: '1205', message: 'Lock wait timeout exceeded' },
+    });
+    const unrelatedRawFailure = new Prisma.PrismaClientKnownRequestError('Raw query failed. Code: `1062`.', {
+      code: 'P2010',
+      clientVersion: 'test',
+      meta: { code: '1062', message: 'Duplicate entry' },
+    });
+    expect(isConflict(deadlock)).toBe(true);
+    expect(isConflict(lockTimeout)).toBe(true);
+    expect(isConflict(unrelatedRawFailure)).toBe(false);
+  });
 });

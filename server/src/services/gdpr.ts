@@ -190,7 +190,13 @@ export async function eraseUserData(userId: string): Promise<void> {
     // its userId — scrub the PII, keep the row
     await tx.loginEvent.updateMany({
       where: { userId },
-      data: { email: 'erased@deleted.invalid', ip: null, userAgent: null, device: 'Erased', fingerprint: 'erased' },
+      data: {
+        email: 'erased@deleted.invalid',
+        ip: null,
+        userAgent: null,
+        device: 'Erased',
+        fingerprint: 'erased',
+      },
     });
     await tx.emailMessage.updateMany({
       where: { userId },

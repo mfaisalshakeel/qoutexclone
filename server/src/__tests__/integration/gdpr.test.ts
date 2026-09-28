@@ -48,7 +48,7 @@ suite('GDPR export and erasure', () => {
     await prisma.$disconnect();
   });
 
-  it("exports every table tied to the account", async () => {
+  it('exports every table tied to the account', async () => {
     const user = await makeUser();
     await prisma.notification.create({
       data: { userId: user.id, kind: 'SYSTEM', title: 'Hi', body: 'Welcome' },

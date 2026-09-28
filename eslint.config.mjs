@@ -58,6 +58,15 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
 
+  // k6 load test scripts run inside k6's own JS runtime (see k6/trade-load.js),
+  // not Node or a browser — __ENV/__VU/open are its globals, not undefined ones
+  {
+    files: ['k6/*.js'],
+    languageOptions: {
+      globals: { __ENV: 'readonly', __VU: 'readonly', __ITER: 'readonly', open: 'readonly' },
+    },
+  },
+
   {
     rules: {
       // `_`-prefixed arguments are deliberately unused (Express handlers, etc.)

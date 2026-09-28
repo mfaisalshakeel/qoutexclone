@@ -88,6 +88,12 @@ const schema = z.object({
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   LOG_PRETTY: bool(process.env.NODE_ENV !== 'production'),
+
+  // realtime fan-out across API instances: unset keeps everything in-process
+  // (correct for a single instance), a URL switches every instance onto the
+  // same Redis pub/sub channel so a trader's socket on one instance still
+  // hears an event that happened on another
+  REDIS_URL: z.string().optional().default(''),
 });
 
 /**
@@ -183,6 +189,8 @@ function load() {
 
     logLevel: raw.LOG_LEVEL,
     logPretty: raw.LOG_PRETTY,
+
+    redisUrl: raw.REDIS_URL || null,
   } as const;
 }
 

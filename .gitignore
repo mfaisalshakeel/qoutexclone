@@ -16,3 +16,4 @@ server/prisma/dev.db*
 playwright-report/
 e2e-results/
 server/storage/
+k6/traders.json

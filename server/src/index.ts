@@ -17,6 +17,7 @@ import { sentiment } from './services/sentiment.js';
 import { leaderboard } from './services/leaderboard.js';
 import { startNotifications, stopNotifications } from './services/notifications.js';
 import { startRetentionSweeps, stopRetentionSweeps } from './services/retention.js';
+import { pubsub } from './services/pubsub.js';
 import { loadRevocations, pruneRevocations } from './services/revocations.js';
 import { configureMailer, watchMailSettings } from './services/mailer.js';
 import { attachEmailNotifications } from './services/email-notifications.js';
@@ -164,6 +165,7 @@ async function main() {
       chainWatcher.stop();
       marketFeed.stop();
       ws.close();
+      await pubsub.close();
       await prisma.$disconnect();
       clearTimeout(force);
       log.boot.info('shutdown complete');

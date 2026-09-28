@@ -144,7 +144,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 
 - [x] **Security review.** Authz tests for every route (user vs admin vs other user), rate limits per sensitive route, CSP without `unsafe-inline` scripts, secure cookies if cookies are used, dependency audit clean, file upload validation (KYC documents to object storage interface), and brute-force lockout.
 - [x] **Data.** Indexes reviewed with `EXPLAIN` on the heavy queries, DB backups documented, soft-delete/retention policy, and GDPR-style data export/delete for a user.
-- [ ] **Scale.** Realtime fan-out through a pub/sub interface (in-memory by default, Redis adapter), settlement safe with multiple API instances, and a load test (k6) of 1,000 concurrent traders placing trades with results recorded.
+- [x] **Scale.** Realtime fan-out through a pub/sub interface (in-memory by default, Redis adapter), settlement safe with multiple API instances, and a load test (k6) of 1,000 concurrent traders placing trades with results recorded.
 - [ ] **Observability.** Error tracking hook (Sentry-compatible), metrics endpoint (Prometheus format: trades/s, settlement lag, ws clients, feed staleness), and alerts documented.
 - [ ] **Deployment.** Production Docker compose with nginx (TLS, gzip/brotli, caching headers, ws upgrade), migrations on deploy, and a zero-downtime restart procedure. The README is updated and a cPanel/VPS guide is kept.
 - [ ] **Final pass.** Every page at 360/390/768/1024/1440 widths, light and dark themes, keyboard-only navigation, and the full e2e suite green. Update screenshots in `docs/screenshots`.
