@@ -14,6 +14,7 @@ import { marketHours, otcAlternative } from './market-hours.js';
 import { payouts } from './payouts.js';
 import { assessStake } from './risk.js';
 import { retryOnConflict } from '../lib/retry.js';
+import { tradesPlacedTotal, tradesSettledTotal } from '../lib/metrics.js';
 import {
   clockSlots,
   validateAgainstClose,
@@ -252,6 +253,7 @@ export async function placeTrade(input: PlaceTradeInput): Promise<Trade> {
     }),
   );
 
+  tradesPlacedTotal.inc({ accountType: trade.accountType });
   tradeEvents.emit('opened', trade);
   return trade;
 }
@@ -426,7 +428,10 @@ export async function settleTrade(tradeId: string): Promise<SettlementResult | n
     }),
   );
 
-  if (result) tradeEvents.emit('settled', result);
+  if (result) {
+    tradesSettledTotal.inc({ status: result.trade.status });
+    tradeEvents.emit('settled', result);
+  }
   return result;
 }
 

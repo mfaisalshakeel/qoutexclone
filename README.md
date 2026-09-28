@@ -197,6 +197,8 @@ All server settings live in `server/.env` (see `server/.env.example`).
 | `REFERRAL_COMMISSION_PCT` | `5` | Share of a referred trader's deposits paid to the referrer |
 | `MAX_OPEN_TRADES` | `25` | Open positions allowed per trader |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` | empty / `587` | Seed the email settings an operator edits in **Admin → Email**. Empty means nothing is delivered, but every message is still recorded in the outbox |
+| `REDIS_URL` | empty | Set when running more than one API instance — see [docs/load-test.md](docs/load-test.md) |
+| `SENTRY_DSN` / `METRICS_TOKEN` | empty / empty | Error tracking and the `/metrics` Prometheus endpoint — see [docs/observability.md](docs/observability.md) |
 
 ### Market data
 

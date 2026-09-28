@@ -3,6 +3,7 @@ import multer from 'multer';
 import { ZodError } from 'zod';
 import { AppError } from '../lib/errors.js';
 import { isConflict } from '../lib/retry.js';
+import { captureException } from '../lib/error-tracking.js';
 import { env } from '../env.js';
 import { logger } from '../lib/logger.js';
 
@@ -48,6 +49,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (env.nodeEnv !== 'test') {
     const reqLog = (req as typeof req & { log?: typeof logger }).log ?? logger;
     reqLog.error({ err }, 'unhandled request error');
+    captureException(err, { path: req.path, method: req.method });
   }
   res.status(500).json({ error: { code: 'internal_error', message: 'Something went wrong' } });
 };

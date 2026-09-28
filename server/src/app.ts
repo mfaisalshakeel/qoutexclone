@@ -21,9 +21,22 @@ import supportRoutes from './routes/support.js';
 import contentRoutes from './routes/content.js';
 import webhookRoutes from './routes/webhooks.js';
 import { marketFeed } from './engine/feed.js';
+import { settlementEngine } from './engine/settlement.js';
 import { settings } from './services/settings.js';
 import { isCrawlerUserAgent } from './lib/crawlers.js';
 import { buildRobotsTxt, buildSitemapXml } from './lib/sitemap.js';
+import { env } from './env.js';
+import { wsStats } from './ws.js';
+import {
+  registry as metricsRegistry,
+  settlementLagMs,
+  settlementLastTickAge,
+  settlementLastTickDurationMs,
+  feedStalenessMs,
+  feedProviderUp,
+  wsConnections,
+  wsOnlineUsers,
+} from './lib/metrics.js';
 
 /**
  * Single-port deployment: when the web client has been built, the API serves
@@ -179,6 +192,40 @@ export function createApp() {
       // a provider falling back to the broker engine is degraded, not unready
       providers: marketFeed.providerHealth(),
     });
+  });
+
+  /**
+   * Prometheus scrape target. Gauges are set right here, on scrape, so
+   * Prometheus always gets this instant's value rather than whatever a timer
+   * last happened to compute; counters (trades placed/settled) are
+   * incremented at the source instead, since a counter has to be cumulative.
+   * `METRICS_TOKEN`, when set, gates this behind a bearer token — unset
+   * leaves it open, fine on a network Prometheus reaches directly, not fine
+   * facing the public internet (see docs/observability.md).
+   */
+  app.get('/metrics', async (req, res) => {
+    if (env.metricsToken && req.get('authorization') !== `Bearer ${env.metricsToken}`) {
+      res.status(401).json({ error: { code: 'unauthorized', message: 'Authentication required' } });
+      return;
+    }
+
+    const settlement = await settlementEngine.health();
+    settlementLagMs.set(settlement.lagMs);
+    settlementLastTickDurationMs.set(settlement.lastTickMs);
+    settlementLastTickAge.set(settlement.lastTickAt === null ? -1 : Date.now() - settlement.lastTickAt);
+
+    const tickAge = marketFeed.lastTickAge();
+    feedStalenessMs.set(tickAge ?? -1);
+    for (const provider of marketFeed.providerHealth()) {
+      feedProviderUp.set({ provider: provider.name }, provider.status === 'connected' ? 1 : 0);
+    }
+
+    const ws = wsStats();
+    wsConnections.set(ws.connections);
+    wsOnlineUsers.set(ws.onlineUsers);
+
+    res.set('Content-Type', metricsRegistry.contentType);
+    res.send(await metricsRegistry.metrics());
   });
 
   app.use('/api/auth', authRoutes);

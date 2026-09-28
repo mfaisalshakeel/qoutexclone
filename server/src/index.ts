@@ -18,6 +18,7 @@ import { leaderboard } from './services/leaderboard.js';
 import { startNotifications, stopNotifications } from './services/notifications.js';
 import { startRetentionSweeps, stopRetentionSweeps } from './services/retention.js';
 import { pubsub } from './services/pubsub.js';
+import { captureException, flushErrorTracking } from './lib/error-tracking.js';
 import { loadRevocations, pruneRevocations } from './services/revocations.js';
 import { configureMailer, watchMailSettings } from './services/mailer.js';
 import { attachEmailNotifications } from './services/email-notifications.js';
@@ -167,6 +168,7 @@ async function main() {
       ws.close();
       await pubsub.close();
       await prisma.$disconnect();
+      await flushErrorTracking();
       clearTimeout(force);
       log.boot.info('shutdown complete');
       process.exit(0);
@@ -178,14 +180,19 @@ async function main() {
 
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
-  process.on('unhandledRejection', (reason) => log.boot.error({ err: reason }, 'unhandled rejection'));
+  process.on('unhandledRejection', (reason) => {
+    log.boot.error({ err: reason }, 'unhandled rejection');
+    captureException(reason, { source: 'unhandledRejection' });
+  });
   process.on('uncaughtException', (err) => {
     log.boot.fatal({ err }, 'uncaught exception');
+    captureException(err, { source: 'uncaughtException' });
     void shutdown('uncaughtException');
   });
 }
 
 main().catch((err) => {
   log.boot.fatal({ err }, 'failed to start');
-  process.exit(1);
+  captureException(err, { source: 'boot' });
+  void flushErrorTracking().finally(() => process.exit(1));
 });

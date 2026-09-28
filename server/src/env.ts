@@ -94,6 +94,13 @@ const schema = z.object({
   // same Redis pub/sub channel so a trader's socket on one instance still
   // hears an event that happened on another
   REDIS_URL: z.string().optional().default(''),
+
+  // observability: both optional, both no-ops when unset
+  SENTRY_DSN: z.string().optional().default(''),
+  // gates GET /metrics with `Authorization: Bearer <token>` when set. Unset
+  // leaves it open — fine on an internal network Prometheus reaches directly,
+  // not fine exposed to the public internet without one
+  METRICS_TOKEN: z.string().optional().default(''),
 });
 
 /**
@@ -191,6 +198,9 @@ function load() {
     logPretty: raw.LOG_PRETTY,
 
     redisUrl: raw.REDIS_URL || null,
+
+    sentryDsn: raw.SENTRY_DSN || null,
+    metricsToken: raw.METRICS_TOKEN || null,
   } as const;
 }
 

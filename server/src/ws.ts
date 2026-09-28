@@ -74,10 +74,24 @@ type FanoutTarget = { kind: 'user'; userId: string } | { kind: 'admins' } | { ki
  * everyone, and account events (settled trades, deposit/withdrawal updates)
  * routed to the owning user's sockets only.
  */
+// Set once, from inside attachWebsocket, so `wsStats()` (below) can report
+// this instance's own connection counts to the /metrics route without
+// threading the `attachWebsocket` return value through app.ts — the same
+// module-singleton shape `marketFeed`/`settlementEngine` already use.
+let liveClients: Map<WebSocket, ClientState> | null = null;
+let liveByUser: Map<string, Set<WebSocket>> | null = null;
+
+/** This instance's own open sockets and distinct signed-in users — see the note above. */
+export function wsStats(): { connections: number; onlineUsers: number } {
+  return { connections: liveClients?.size ?? 0, onlineUsers: liveByUser?.size ?? 0 };
+}
+
 export function attachWebsocket(server: Server) {
   const wss = new WebSocketServer({ server, path: '/ws' });
   const clients = new Map<WebSocket, ClientState>();
   const byUser = new Map<string, Set<WebSocket>>();
+  liveClients = clients;
+  liveByUser = byUser;
 
   const send = (socket: WebSocket, payload: unknown) => {
     if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(payload));
