@@ -55,8 +55,19 @@ function serveWebClient(app: express.Express): void {
   if (!dist) return;
 
   const prerenderedDir = path.join(dist, '__prerendered__');
-  app.use(express.static(dist, { index: false, maxAge: '1h' }));
+  // Vite content-hashes everything under /assets — a new build is a new
+  // filename, so these can be cached for a year with `immutable` and never
+  // go stale. Everything else (fonts, favicon, robots.txt — unhashed on
+  // purpose, see Performance task) gets a short cache instead: a deploy can
+  // change their contents under the same name.
+  app.use('/assets', express.static(path.join(dist, 'assets'), { immutable: true, maxAge: '1y' }));
+  app.use(express.static(dist, { index: false, maxAge: '5m' }));
   app.get(/^(?!\/api).*/, (req, res) => {
+    // index.html itself is the one file that must never be cached: it is
+    // what points a returning visitor at the *current* build's hashed
+    // bundle names, and a stale copy would ask the browser for assets a
+    // deploy already deleted.
+    res.set('Cache-Control', 'no-cache');
     // a recognised crawler gets whatever this route's own build-time
     // snapshot last captured — the real, fully-loaded content, not an empty
     // shell it has no JavaScript engine to fill in. Every other visitor

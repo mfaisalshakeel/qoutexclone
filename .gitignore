@@ -17,3 +17,4 @@ playwright-report/
 e2e-results/
 server/storage/
 k6/traders.json
+docker/nginx/certs/*.pem

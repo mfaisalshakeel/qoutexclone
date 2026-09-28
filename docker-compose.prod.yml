@@ -1,0 +1,71 @@
+# Production stack: MySQL + the app + nginx in front of it for TLS, gzip,
+# caching headers and the websocket upgrade. See DEPLOY.md's "Production"
+# section for the TLS certificate step this needs before it will start, and
+# for the zero-downtime restart procedure that goes with this file
+# specifically (the plain docker-compose.yml, with one instance and no
+# reverse proxy, does not need — or support — it).
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-quotex}
+      MYSQL_USER: ${MYSQL_USER:-quotex}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set a real MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set a real MYSQL_ROOT_PASSWORD in .env}
+    command: --default-authentication-plugin=mysql_native_password
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-p${MYSQL_ROOT_PASSWORD}']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    # no published port: only the app container reaches this, over the
+    # compose network — the database is never directly internet-facing
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: mysql://${MYSQL_USER:-quotex}:${MYSQL_PASSWORD:?set a real MYSQL_PASSWORD in .env}@db:3306/${MYSQL_DATABASE:-quotex}
+      JWT_SECRET: ${JWT_SECRET:?set a real JWT_SECRET in .env — openssl rand -hex 32}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set a real JWT_REFRESH_SECRET in .env — openssl rand -hex 32}
+      CORS_ORIGINS: ${CORS_ORIGINS:?set your real domain, e.g. https://your-domain.com}
+      FEED_PROVIDER: ${FEED_PROVIDER:-simulated}
+      MOCK_CHAIN_WATCHER: ${MOCK_CHAIN_WATCHER:-true}
+      AUTO_APPROVE_WITHDRAWALS: ${AUTO_APPROVE_WITHDRAWALS:-false}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@quotexclone.dev}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set a real ADMIN_PASSWORD in .env}
+      SEED_ON_START: ${SEED_ON_START:-true}
+      REDIS_URL: ${REDIS_URL:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+    # no published port here either — nginx is the only public entrypoint.
+    # `docker compose ... --scale app=2` (the zero-downtime procedure) adds
+    # a second container on this same private network; nginx's resolver
+    # picks it up without any change here.
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/certs:/etc/nginx/certs:ro
+      - certbot-www:/var/www/certbot:ro
+
+volumes:
+  db-data:
+  certbot-www:

@@ -1,11 +1,20 @@
 # ---- build ----------------------------------------------------------------
 FROM node:22-alpine AS build
 WORKDIR /app
+# Prisma's engine binaries need real OpenSSL at runtime, not the musl-libc
+# minimal set Alpine ships by default — without this, prisma generate/deploy
+# fail with "Could not parse schema engine response" (the engine crashes
+# before it can even reply).
+RUN apk add --no-cache openssl
 
 COPY package.json package-lock.json ./
 COPY server/package.json ./server/
 COPY web/package.json ./web/
-RUN npm ci
+# --ignore-scripts: server/package.json's own `postinstall` runs `prisma
+# generate`, which needs server/prisma/schema.prisma — not copied in until
+# the next step. Harmless to skip here since the schema is regenerated
+# explicitly right below, after the schema itself actually exists.
+RUN npm ci --ignore-scripts
 
 COPY server ./server
 COPY web ./web
@@ -17,6 +26,7 @@ RUN npx prisma generate --schema server/prisma/schema.prisma \
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+RUN apk add --no-cache openssl
 
 COPY package.json package-lock.json ./
 COPY server/package.json ./server/

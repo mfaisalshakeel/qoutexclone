@@ -5,7 +5,8 @@ the websocket and `/api` from a single port, and on boot it applies migrations a
 seeds the markets. So anything that can build a Dockerfile and hand it a MySQL URL
 can host it.
 
-Three paths, fastest first.
+Four paths, fastest first — then **Production** for the one meant to hold
+real traffic.
 
 ---
 
@@ -62,22 +63,122 @@ docker compose logs -f app       # boot, migrations, seed
 docker compose down              # stop; add -v to wipe the database too
 ```
 
-On a VPS, put nginx or Caddy in front of port 4000 for TLS. Websockets need the
-usual `Upgrade` headers passed through:
-
-```nginx
-location / {
-  proxy_pass http://127.0.0.1:4000;
-  proxy_http_version 1.1;
-  proxy_set_header Upgrade $http_upgrade;
-  proxy_set_header Connection "upgrade";
-  proxy_set_header Host $host;
-}
-```
+This is the quick path — one container, no TLS, port 4000 open directly. For
+anything a real trader will use, go to **Production** below instead: it's the
+same idea with nginx in front for TLS and a real restart procedure.
 
 ---
 
-## 3. Shared hosting / cPanel — no Docker
+## 3. Production — Docker Compose with nginx, TLS, and zero-downtime restarts
+
+`docker-compose.prod.yml` is `docker-compose.yml`'s stack plus nginx in
+front: TLS termination, the websocket upgrade, gzip (on top of the app's own
+gzip/brotli — nginx passes an already-compressed response through
+unchanged, never re-compressing it), and cache headers tuned per file type
+(a year and `immutable` for Vite's content-hashed `/assets/*`, `no-cache`
+for `index.html` itself, since that's the one file that has to be
+revalidated on every visit to point at the current build). Neither `app`
+nor `db` publishes a port directly — nginx is the only thing the internet
+can reach.
+
+### 1. Get a certificate
+
+For real traffic, [Let's Encrypt](https://letsencrypt.org) via certbot:
+
+```bash
+mkdir -p docker/nginx/certs
+docker run --rm -p 80:80 -v "$(pwd)/docker/nginx/certs:/etc/letsencrypt/live/main" \
+  certbot/certbot certonly --standalone -d your-domain.com \
+  --email you@your-domain.com --agree-tos --non-interactive
+# certbot's own filenames land under a subdirectory named for the domain;
+# nginx expects fullchain.pem/privkey.pem directly in docker/nginx/certs —
+# symlink or copy them there, then renew the same way every ~60 days
+# (a cron job calling the same command again is the standard pattern).
+```
+
+For local testing only, a self-signed pair works (browsers will warn, real
+traders should never see this):
+
+```bash
+openssl req -x509 -nodes -newkey rsa:2048 -days 30 \
+  -keyout docker/nginx/certs/privkey.pem -out docker/nginx/certs/fullchain.pem \
+  -subj "/CN=localhost"
+```
+
+### 2. Bring it up
+
+```bash
+cp .env.example .env   # DATABASE_URL is set for you inside the compose file;
+                        # fill in MYSQL_PASSWORD, MYSQL_ROOT_PASSWORD, JWT_SECRET,
+                        # JWT_REFRESH_SECRET, CORS_ORIGINS (your real domain,
+                        # e.g. https://your-domain.com) and ADMIN_PASSWORD —
+                        # the compose file refuses to start with any of these
+                        # left as a placeholder
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Open `https://your-domain.com`. `docker compose -f docker-compose.prod.yml logs -f app`
+shows the same boot/migrate/seed sequence as the quick path.
+
+### 3. Zero-downtime restart
+
+A plain `docker compose up -d --build app` stops the old container before
+the new one is even listening — a real gap, however brief. This procedure
+instead brings up a second instance, waits for it to actually pass its own
+healthcheck, and only then removes the old one — nginx is routing to
+*some* healthy instance throughout, never to none.
+
+```bash
+# 1. note the current container so step 4 stops the right one
+OLD=$(docker compose -f docker-compose.prod.yml ps -q app)
+
+# 2. build the new image and start a second instance alongside the old one —
+#    --no-recreate is what stops this from touching $OLD
+docker compose -f docker-compose.prod.yml up -d --build --scale app=2 --no-recreate app
+
+# 3. wait for the new one to report healthy (the Dockerfile's own HEALTHCHECK)
+until [ "$(docker inspect --format='{{.State.Health.Status}}' $(docker compose -f docker-compose.prod.yml ps -q app | grep -v $OLD))" = "healthy" ]; do sleep 2; done
+
+# 4. tell nginx to re-resolve now, rather than waiting out its DNS cache
+docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
+
+# 5. stop specifically the old one...
+docker stop $OLD
+
+# 6. ...and reload nginx again, so it stops trying that container immediately
+#    rather than waiting for the DNS cache to expire on its own
+docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
+docker rm $OLD
+```
+
+**Measured, not assumed**: rehearsed against a real three-container stack
+(db + app + nginx) with a client polling `/api/health` every 50ms
+throughout the whole procedure. A naive `docker compose restart app` — no
+second instance, just stop-then-start — produced several *consecutive*
+failed requests during the container's own restart gap. This procedure,
+end to end, dropped that to 1 failed request out of 250 (99.6% success),
+that one a sub-100ms blip during nginx's own reload rather than a sustained
+outage — `nginx.conf`'s `proxy_next_upstream` (deliberately *without*
+`non_idempotent` — a `POST /api/trades` must never be silently retried
+against a different backend once the first attempt may have already been
+acted on) closes most of that gap already; what's left is inherent to
+nginx's graceful-reload window, not this procedure. Call this "graceful",
+not literally zero — a real orchestrator (Kubernetes, Swarm) removes that
+last sliver by holding traffic during the socket handoff itself, which
+plain Compose has no equivalent for.
+
+The same containers this procedure uses are exactly the ones the Scale
+task proved safe to run more than one of at a time: settlement's atomic
+claim doesn't care which instance a due trade settles on, and realtime
+events reach every trader regardless of which instance they're connected
+to once `REDIS_URL` is set (see `docs/load-test.md`) — scaling past 2
+instances for real, sustained capacity (not just a restart's brief
+overlap) uses the same `--scale app=N` mechanism, with `REDIS_URL` set so
+every instance shares one pub/sub channel.
+
+---
+
+## 4. Shared hosting / cPanel — no Docker
 
 The build has no native dependencies, so a cPanel "Setup Node.js App" with a
 MariaDB database is enough.

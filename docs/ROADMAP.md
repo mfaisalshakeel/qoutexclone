@@ -146,7 +146,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **Data.** Indexes reviewed with `EXPLAIN` on the heavy queries, DB backups documented, soft-delete/retention policy, and GDPR-style data export/delete for a user.
 - [x] **Scale.** Realtime fan-out through a pub/sub interface (in-memory by default, Redis adapter), settlement safe with multiple API instances, and a load test (k6) of 1,000 concurrent traders placing trades with results recorded.
 - [x] **Observability.** Error tracking hook (Sentry-compatible), metrics endpoint (Prometheus format: trades/s, settlement lag, ws clients, feed staleness), and alerts documented.
-- [ ] **Deployment.** Production Docker compose with nginx (TLS, gzip/brotli, caching headers, ws upgrade), migrations on deploy, and a zero-downtime restart procedure. The README is updated and a cPanel/VPS guide is kept.
+- [x] **Deployment.** Production Docker compose with nginx (TLS, gzip/brotli, caching headers, ws upgrade), migrations on deploy, and a zero-downtime restart procedure. The README is updated and a cPanel/VPS guide is kept.
 - [ ] **Final pass.** Every page at 360/390/768/1024/1440 widths, light and dark themes, keyboard-only navigation, and the full e2e suite green. Update screenshots in `docs/screenshots`.
 
 ## Design direction
