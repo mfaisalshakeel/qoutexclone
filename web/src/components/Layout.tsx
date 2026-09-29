@@ -68,13 +68,20 @@ export function Layout() {
               <NavLink
                 key={item.to}
                 to={item.to}
+                title={item.label}
                 className={({ isActive }) =>
-                  `rounded-lg px-3 py-2 text-sm font-medium transition ${
+                  `flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium transition xl:px-3 ${
                     isActive ? 'bg-ink-700 text-white' : 'text-slate-400 hover:text-slate-100'
                   }`
                 }
               >
-                {item.label}
+                {/* every item earns its full label back at xl: (1280px) — a
+                    tablet- or small-laptop-width row of seven text labels
+                    plus the balance/deposit/avatar cluster on the other side
+                    does not fit until then; icon-only from md keeps every
+                    destination one tap away regardless of width */}
+                <item.icon className="h-4 w-4 shrink-0" />
+                <span className="hidden xl:inline">{item.label}</span>
               </NavLink>
             ))}
           </nav>

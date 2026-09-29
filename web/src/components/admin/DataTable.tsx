@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ApiError, api } from '../../lib/api';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import {
   parseTableState,
   sortDirection,
@@ -94,6 +95,7 @@ export function DataTable<T>({
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [drawerRow, setDrawerRow] = useState<T | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const filtersRef = useRef<HTMLDivElement>(null);
 
   const update = (patch: Partial<typeof state>) => {
     setParams(tableStateToParams({ ...state, ...patch }), { replace: true });
@@ -211,7 +213,7 @@ export function DataTable<T>({
       </div>
 
       {filters.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-2">
+        <div ref={filtersRef} className="mb-3 flex flex-wrap gap-2">
           {filters.map((filter) => (
             <FilterChip
               key={filter.key}
@@ -222,7 +224,15 @@ export function DataTable<T>({
           ))}
           {Object.keys(state.filters).length > 0 && (
             <button
-              onClick={() => update({ page: 1, filters: {} })}
+              onClick={() => {
+                // a native <details> filter panel only closes on its own
+                // summary click — left open, it keeps floating over (and
+                // intercepting clicks meant for) whatever is underneath it
+                filtersRef.current
+                  ?.querySelectorAll('details[open]')
+                  .forEach((el) => el.removeAttribute('open'));
+                update({ page: 1, filters: {} });
+              }}
               className="chip bg-ink-700 text-slate-400 hover:text-slate-200"
             >
               Clear filters ✕
@@ -285,8 +295,10 @@ export function DataTable<T>({
             ))}
           </ul>
 
-          {/* real table on desktop */}
-          <div className="card hidden overflow-hidden sm:block">
+          {/* real table on desktop — min-w-0 so it can actually shrink to fit
+              a narrow flex/grid ancestor rather than being held to the
+              table's own full intrinsic width */}
+          <div className="card hidden min-w-0 overflow-hidden sm:block">
             <div className="max-h-[70vh] overflow-auto">
               <table className="w-full min-w-[42rem] text-sm">
                 <thead className="sticky top-0 z-10 bg-ink-700 text-[10px] uppercase tracking-wide text-slate-400">
@@ -594,6 +606,9 @@ export function Pager({
 }
 
 function Drawer({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(containerRef, true);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -605,7 +620,13 @@ function Drawer({ children, onClose }: { children: ReactNode; onClose: () => voi
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <button aria-label="Close panel" onClick={onClose} className="absolute inset-0 bg-black/50" />
-      <div className="relative h-full w-full max-w-md overflow-y-auto bg-ink-800 p-5 shadow-2xl">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Details"
+        className="relative h-full w-full max-w-md overflow-y-auto bg-ink-800 p-5 shadow-2xl"
+      >
         <button onClick={onClose} className="btn-ghost absolute right-4 top-4 !px-2.5 !py-1.5 text-xs">
           Close ✕
         </button>

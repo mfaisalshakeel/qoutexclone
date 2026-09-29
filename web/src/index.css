@@ -167,6 +167,17 @@
     -webkit-appearance: none;
     margin: 0;
   }
+
+  /* a guaranteed, consistent ring on focus, everywhere — rather than
+     however each browser's own default outline happens to render (or not,
+     once a custom background/border is in the way). Plain `:focus` rather
+     than `:focus-visible`: the latter's "was the last input a keyboard"
+     heuristic is exactly what a trading app's most consequential buttons
+     (Higher/Lower) cannot afford to gamble on. */
+  :focus {
+    outline: 2px solid #4d88ff;
+    outline-offset: 2px;
+  }
 }
 
 @layer components {
@@ -202,7 +213,7 @@
   }
 
   .btn-primary {
-    @apply btn bg-accent text-white hover:bg-accent/90 active:scale-[0.99];
+    @apply btn bg-accent-solid text-white hover:bg-accent-solid/90 active:scale-[0.99];
   }
 
   .btn-ghost {
@@ -210,11 +221,11 @@
   }
 
   .btn-up {
-    @apply btn bg-up text-white hover:brightness-110 active:scale-[0.99];
+    @apply btn bg-up-solid text-white hover:brightness-110 active:scale-[0.99];
   }
 
   .btn-down {
-    @apply btn bg-down text-white hover:brightness-110 active:scale-[0.99];
+    @apply btn bg-down-solid text-white hover:brightness-110 active:scale-[0.99];
   }
 
   .chip {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, api } from '../lib/api';
 import { dateTime, duration as fmtDuration, money, price as fmtPrice } from '../lib/format';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import type { Candle, Trade } from '../lib/types';
 import { Skeleton } from './Skeleton';
 
@@ -37,6 +38,8 @@ export function TradeDetail({ trade, precision, onClose, onTradeAgain, canTradeA
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(containerRef, true);
 
   const load = useCallback(async () => {
     try {
@@ -71,6 +74,7 @@ export function TradeDetail({ trade, precision, onClose, onTradeAgain, canTradeA
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button onClick={onClose} aria-label="Close trade details" className="absolute inset-0 bg-black/60" />
       <div
+        ref={containerRef}
         role="dialog"
         aria-modal="true"
         aria-label={`${trade.symbol} ${trade.direction} trade`}
@@ -154,7 +158,7 @@ export function TradeDetail({ trade, precision, onClose, onTradeAgain, canTradeA
               }
             }}
             disabled={busy}
-            className="mt-3 w-full rounded-lg bg-accent py-2.5 text-xs font-semibold text-white disabled:opacity-50"
+            className="mt-3 w-full rounded-lg bg-accent-solid py-2.5 text-xs font-semibold text-white disabled:opacity-50"
           >
             {busy ? 'Placing…' : 'Trade again'}
           </button>

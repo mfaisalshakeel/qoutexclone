@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { dragOffset, shouldDismiss } from '../lib/gestures';
 
 interface Props {
@@ -25,6 +26,7 @@ export function BottomSheet({ open, onClose, title, hideTitle, children, keepMou
   const panelRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y: number; at: number } | null>(null);
   const [offset, setOffset] = useState(0);
+  useFocusTrap(panelRef, open);
 
   useEffect(() => {
     if (!open) return;

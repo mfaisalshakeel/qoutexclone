@@ -319,7 +319,9 @@ export function AdminDashboard() {
 
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">Charts</h2>
-        <div className="flex gap-1 rounded-lg border border-ink-600 bg-ink-800 p-1">
+        {/* scrolls inside its own box rather than widening the page on a
+            narrow screen where "Charts" plus three toggles don't both fit */}
+        <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-ink-600 bg-ink-800 p-1">
           {CHART_WINDOWS.map((d) => (
             <button
               key={d}
@@ -505,8 +507,10 @@ function PeriodPicker({
   onCustom: (c: { from: string; to: string }) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      <div className="flex gap-1 rounded-lg border border-ink-600 bg-ink-800 p-1">
+    <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+      {/* six presets don't fit a narrow screen next to the page title —
+          scrolls inside its own box rather than widening the page */}
+      <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-ink-600 bg-ink-800 p-1">
         {PRESETS.map((p) => (
           <button
             key={p.key}

@@ -527,7 +527,7 @@ export function SiteFooter({ copy = { ...EMPTY_COPY, loading: false } }: { copy?
   return (
     <footer className="border-t border-ink-700">
       <div className="mx-auto max-w-6xl px-4 py-10">
-        <p className="text-xs leading-relaxed text-slate-500">
+        <p className="text-xs leading-relaxed text-slate-400">
           {copy.body ?? t('footer.riskWarningDefault')}
         </p>
         <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-400">

@@ -43,7 +43,7 @@ export function DrawingTools({
           title={each.label}
           className={`h-7 w-7 rounded-lg border text-xs font-semibold transition ${
             tool === each.kind
-              ? 'border-accent bg-accent text-white'
+              ? 'border-accent-solid bg-accent-solid text-white'
               : 'border-ink-500 bg-ink-800/90 text-slate-300 hover:bg-ink-700'
           }`}
         >

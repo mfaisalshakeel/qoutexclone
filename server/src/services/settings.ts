@@ -790,7 +790,10 @@ export const SETTINGS = {
   }),
   'security.apiRateLimitPerMinute': define({
     schema: z.number().int().min(60).max(10_000),
-    default: 600,
+    // same reasoning as security.authAttemptsPer15Min above: this one applies
+    // globally, and the e2e suite's own page loads (each firing several
+    // requests) add up fast from one address over a long serial run
+    default: env.nodeEnv === 'production' ? 600 : 6000,
     group: 'security',
     label: 'API requests per minute, per IP',
     help: 'Applies to every request. Sign-in and sign-up have their own, tighter limit above.',

@@ -240,7 +240,7 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
               <li key={label} className="flex flex-1 items-center gap-2">
                 <span
                   className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-                    i <= step ? 'bg-accent text-white' : 'bg-ink-600 text-slate-400'
+                    i <= step ? 'bg-accent-solid text-white' : 'bg-ink-600 text-slate-400'
                   } ${i === step ? 'animate-ring' : ''}`}
                 >
                   {i + 1}

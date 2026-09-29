@@ -499,7 +499,7 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
                   onClick={() => setTrigger(kind)}
                   aria-pressed={trigger === kind}
                   className={`rounded-md py-1.5 text-[11px] font-semibold transition ${
-                    trigger === kind ? 'bg-accent text-white' : 'bg-ink-700 text-slate-300'
+                    trigger === kind ? 'bg-accent-solid text-white' : 'bg-ink-700 text-slate-300'
                   }`}
                 >
                   {kind === 'PRICE' ? 'At a price' : 'At a time'}
@@ -572,7 +572,7 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
                 aria-pressed={durationSec === seconds}
                 className={`rounded-lg py-2 text-xs font-semibold transition ${
                   durationSec === seconds
-                    ? 'bg-accent text-white'
+                    ? 'bg-accent-solid text-white'
                     : 'bg-ink-700 text-slate-300 hover:bg-ink-600'
                 }`}
               >
@@ -595,7 +595,7 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
                     onClick={() => setClockExpiresAt(slot.expiresAt)}
                     aria-pressed={active}
                     className={`rounded-lg px-2 py-2 text-xs font-semibold transition ${
-                      active ? 'bg-accent text-white' : 'bg-ink-700 text-slate-300 hover:bg-ink-600'
+                      active ? 'bg-accent-solid text-white' : 'bg-ink-700 text-slate-300 hover:bg-ink-600'
                     }`}
                   >
                     <span className="tabular">{clockLabel(slot.expiresAt)}</span>

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { ApiError, api } from '../../lib/api';
 import { money } from '../../lib/format';
 import { toast } from '../../store/toast';
@@ -145,6 +146,8 @@ function MethodDrawer({
     sortOrder: String(method.sortOrder),
   });
   const [busy, setBusy] = useState(false);
+  const containerRef = useRef<HTMLElement>(null);
+  useFocusTrap(containerRef, true);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -186,7 +189,9 @@ function MethodDrawer({
     <div className="fixed inset-0 z-50 flex">
       <button aria-label="Close" onClick={onClose} className="flex-1 bg-black/60" />
       <aside
+        ref={containerRef}
         role="dialog"
+        aria-modal="true"
         aria-label="Edit payment method"
         className="flex w-full max-w-lg flex-col overflow-y-auto border-l border-ink-600 bg-ink-800"
       >

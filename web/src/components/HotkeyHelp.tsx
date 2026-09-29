@@ -7,6 +7,7 @@ import {
   type HotkeyAction,
 } from '../lib/hotkeys';
 import type { HotkeysState } from '../hooks/useHotkeys';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface Props {
   state: HotkeysState;
@@ -23,8 +24,11 @@ interface Props {
 export function HotkeyHelp({ state, onClose }: Props) {
   const [capturing, setCapturing] = useState<HotkeyAction | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const { preferences, rebind, setEnabled, reset } = state;
   const clashing = conflicts(preferences.bindings);
+
+  useFocusTrap(containerRef, true);
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -60,6 +64,7 @@ export function HotkeyHelp({ state, onClose }: Props) {
         tabIndex={-1}
       />
       <div
+        ref={containerRef}
         role="dialog"
         aria-modal="true"
         aria-label="Keyboard shortcuts"
@@ -112,7 +117,7 @@ export function HotkeyHelp({ state, onClose }: Props) {
                 aria-label={`Change the shortcut for ${label}`}
                 className={`shrink-0 rounded-md px-2.5 py-1 font-mono text-[11px] font-semibold ${
                   capturing === action
-                    ? 'bg-accent text-white'
+                    ? 'bg-accent-solid text-white'
                     : clashing.includes(action)
                       ? 'bg-down/20 text-down'
                       : 'bg-ink-700 text-slate-200'

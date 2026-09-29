@@ -131,7 +131,7 @@ export function Leaderboard() {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-slate-100">
                       {row.display}
-                      {row.isYou && <span className="ml-1.5 chip bg-accent text-white">You</span>}
+                      {row.isYou && <span className="ml-1.5 chip bg-accent-solid text-white">You</span>}
                     </span>
                     <span className="block text-[11px] text-slate-500">
                       {row.trades} position{row.trades === 1 ? '' : 's'} · {row.winRate}% won

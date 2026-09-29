@@ -108,7 +108,7 @@ export function AssetPicker({ onPicked }: Props) {
               key={asset.symbol}
               className={`mb-1 flex items-start gap-1 rounded-lg transition ${
                 active ? 'bg-accent-soft ring-1 ring-accent/40' : 'hover:bg-ink-700'
-              } ${asset.isOpen ? '' : 'opacity-60'}`}
+              }`}
             >
               <button
                 onClick={() => {

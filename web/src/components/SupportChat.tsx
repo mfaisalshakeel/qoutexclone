@@ -126,7 +126,7 @@ export function SupportChat() {
       <button
         onClick={() => setOpen(!open)}
         aria-label="Support chat"
-        className={`fixed bottom-24 right-4 z-40 h-12 w-12 items-center justify-center rounded-full bg-accent text-white shadow-xl transition hover:brightness-110 md:bottom-6 ${
+        className={`fixed bottom-24 right-4 z-40 h-12 w-12 items-center justify-center rounded-full bg-accent-solid text-white shadow-xl transition hover:brightness-110 md:bottom-6 ${
           onTerminal && !open ? 'hidden md:flex' : 'flex'
         }`}
       >
@@ -206,7 +206,7 @@ export function SupportChat() {
                 <div
                   key={message.id}
                   className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed ${
-                    message.fromSupport ? 'bg-ink-700 text-slate-200' : 'ml-auto bg-accent text-white'
+                    message.fromSupport ? 'bg-ink-700 text-slate-200' : 'ml-auto bg-accent-solid text-white'
                   }`}
                 >
                   <p className="whitespace-pre-wrap break-words">{message.body}</p>

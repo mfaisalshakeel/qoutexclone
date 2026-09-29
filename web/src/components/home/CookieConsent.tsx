@@ -48,6 +48,7 @@ export function CookieConsent() {
 
   return (
     <div
+      id="cookie-consent"
       role="region"
       aria-label={t('cookieConsent.ariaLabel')}
       className="fixed inset-x-0 bottom-0 z-50 border-t border-ink-600 bg-ink-800 p-4 shadow-xl"
@@ -57,7 +58,7 @@ export function CookieConsent() {
           <Trans
             i18nKey="cookieConsent.message"
             components={{
-              policyLink: <Link to="/legal/cookie-policy" className="text-accent hover:underline" />,
+              policyLink: <Link to="/legal/cookie-policy" className="text-accent underline underline-offset-2" />,
             }}
           />
         </p>

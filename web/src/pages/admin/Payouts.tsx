@@ -296,7 +296,7 @@ export function AdminPayouts() {
               setDraft(emptyDraft());
               setPreview(null);
             }}
-            className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-white"
+            className="rounded-lg bg-accent-solid px-3 py-2 text-xs font-semibold text-white"
           >
             New rule
           </button>
@@ -442,7 +442,7 @@ export function AdminPayouts() {
                             })
                           }
                           className={`rounded-md px-2 py-1.5 text-xs font-semibold ${
-                            on ? 'bg-accent text-white' : 'bg-ink-700 text-slate-300'
+                            on ? 'bg-accent-solid text-white' : 'bg-ink-700 text-slate-300'
                           }`}
                         >
                           {day}
@@ -532,7 +532,7 @@ export function AdminPayouts() {
             <button
               onClick={() => void save()}
               disabled={saving || draft.name.trim().length < 2}
-              className="rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+              className="rounded-lg bg-accent-solid px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
             >
               {saving ? 'Saving…' : draft.id ? 'Save changes' : 'Create rule'}
             </button>
@@ -649,7 +649,7 @@ export function AdminPayouts() {
                       <>
                         <button
                           onClick={() => void remove(rule)}
-                          className="rounded-md bg-down px-2.5 py-1 text-xs font-semibold text-white"
+                          className="rounded-md bg-down-solid px-2.5 py-1 text-xs font-semibold text-white"
                         >
                           Confirm delete
                         </button>

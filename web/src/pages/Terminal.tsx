@@ -280,7 +280,7 @@ export function Terminal() {
         </aside>
       )}
 
-      <section className="flex min-h-0 flex-1 flex-col md:gap-2">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col md:gap-2">
         {/* edge to edge on a phone: a card inside a card reads as a mockup */}
         <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-ink-600 bg-ink-800 p-2.5 md:rounded-xl md:border">
           {!asset ? (
@@ -343,7 +343,7 @@ export function Terminal() {
           )}
 
           {/* the toolbar scrolls inside its own box rather than widening the page */}
-          <div className="-mx-1 flex w-full min-w-0 items-center gap-1 overflow-x-auto px-1 md:ml-auto md:w-auto md:overflow-visible">
+          <div className="-mx-1 flex w-full min-w-0 items-center gap-1 overflow-x-auto px-1 lg:ml-auto lg:w-auto lg:overflow-visible">
             {/* quick picks inline, the full set behind a menu: 14 timeframes
                 will not fit a toolbar at any width */}
             <div className="flex gap-1">
@@ -383,7 +383,7 @@ export function Terminal() {
                         }}
                         aria-pressed={timeframe === tf}
                         className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${
-                          timeframe === tf ? 'bg-accent text-white' : 'text-slate-300 hover:bg-ink-700'
+                          timeframe === tf ? 'bg-accent-solid text-white' : 'text-slate-300 hover:bg-ink-700'
                         }`}
                       >
                         {tf}
@@ -469,7 +469,7 @@ export function Terminal() {
                         }}
                         aria-pressed={chartType === type}
                         className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs font-semibold transition ${
-                          chartType === type ? 'bg-accent text-white' : 'text-slate-300 hover:bg-ink-700'
+                          chartType === type ? 'bg-accent-solid text-white' : 'text-slate-300 hover:bg-ink-700'
                         }`}
                       >
                         <span aria-hidden="true">{SERIES_GLYPHS[type]}</span>

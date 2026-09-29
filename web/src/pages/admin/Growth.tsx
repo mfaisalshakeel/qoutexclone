@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, api } from '../../lib/api';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { money } from '../../lib/format';
 import { toast } from '../../store/toast';
 import { Empty, Loading, PageHead, StatusPill, Table, Td } from '../../components/admin/ui';
@@ -757,11 +758,24 @@ function MarketplaceItemDrawer({
 /* --------------------------------- shared ---------------------------------- */
 
 function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const containerRef = useRef<HTMLElement>(null);
+  useFocusTrap(containerRef, true);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 z-50 flex">
       <button aria-label="Close" onClick={onClose} className="flex-1 bg-black/60" />
       <aside
+        ref={containerRef}
         role="dialog"
+        aria-modal="true"
         aria-label={title}
         className="flex w-full max-w-lg flex-col gap-3 overflow-y-auto border-l border-ink-600 bg-ink-800 p-4"
       >

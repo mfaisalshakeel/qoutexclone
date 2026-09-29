@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, api } from '../../lib/api';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { dateTime } from '../../lib/format';
 import { toast } from '../../store/toast';
 import { Empty, Loading, PageHead, StatusPill, Table, Td } from '../../components/admin/ui';
@@ -319,6 +320,8 @@ function EmailTemplateDrawer({
   const [body, setBody] = useState(override.draftBody ?? '');
   const [busy, setBusy] = useState<'save' | 'publish' | 'revert' | null>(null);
   const isCustomized = Boolean(override.publishedSubject || override.publishedBody);
+  const containerRef = useRef<HTMLElement>(null);
+  useFocusTrap(containerRef, true);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -378,7 +381,9 @@ function EmailTemplateDrawer({
     <div className="fixed inset-0 z-50 flex">
       <button aria-label="Close" onClick={onClose} className="flex-1 bg-black/60" />
       <aside
+        ref={containerRef}
         role="dialog"
+        aria-modal="true"
         aria-label="Email preview"
         className="flex w-full max-w-2xl flex-col overflow-y-auto border-l border-ink-600 bg-ink-800"
       >
@@ -450,6 +455,9 @@ function EmailTemplateDrawer({
  * own document.
  */
 function PreviewDrawer({ title, html, onClose }: { title: string; html: string; onClose: () => void }) {
+  const containerRef = useRef<HTMLElement>(null);
+  useFocusTrap(containerRef, true);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -462,7 +470,9 @@ function PreviewDrawer({ title, html, onClose }: { title: string; html: string; 
     <div className="fixed inset-0 z-50 flex">
       <button aria-label="Close the preview" onClick={onClose} className="flex-1 bg-black/60" />
       <aside
+        ref={containerRef}
         role="dialog"
+        aria-modal="true"
         aria-label="Email preview"
         className="flex w-full max-w-xl flex-col border-l border-ink-600 bg-ink-800"
       >

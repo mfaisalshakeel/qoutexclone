@@ -215,7 +215,7 @@ export function AdminSupport() {
                   <span className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-xs font-semibold">{ticket.subject}</span>
                     {ticket.unreadByAgent > 0 && (
-                      <span className="rounded-full bg-down px-1.5 text-[10px] font-bold text-white">
+                      <span className="rounded-full bg-down-solid px-1.5 text-[10px] font-bold text-white">
                         {ticket.unreadByAgent}
                       </span>
                     )}
@@ -263,7 +263,7 @@ export function AdminSupport() {
                   <div
                     key={message.id}
                     className={`max-w-[80%] rounded-xl px-3 py-2 text-xs leading-relaxed ${
-                      message.fromSupport ? 'ml-auto bg-accent text-white' : 'bg-ink-700 text-slate-200'
+                      message.fromSupport ? 'ml-auto bg-accent-solid text-white' : 'bg-ink-700 text-slate-200'
                     }`}
                   >
                     <p className="whitespace-pre-wrap break-words">{message.body}</p>

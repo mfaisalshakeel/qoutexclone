@@ -459,8 +459,6 @@ test.describe('admin', () => {
     await expect(row).toHaveCount(0);
     await page.getByText('Clear filters ✕').click();
     await expect(row).toBeVisible();
-    // close the still-open filter dropdown, or it overlaps the row below it
-    await page.getByText('Kind', { exact: true }).click();
 
     // clicking the row opens its redemptions, empty until someone uses the code
     await row.getByText(code).click();
@@ -489,8 +487,6 @@ test.describe('admin', () => {
     await expect(row).toHaveCount(0);
     await page.getByText('Clear filters ✕').click();
     await expect(row).toBeVisible();
-    // close the still-open filter dropdown, or it overlaps the row below it
-    await page.getByText('Class', { exact: true }).click();
 
     // clicking the sortable Payout header reorders the list without erroring
     await page.getByRole('columnheader', { name: 'Payout' }).getByRole('button').click();
@@ -651,8 +647,6 @@ test.describe('admin', () => {
 
     // clean up: approve both so no live pending withdrawal is left behind
     await admin.getByText('Clear filters ✕').click();
-    // close the still-open filter dropdown, or it overlaps the rows below it
-    await admin.locator('summary').filter({ hasText: 'Status' }).click();
     for (const email of [proCreds.email, standardCreds.email]) {
       const row = admin.locator('tr').filter({ hasText: email });
       await row.locator('button:has-text("Approve")').click();

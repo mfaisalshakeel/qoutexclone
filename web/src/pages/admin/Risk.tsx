@@ -240,7 +240,7 @@ export function AdminRisk() {
                         <button
                           onClick={() => void save(market)}
                           disabled={saving}
-                          className="rounded-md bg-accent px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                          className="rounded-md bg-accent-solid px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
                         >
                           {saving ? 'Saving…' : 'Save'}
                         </button>

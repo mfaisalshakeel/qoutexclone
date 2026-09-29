@@ -80,6 +80,10 @@ export async function openTraderProfile(page: Page, email: string): Promise<void
   await expect(page).toHaveURL(/search=/);
   const pattern = new RegExp(email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const row = page.locator('tr:visible, li:visible').filter({ hasText: pattern }).first();
+  // the search itself is debounced, and the URL updates before the filtered
+  // list does — waiting only for the URL races a stale (or, with enough
+  // accumulated test accounts, still-loading) list still showing everyone
+  await row.waitFor({ state: 'visible' });
   const detailsButton = row.getByRole('button', { name: 'View details' });
   if (await detailsButton.isVisible().catch(() => false)) {
     await detailsButton.click();

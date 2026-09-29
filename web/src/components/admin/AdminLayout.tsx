@@ -157,7 +157,7 @@ export function AdminLayout() {
                 >
                   <span className="flex-1">{item.label}</span>
                   {badge > 0 && (
-                    <span className="rounded-full bg-down px-1.5 text-[10px] font-bold text-white">
+                    <span className="rounded-full bg-down-solid px-1.5 text-[10px] font-bold text-white">
                       {badge}
                     </span>
                   )}

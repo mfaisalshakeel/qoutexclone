@@ -81,10 +81,15 @@ export function StatusPill({ status }: { status: string }) {
   return <span className={`chip ${STATUS_TONES[key] ?? 'bg-ink-600 text-slate-300'}`}>{key}</span>;
 }
 
-/** Responsive table: real table on desktop, stacked cards on phones. */
+/**
+ * A table that scrolls inside its own box at any width, rather than widening
+ * the page — `min-w-0` on the card is what lets it actually shrink to fit a
+ * narrow parent; without it a flex/grid ancestor can hold it to the table's
+ * full intrinsic width instead of the viewport's.
+ */
 export function Table({ head, children }: { head: string[]; children: ReactNode }) {
   return (
-    <div className="card overflow-hidden">
+    <div className="card min-w-0 overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[42rem] text-sm">
           <thead className="bg-ink-700/60 text-[10px] uppercase tracking-wide text-slate-400">
