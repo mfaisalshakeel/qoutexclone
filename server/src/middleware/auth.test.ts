@@ -11,14 +11,20 @@ import { AppError } from '../lib/errors.js';
 
 const run = (req: Partial<Request>): Promise<unknown> =>
   new Promise((resolve) => {
-    requireNotInMaintenance(req as Request, {} as Response, ((err?: unknown) => resolve(err)) as NextFunction);
+    requireNotInMaintenance(
+      req as Request,
+      {} as Response,
+      ((err?: unknown) => resolve(err)) as NextFunction,
+    );
   });
 
 describe('requireNotInMaintenance', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('lets everyone through while maintenance mode is off', async () => {
-    vi.spyOn(settings, 'get').mockImplementation((key) => (key === 'general.maintenanceMode' ? false : undefined) as never);
+    vi.spyOn(settings, 'get').mockImplementation(
+      (key) => (key === 'general.maintenanceMode' ? false : undefined) as never,
+    );
     const err = await run({ user: { id: '1', role: 'USER', email: 'a@b.com' }, ip: '1.2.3.4' });
     expect(err).toBeUndefined();
   });

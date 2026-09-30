@@ -85,7 +85,7 @@ describe('filtering', () => {
     expect(filterAssets(catalogue, { ...options, tab: 'CRYPTO', query: 'eur' })).toHaveLength(0);
   });
 
-  it('narrows to a tournament\'s own market list when one is given', () => {
+  it("narrows to a tournament's own market list when one is given", () => {
     const scoped = filterAssets(catalogue, { ...options, allowedAssetIds: ['EURUSD', 'AAPL'] });
     expect(scoped.map((a) => a.symbol)).toEqual(['EURUSD', 'AAPL']);
   });
@@ -95,7 +95,7 @@ describe('filtering', () => {
     expect(filterAssets(catalogue, { ...options, allowedAssetIds: undefined })).toHaveLength(4);
   });
 
-  it('combines a tournament\'s market list with the tab and the search', () => {
+  it("combines a tournament's market list with the tab and the search", () => {
     const narrowed = filterAssets(catalogue, {
       ...options,
       tab: 'CRYPTO',

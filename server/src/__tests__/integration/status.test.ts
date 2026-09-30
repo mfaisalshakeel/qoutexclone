@@ -196,7 +196,7 @@ suite('status levels', () => {
     expect(trade.payoutPct).toBe(84);
   });
 
-  it("a status-level pin is left out of a tournament chip trade, like deposits always are", async () => {
+  it('a status-level pin is left out of a tournament chip trade, like deposits always are', async () => {
     const asset = await makeAsset(80);
     const pinned = await makeUser(0);
     await prisma.user.update({ where: { id: pinned.id }, data: { statusLevelOverride: 'VIP' } });

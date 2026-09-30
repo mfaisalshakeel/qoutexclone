@@ -62,7 +62,9 @@ export function CookieConsent() {
           <Trans
             i18nKey="cookieConsent.message"
             components={{
-              policyLink: <Link to="/legal/cookie-policy" className="text-accent underline underline-offset-2" />,
+              policyLink: (
+                <Link to="/legal/cookie-policy" className="text-accent underline underline-offset-2" />
+              ),
             }}
           />
         </p>

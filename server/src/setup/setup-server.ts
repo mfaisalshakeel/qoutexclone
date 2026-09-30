@@ -156,7 +156,9 @@ export function createSetupApp(options: { exitAfterInstall?: boolean } = {}): Ex
     if (!parsed.success) {
       res
         .status(400)
-        .json({ error: { code: 'validation_error', message: 'Check the form for missing or invalid fields.' } });
+        .json({
+          error: { code: 'validation_error', message: 'Check the form for missing or invalid fields.' },
+        });
       return;
     }
 
@@ -167,7 +169,9 @@ export function createSetupApp(options: { exitAfterInstall?: boolean } = {}): Ex
       if (/^DATABASE_URL=.+$/m.test(existing)) {
         res
           .status(409)
-          .json({ error: { code: 'already_configured', message: 'This installation is already configured.' } });
+          .json({
+            error: { code: 'already_configured', message: 'This installation is already configured.' },
+          });
         return;
       }
     }
@@ -199,7 +203,8 @@ export function createSetupApp(options: { exitAfterInstall?: boolean } = {}): Ex
       // DATABASE_URL set would make the *next* boot try (and fail) to start
       // the whole app instead of reopening the wizard
       await fsp.rm(envPath, { force: true });
-      const stderr = err && typeof err === 'object' && 'stderr' in err ? String((err as { stderr: unknown }).stderr) : '';
+      const stderr =
+        err && typeof err === 'object' && 'stderr' in err ? String((err as { stderr: unknown }).stderr) : '';
       const message = err instanceof Error ? err.message : String(err);
       console.error('[setup] install failed', message, stderr);
       res.status(500).json({

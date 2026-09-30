@@ -191,8 +191,8 @@ export function AdminLayout() {
         <div className="card max-w-sm space-y-3 p-6 text-center">
           <p className="text-sm font-semibold text-slate-100">Turn on two-factor to continue</p>
           <p className="text-xs text-slate-400">
-            Admin accounts need a second factor before they can open the back office. Set it up from
-            Account → Security, then come back here.
+            Admin accounts need a second factor before they can open the back office. Set it up from Account →
+            Security, then come back here.
           </p>
           <Link to="/account/security" className="btn-primary block w-full !py-2 text-xs">
             Go to Account → Security

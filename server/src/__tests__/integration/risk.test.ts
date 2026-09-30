@@ -93,7 +93,7 @@ suite('platform-wide stake bounds', () => {
     return asset;
   };
 
-  it("refuses a stake the asset allows but the platform-wide ceiling does not", async () => {
+  it('refuses a stake the asset allows but the platform-wide ceiling does not', async () => {
     await settings.set('trading.maxStakeCents', 50_000); // $500 platform-wide
     const asset = await makeAsset();
     const user = await makeUser();
@@ -120,7 +120,7 @@ suite('platform-wide stake bounds', () => {
     expect(trade.stake).toBe(40_000);
   });
 
-  it("raises a stake the asset allows up to the platform-wide floor", async () => {
+  it('raises a stake the asset allows up to the platform-wide floor', async () => {
     await settings.set('trading.minStakeCents', 20_000); // $200 platform-wide
     const asset = await makeAsset(); // its own row still says $1 minimum
     const user = await makeUser();

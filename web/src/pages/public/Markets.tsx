@@ -102,10 +102,7 @@ export function PublicMarkets() {
             <p className="p-6 text-center text-sm text-slate-500">{t('markets.noMatch', { query })}</p>
           )}
           {shown.map((asset) => (
-            <div
-              key={asset.symbol}
-              className="flex items-center gap-3 p-4"
-            >
+            <div key={asset.symbol} className="flex items-center gap-3 p-4">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink-600 text-[10px] font-bold text-slate-300">
                 {asset.icon ?? asset.base}
               </span>

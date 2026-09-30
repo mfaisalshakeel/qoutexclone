@@ -62,7 +62,11 @@ export function MarkdownEditor({
           className="markdown-body min-h-[8rem] rounded-lg border border-ink-500 bg-ink-900 p-3 text-sm text-slate-200"
           style={{ minHeight: `${rows * 1.5}rem` }}
           // sanitised by renderMarkdown before it ever reaches innerHTML
-          dangerouslySetInnerHTML={{ __html: value.trim() ? renderMarkdown(value) : '<p class="text-slate-500">Nothing to preview yet.</p>' }}
+          dangerouslySetInnerHTML={{
+            __html: value.trim()
+              ? renderMarkdown(value)
+              : '<p class="text-slate-500">Nothing to preview yet.</p>',
+          }}
         />
       )}
     </div>

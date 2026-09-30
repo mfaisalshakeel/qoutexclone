@@ -1663,13 +1663,17 @@ function AssetDrawer({
             className="field !text-xs"
           />
           <p className="mt-1 text-[10px] text-slate-500">
-            Narrows the platform's own duration list — it can leave options out, never add ones the
-            platform doesn't offer.
+            Narrows the platform's own duration list — it can leave options out, never add ones the platform
+            doesn't offer.
           </p>
         </div>
       </div>
 
-      <button type="submit" disabled={saving} className="btn-primary mt-5 w-full !py-2 text-xs disabled:opacity-50">
+      <button
+        type="submit"
+        disabled={saving}
+        className="btn-primary mt-5 w-full !py-2 text-xs disabled:opacity-50"
+      >
         {saving ? 'Saving…' : 'Save changes'}
       </button>
     </form>

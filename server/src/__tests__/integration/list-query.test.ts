@@ -61,7 +61,10 @@ suite('generic list pagination and export', () => {
     expect(page1.items).toHaveLength(2);
     expect(page1.total).toBe(5);
     expect(page1.pageCount).toBe(3);
-    expect(page1.items.map((u: { email: string }) => u.email)).toEqual([`${prefix}-0@test.dev`, `${prefix}-1@test.dev`]);
+    expect(page1.items.map((u: { email: string }) => u.email)).toEqual([
+      `${prefix}-0@test.dev`,
+      `${prefix}-1@test.dev`,
+    ]);
 
     const page3 = await paginateOffset({
       findMany: (args) => prisma.user.findMany(args as never),
@@ -108,8 +111,7 @@ suite('generic list pagination and export', () => {
       'test.csv',
       ['Email'],
       (u: { email: string }) => [u.email],
-      (skip, take) =>
-        prisma.user.findMany({ where, orderBy: { email: 'asc' }, skip, take }) as never,
+      (skip, take) => prisma.user.findMany({ where, orderBy: { email: 'asc' }, skip, take }) as never,
     );
 
     expect(headers['content-type']).toContain('text/csv');

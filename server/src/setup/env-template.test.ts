@@ -3,9 +3,15 @@ import { buildDatabaseUrl, buildEnvFile, randomSecret } from './env-template.js'
 
 describe('buildDatabaseUrl', () => {
   it('builds a plain mysql:// url from simple credentials', () => {
-    expect(buildDatabaseUrl({ host: '127.0.0.1', port: 3306, database: 'quotex', user: 'quotex', password: 'quotex' })).toBe(
-      'mysql://quotex:quotex@127.0.0.1:3306/quotex',
-    );
+    expect(
+      buildDatabaseUrl({
+        host: '127.0.0.1',
+        port: 3306,
+        database: 'quotex',
+        user: 'quotex',
+        password: 'quotex',
+      }),
+    ).toBe('mysql://quotex:quotex@127.0.0.1:3306/quotex');
   });
 
   it('percent-encodes a password containing url-special characters', () => {
@@ -21,12 +27,24 @@ describe('buildDatabaseUrl', () => {
   });
 
   it('percent-encodes a database or user name with special characters too', () => {
-    const url = buildDatabaseUrl({ host: 'db.example.com', port: 3307, database: 'my db', user: 'a/b', password: '' });
+    const url = buildDatabaseUrl({
+      host: 'db.example.com',
+      port: 3307,
+      database: 'my db',
+      user: 'a/b',
+      password: '',
+    });
     expect(url).toBe('mysql://a%2Fb:@db.example.com:3307/my%20db');
   });
 
   it('trims whitespace from the host', () => {
-    const url = buildDatabaseUrl({ host: '  127.0.0.1  ', port: 3306, database: 'quotex', user: 'quotex', password: '' });
+    const url = buildDatabaseUrl({
+      host: '  127.0.0.1  ',
+      port: 3306,
+      database: 'quotex',
+      user: 'quotex',
+      password: '',
+    });
     expect(url).toContain('@127.0.0.1:3306');
   });
 });
@@ -61,7 +79,7 @@ describe('buildEnvFile', () => {
     expect(env).toContain('PORT=4000');
   });
 
-  it('matches the CLI installer\'s own bootstrap defaults — one template, two front doors', () => {
+  it("matches the CLI installer's own bootstrap defaults — one template, two front doors", () => {
     const env = buildEnvFile(params);
     expect(env).toContain('NODE_ENV=production');
     expect(env).toContain('FEED_PROVIDER=simulated');

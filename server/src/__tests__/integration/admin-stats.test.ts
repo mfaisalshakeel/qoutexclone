@@ -134,9 +134,9 @@ suite('admin dashboard overview', () => {
   it('refuses a range where the start is not before the end', async () => {
     const now = new Date();
     await expect(dashboardOverview({ from: now, to: now })).rejects.toMatchObject({ code: 'invalid_range' });
-    await expect(
-      dashboardOverview({ from: now, to: new Date(now.getTime() - 1000) }),
-    ).rejects.toMatchObject({ code: 'invalid_range' });
+    await expect(dashboardOverview({ from: now, to: new Date(now.getTime() - 1000) })).rejects.toMatchObject({
+      code: 'invalid_range',
+    });
   });
 
   it('counts a first-time depositor once, and never a repeat depositor', async () => {

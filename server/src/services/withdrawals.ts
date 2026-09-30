@@ -424,6 +424,9 @@ export function priorityOrder<
 >(rows: T[]): (T & { level: StatusLevel })[] {
   const config = statusConfig();
   return rows
-    .map((row) => ({ ...row, level: levelFor(row.user.totalDeposited, config, row.user.statusLevelOverride) }))
+    .map((row) => ({
+      ...row,
+      level: levelFor(row.user.totalDeposited, config, row.user.statusLevelOverride),
+    }))
     .sort((a, b) => b.level.priority - a.level.priority || a.createdAt.getTime() - b.createdAt.getTime());
 }

@@ -71,7 +71,11 @@ suite('e-wallet withdrawals', () => {
   it('refuses a destination that is not email-shaped', async () => {
     const user = await makeUser();
     await expect(
-      withdrawals.createEwalletWithdrawal({ userId: user.id, destination: 'not-an-email', amountCents: 5_000 }),
+      withdrawals.createEwalletWithdrawal({
+        userId: user.id,
+        destination: 'not-an-email',
+        amountCents: 5_000,
+      }),
     ).rejects.toMatchObject({ code: 'invalid_address' });
   });
 
@@ -96,7 +100,11 @@ suite('e-wallet withdrawals', () => {
   it('refuses an amount below the method minimum', async () => {
     const user = await makeUser();
     await expect(
-      withdrawals.createEwalletWithdrawal({ userId: user.id, destination: 'trader@example.test', amountCents: 500 }),
+      withdrawals.createEwalletWithdrawal({
+        userId: user.id,
+        destination: 'trader@example.test',
+        amountCents: 500,
+      }),
     ).rejects.toMatchObject({ code: 'below_minimum' });
   });
 
@@ -168,7 +176,11 @@ suite('e-wallet withdrawals', () => {
       destination: 'trader@example.test',
       amountCents: 15_000,
     });
-    const rejected = await withdrawals.rejectWithdrawal(withdrawal.id, null, 'destination could not be verified');
+    const rejected = await withdrawals.rejectWithdrawal(
+      withdrawal.id,
+      null,
+      'destination could not be verified',
+    );
     expect(rejected.status).toBe('REJECTED');
     expect(rejected.adminNote).toBe('destination could not be verified');
 

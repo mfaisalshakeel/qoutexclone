@@ -39,10 +39,9 @@ describe('buildOrderBy', () => {
   });
 
   it('applies multiple comma-separated columns in order', () => {
-    expect(buildOrderBy('-totalDeposited,email', ['totalDeposited', 'email'], { createdAt: 'desc' })).toEqual([
-      { totalDeposited: 'desc' },
-      { email: 'asc' },
-    ]);
+    expect(buildOrderBy('-totalDeposited,email', ['totalDeposited', 'email'], { createdAt: 'desc' })).toEqual(
+      [{ totalDeposited: 'desc' }, { email: 'asc' }],
+    );
   });
 
   it('refuses a column that was not offered', () => {

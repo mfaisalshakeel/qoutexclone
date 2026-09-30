@@ -44,7 +44,13 @@ describe('tableStateToParams', () => {
   });
 
   it('round-trips through parseTableState', () => {
-    const original = { page: 4, pageSize: 50, sort: '-createdAt', search: 'bob', filters: { status: 'ACTIVE' } };
+    const original = {
+      page: 4,
+      pageSize: 50,
+      sort: '-createdAt',
+      search: 'bob',
+      filters: { status: 'ACTIVE' },
+    };
     const parsed = parseTableState(tableStateToParams(original), 25);
     expect(parsed).toEqual(original);
   });

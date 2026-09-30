@@ -469,7 +469,9 @@ export function Terminal() {
                         }}
                         aria-pressed={chartType === type}
                         className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs font-semibold transition ${
-                          chartType === type ? 'bg-accent-solid text-white' : 'text-slate-300 hover:bg-ink-700'
+                          chartType === type
+                            ? 'bg-accent-solid text-white'
+                            : 'text-slate-300 hover:bg-ink-700'
                         }`}
                       >
                         <span aria-hidden="true">{SERIES_GLYPHS[type]}</span>

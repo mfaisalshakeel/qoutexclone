@@ -98,7 +98,9 @@ test.describe('admin', () => {
     await expect(admin.getByText('Add a note first')).toBeVisible();
     await expect(rejectRow.getByText('rejected')).toHaveCount(0);
 
-    await rejectRow.getByPlaceholder('Note (required to reject)').fill('Could not verify the e-wallet handle');
+    await rejectRow
+      .getByPlaceholder('Note (required to reject)')
+      .fill('Could not verify the e-wallet handle');
     await rejectRow.locator('button:has-text("Reject")').click();
     await expect(admin.getByText('Withdrawal rejected, funds returned')).toBeVisible();
     await expect(rejectRow.getByText('rejected')).toBeVisible();
@@ -149,9 +151,7 @@ test.describe('admin', () => {
     expect(errors).toEqual([]);
   });
 
-  test('dashboard charts render for every window and switch without breaking the page', async ({
-    page,
-  }) => {
+  test('dashboard charts render for every window and switch without breaking the page', async ({ page }) => {
     const errors = failOnPageErrors(page);
     await login(page, ADMIN);
     await page.goto('/admin');
@@ -496,7 +496,7 @@ test.describe('admin', () => {
     expect(errors).toEqual([]);
   });
 
-  test('a market\'s full details can be edited from its drawer, not just payout and delist', async ({
+  test("a market's full details can be edited from its drawer, not just payout and delist", async ({
     page,
   }) => {
     const errors = failOnPageErrors(page);
@@ -742,7 +742,9 @@ test.describe('admin', () => {
     await expect(admin.getByText('pinned: VIP')).toBeVisible();
 
     // a note is written and shows up in the list below the form
-    await admin.getByPlaceholder('Add a note for the next admin who opens this account…').fill('Called about a large deposit; identity confirmed by phone.');
+    await admin
+      .getByPlaceholder('Add a note for the next admin who opens this account…')
+      .fill('Called about a large deposit; identity confirmed by phone.');
     await admin.getByRole('button', { name: 'Add note' }).click();
     await expect(admin.getByText('Called about a large deposit; identity confirmed by phone.')).toBeVisible();
 

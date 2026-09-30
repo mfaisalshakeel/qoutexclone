@@ -235,7 +235,9 @@ export function Limits() {
                 key={days}
                 onClick={() => setConfirming(days)}
                 className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                  confirming === days ? 'bg-down-solid text-white' : 'bg-ink-700 text-slate-300 hover:bg-ink-600'
+                  confirming === days
+                    ? 'bg-down-solid text-white'
+                    : 'bg-ink-700 text-slate-300 hover:bg-ink-600'
                 }`}
               >
                 {days === 365 ? '1 year' : days >= 30 ? `${Math.round(days / 30)} months` : `${days} days`}

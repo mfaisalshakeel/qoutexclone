@@ -37,10 +37,7 @@ describe('AnnouncementBanner', () => {
     });
     render(<AnnouncementBanner />);
     expect(await screen.findByText('Scheduled maintenance Sunday.')).toBeDefined();
-    expect(screen.getByRole('link', { name: 'Details' })).toHaveProperty(
-      'href',
-      'https://example.com/',
-    );
+    expect(screen.getByRole('link', { name: 'Details' })).toHaveProperty('href', 'https://example.com/');
   });
 
   it('dismisses a banner and remembers it across a remount', async () => {

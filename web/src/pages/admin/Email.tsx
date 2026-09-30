@@ -425,9 +425,7 @@ function EmailTemplateDrawer({
               placeholder="Leave blank to keep the platform default"
             />
           </div>
-          {isCustomized && (
-            <p className="text-[11px] text-accent">This template is live with custom copy.</p>
-          )}
+          {isCustomized && <p className="text-[11px] text-accent">This template is live with custom copy.</p>}
           <div className="flex flex-wrap gap-2 pt-1">
             <button onClick={() => void save()} disabled={busy !== null} className="btn-ghost">
               {busy === 'save' ? 'Saving…' : 'Save draft'}

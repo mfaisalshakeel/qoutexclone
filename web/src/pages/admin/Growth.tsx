@@ -279,7 +279,12 @@ function BonusOfferDrawer({
         <label className="label" htmlFor="bo-e-name">
           Name
         </label>
-        <input id="bo-e-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="field" />
+        <input
+          id="bo-e-name"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          className="field"
+        />
       </div>
       <div>
         <label className="label" htmlFor="bo-e-description">
@@ -437,14 +442,23 @@ function formToConfig(kind: ItemKind, form: Record<string, string>): Record<stri
   return out;
 }
 
-const emptyItemForm = { key: '', name: '', description: '', kind: 'PAYOUT_BOOSTER' as ItemKind, priceCents: 500, pricePoints: 0 };
+const emptyItemForm = {
+  key: '',
+  name: '',
+  description: '',
+  kind: 'PAYOUT_BOOSTER' as ItemKind,
+  priceCents: 500,
+  pricePoints: 0,
+};
 
 export function AdminMarketplaceItems() {
   const [items, setItems] = useState<MarketplaceItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<MarketplaceItem | null>(null);
   const [form, setForm] = useState(emptyItemForm);
-  const [config, setConfig] = useState<Record<string, string>>(configToForm('PAYOUT_BOOSTER', defaultConfig('PAYOUT_BOOSTER')));
+  const [config, setConfig] = useState<Record<string, string>>(
+    configToForm('PAYOUT_BOOSTER', defaultConfig('PAYOUT_BOOSTER')),
+  );
 
   const load = useCallback(async () => {
     setError(null);
@@ -757,7 +771,15 @@ function MarketplaceItemDrawer({
 
 /* --------------------------------- shared ---------------------------------- */
 
-function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function Drawer({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
   const containerRef = useRef<HTMLElement>(null);
   useFocusTrap(containerRef, true);
 

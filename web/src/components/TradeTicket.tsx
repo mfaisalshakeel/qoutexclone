@@ -281,7 +281,14 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
   const badTime =
     orderType === 'PENDING' && trigger === 'TIME' && !(new Date(triggerAt).getTime() > Date.now());
   const blocked =
-    maintenanceActive || marketClosed || tooSmall || tooLarge || insufficient || noSlot || badLevel || badTime;
+    maintenanceActive ||
+    marketClosed ||
+    tooSmall ||
+    tooLarge ||
+    insufficient ||
+    noSlot ||
+    badLevel ||
+    badTime;
   // a pending order is not funded until it fires, so a thin balance is only a
   // warning there rather than a block
   const pendingSide = orderType === 'PENDING' ? (levelNumber > (livePrice ?? 0) ? 'above' : 'below') : null;

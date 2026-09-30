@@ -46,7 +46,8 @@ export function AssetPicker({ onPicked }: Props) {
 
   const tabs = useMemo(() => tabsFor(inScope, favourites), [inScope, favourites]);
   const shown = useMemo(
-    () => sortAssets(filterAssets(assets, { query, tab, favourites, allowedAssetIds: scope }), sort, favourites),
+    () =>
+      sortAssets(filterAssets(assets, { query, tab, favourites, allowedAssetIds: scope }), sort, favourites),
     [assets, query, tab, favourites, sort, scope],
   );
 

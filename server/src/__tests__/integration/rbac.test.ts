@@ -43,7 +43,9 @@ suite('admin access control', () => {
     adminRole?: string | null,
   ): Promise<unknown> =>
     new Promise((resolve) => {
-      const req = { user: { id: userId, role: 'ADMIN', email: 'x@test.dev', adminRole } } as unknown as Request;
+      const req = {
+        user: { id: userId, role: 'ADMIN', email: 'x@test.dev', adminRole },
+      } as unknown as Request;
       middleware(req, {} as Response, (err?: unknown) => resolve(err));
     });
 

@@ -165,7 +165,7 @@ suite('tournaments: rebuys, scoping, edit and cancel', () => {
   });
 
   describe('market scoping', () => {
-    it('refuses a stake on a market outside the tournament\'s own list', async () => {
+    it("refuses a stake on a market outside the tournament's own list", async () => {
       const allowed = await makeAsset();
       const disallowed = await makeAsset();
       const tournament = await makeTournament({ allowedAssetIds: [allowed.id] });

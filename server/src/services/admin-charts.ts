@@ -46,31 +46,32 @@ export async function dashboardCharts(days: number): Promise<ChartsPayload> {
   const to = new Date();
   const from = new Date(to.getTime() - days * 86_400_000);
 
-  const [deposits, withdrawals, trades, assets, topAssetAgg, exposure, registrations, ftd] = await Promise.all([
-    prisma.deposit.findMany({
-      where: { status: 'COMPLETED', confirmedAt: { gte: from, lt: to } },
-      select: { confirmedAt: true, creditedAmount: true },
-    }),
-    prisma.withdrawal.findMany({
-      where: { status: 'COMPLETED', processedAt: { gte: from, lt: to } },
-      select: { processedAt: true, amount: true },
-    }),
-    prisma.trade.findMany({
-      where: { accountType: 'REAL', status: { in: ['WON', 'LOST'] }, settledAt: { gte: from, lt: to } },
-      select: { settledAt: true, profit: true, stake: true, assetId: true, openedAt: true },
-    }),
-    prisma.asset.findMany({ select: { id: true, symbol: true, pair: true, assetClass: true } }),
-    prisma.trade.groupBy({
-      by: ['assetId'],
-      where: { accountType: 'REAL', status: { in: ['WON', 'LOST'] }, settledAt: { gte: from, lt: to } },
-      _sum: { stake: true },
-      orderBy: { _sum: { stake: 'desc' } },
-      take: 10,
-    }),
-    exposureByMarket(),
-    prisma.user.count({ where: { createdAt: { gte: from, lt: to } } }),
-    firstTimeDepositors(from, to),
-  ]);
+  const [deposits, withdrawals, trades, assets, topAssetAgg, exposure, registrations, ftd] =
+    await Promise.all([
+      prisma.deposit.findMany({
+        where: { status: 'COMPLETED', confirmedAt: { gte: from, lt: to } },
+        select: { confirmedAt: true, creditedAmount: true },
+      }),
+      prisma.withdrawal.findMany({
+        where: { status: 'COMPLETED', processedAt: { gte: from, lt: to } },
+        select: { processedAt: true, amount: true },
+      }),
+      prisma.trade.findMany({
+        where: { accountType: 'REAL', status: { in: ['WON', 'LOST'] }, settledAt: { gte: from, lt: to } },
+        select: { settledAt: true, profit: true, stake: true, assetId: true, openedAt: true },
+      }),
+      prisma.asset.findMany({ select: { id: true, symbol: true, pair: true, assetClass: true } }),
+      prisma.trade.groupBy({
+        by: ['assetId'],
+        where: { accountType: 'REAL', status: { in: ['WON', 'LOST'] }, settledAt: { gte: from, lt: to } },
+        _sum: { stake: true },
+        orderBy: { _sum: { stake: 'desc' } },
+        take: 10,
+      }),
+      exposureByMarket(),
+      prisma.user.count({ where: { createdAt: { gte: from, lt: to } } }),
+      firstTimeDepositors(from, to),
+    ]);
 
   const byDay = emptyDaily(days, to);
   for (const d of deposits) {

@@ -34,7 +34,7 @@ export const NUMBER_FORMATS = [
 ] as const;
 
 /** Only the languages an operator has actually enabled — the rest of LANGUAGES stays hidden until its translation is ready. */
-export function enabledLanguages(codes: readonly string[]): typeof LANGUAGES[number][] {
+export function enabledLanguages(codes: readonly string[]): (typeof LANGUAGES)[number][] {
   const enabled = new Set(codes);
   return LANGUAGES.filter((language) => enabled.has(language.code));
 }

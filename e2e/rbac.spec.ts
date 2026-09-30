@@ -8,9 +8,7 @@ import { ADMIN, failOnPageErrors, login } from './helpers';
  * nav and pages are scoped to the role it was given — never the whole panel.
  */
 test.describe('admin roles', () => {
-  test('a new staff account is locked out until 2FA is on, then scoped to its role', async ({
-    browser,
-  }) => {
+  test('a new staff account is locked out until 2FA is on, then scoped to its role', async ({ browser }) => {
     const adminContext = await browser.newContext();
     const admin = await adminContext.newPage();
     const errors = failOnPageErrors(admin, [/status of 403/]);
@@ -62,9 +60,9 @@ test.describe('admin roles', () => {
     // a direct URL to a section the role doesn't hold lands on a clear refusal,
     // not a broken page making requests the server would reject anyway
     await staff.goto('/admin/risk');
-    await expect(staff.getByText("Not available for your role")).toBeVisible();
+    await expect(staff.getByText('Not available for your role')).toBeVisible();
     await staff.goto('/admin/staff');
-    await expect(staff.getByText("Not available for your role")).toBeVisible();
+    await expect(staff.getByText('Not available for your role')).toBeVisible();
 
     // on the traders list, finance can adjust a balance but not suspend an account
     await staff.goto('/admin/users');

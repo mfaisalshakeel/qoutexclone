@@ -42,16 +42,26 @@ export function Setup() {
   usePageMeta({ title: 'Set up Quantex', noindex: true });
 
   const [step, setStep] = useState<Step>('welcome');
-  const [requirements, setRequirements] = useState<{ node: { version: string; ok: boolean; required: string } } | null>(
-    null,
-  );
+  const [requirements, setRequirements] = useState<{
+    node: { version: string; ok: boolean; required: string };
+  } | null>(null);
 
-  const [db, setDb] = useState<DbForm>({ host: '127.0.0.1', port: '3306', database: 'quotex', user: 'quotex', password: '' });
+  const [db, setDb] = useState<DbForm>({
+    host: '127.0.0.1',
+    port: '3306',
+    database: 'quotex',
+    user: 'quotex',
+    password: '',
+  });
   const [dbTested, setDbTested] = useState(false);
   const [dbTesting, setDbTesting] = useState(false);
   const [dbError, setDbError] = useState('');
 
-  const [admin, setAdmin] = useState<AdminForm>({ email: 'admin@quotexclone.dev', password: '', confirm: '' });
+  const [admin, setAdmin] = useState<AdminForm>({
+    email: 'admin@quotexclone.dev',
+    password: '',
+    confirm: '',
+  });
   const [adminError, setAdminError] = useState('');
 
   const [installError, setInstallError] = useState('');
@@ -65,9 +75,12 @@ export function Setup() {
       .catch(() => setRequirements(null));
   }, []);
 
-  useEffect(() => () => {
-    if (pollRef.current) window.clearInterval(pollRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (pollRef.current) window.clearInterval(pollRef.current);
+    },
+    [],
+  );
 
   const testDb = async () => {
     setDbTesting(true);
@@ -108,7 +121,13 @@ export function Setup() {
     setInstallError('');
     try {
       await api.post('/setup/install', {
-        db: { host: db.host, port: Number(db.port), database: db.database, user: db.user, password: db.password },
+        db: {
+          host: db.host,
+          port: Number(db.port),
+          database: db.database,
+          user: db.user,
+          password: db.password,
+        },
         admin: { email: admin.email, password: admin.password },
       });
       setStep('done');
@@ -170,8 +189,8 @@ export function Setup() {
           <>
             <h1 className="text-xl font-bold">Set up Quantex</h1>
             <p className="mb-6 mt-1 text-sm text-slate-400">
-              No configuration was found. This wizard collects what the platform needs to run — a
-              database and an admin account — and installs it. It only appears until that is done.
+              No configuration was found. This wizard collects what the platform needs to run — a database and
+              an admin account — and installs it. It only appears until that is done.
             </p>
             <ul className="mb-6 space-y-2 text-sm">
               <li className="flex items-center justify-between rounded-lg bg-ink-700 px-3 py-2">
@@ -182,7 +201,9 @@ export function Setup() {
                   </span>
                 )}
               </li>
-              <li className="rounded-lg bg-ink-700 px-3 py-2">MySQL 8 or MariaDB 10.4+ reachable from this server</li>
+              <li className="rounded-lg bg-ink-700 px-3 py-2">
+                MySQL 8 or MariaDB 10.4+ reachable from this server
+              </li>
             </ul>
             <button className="btn-primary w-full" onClick={() => setStep('database')}>
               Get started
@@ -287,11 +308,7 @@ export function Setup() {
                 <button className="btn-ghost flex-1" onClick={() => void testDb()} disabled={dbTesting}>
                   {dbTesting ? 'Testing…' : 'Test connection'}
                 </button>
-                <button
-                  className="btn-primary flex-1"
-                  disabled={!dbTested}
-                  onClick={() => setStep('admin')}
-                >
+                <button className="btn-primary flex-1" disabled={!dbTested} onClick={() => setStep('admin')}>
                   Next
                 </button>
               </div>
@@ -302,7 +319,9 @@ export function Setup() {
         {step === 'admin' && (
           <>
             <h1 className="text-xl font-bold">Admin account</h1>
-            <p className="mb-6 mt-1 text-sm text-slate-400">You will sign in with this once the install finishes.</p>
+            <p className="mb-6 mt-1 text-sm text-slate-400">
+              You will sign in with this once the install finishes.
+            </p>
             <form onSubmit={submitAdmin} className="space-y-4">
               <div>
                 <label className="label" htmlFor="admin-email">
@@ -364,7 +383,9 @@ export function Setup() {
         {step === 'review' && (
           <>
             <h1 className="text-xl font-bold">Review</h1>
-            <p className="mb-6 mt-1 text-sm text-slate-400">This writes the configuration and sets up the database.</p>
+            <p className="mb-6 mt-1 text-sm text-slate-400">
+              This writes the configuration and sets up the database.
+            </p>
             <dl className="mb-6 space-y-2 text-sm">
               <div className="flex justify-between rounded-lg bg-ink-700 px-3 py-2">
                 <dt className="text-slate-400">Database</dt>
@@ -400,7 +421,9 @@ export function Setup() {
               className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-ink-500 border-t-accent"
             />
             <h1 className="text-xl font-bold">Installing…</h1>
-            <p className="mt-1 text-sm text-slate-400">Setting up the database and creating your admin account.</p>
+            <p className="mt-1 text-sm text-slate-400">
+              Setting up the database and creating your admin account.
+            </p>
           </div>
         )}
 
@@ -421,8 +444,8 @@ export function Setup() {
               <>
                 <h1 className="text-xl font-bold text-up">Installation complete</h1>
                 <p className="mt-1 text-sm text-slate-400">
-                  The application did not restart on its own within a minute — that is expected on some
-                  hosts. Restart it yourself (for example, from your host's Node app manager, or{' '}
+                  The application did not restart on its own within a minute — that is expected on some hosts.
+                  Restart it yourself (for example, from your host's Node app manager, or{' '}
                   <code className="rounded bg-ink-700 px-1 py-0.5">pm2 restart quantex</code>), then reload
                   this page.
                 </p>

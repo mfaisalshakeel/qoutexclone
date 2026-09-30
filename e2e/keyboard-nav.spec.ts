@@ -106,10 +106,7 @@ test.describe('keyboard-only navigation', () => {
   }) => {
     await login(page, TRADER);
 
-    const targets = [
-      page.getByRole('button', { name: /^Higher/ }),
-      page.getByRole('tab', { name: /^Open/ }),
-    ];
+    const targets = [page.getByRole('button', { name: /^Higher/ }), page.getByRole('tab', { name: /^Open/ })];
     for (const target of targets) {
       await target.focus();
       const outlineVisible = await target.evaluate((el) => {
@@ -124,7 +121,10 @@ test.describe('keyboard-only navigation', () => {
     }
   });
 
-  test('automated accessibility scan: homepage, login, terminal and admin dashboard', async ({ page, browser }) => {
+  test('automated accessibility scan: homepage, login, terminal and admin dashboard', async ({
+    page,
+    browser,
+  }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     let results = await new AxeBuilder({ page })

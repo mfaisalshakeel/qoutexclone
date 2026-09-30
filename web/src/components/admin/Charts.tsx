@@ -118,7 +118,12 @@ export function AdminCharts({ data }: { data: ChartsData }) {
               fontSize={10}
               minTickGap={20}
             />
-            <YAxis stroke={COLORS.axis} fontSize={10} tickFormatter={(v) => money(v, { sign: true })} width={64} />
+            <YAxis
+              stroke={COLORS.axis}
+              fontSize={10}
+              tickFormatter={(v) => money(v, { sign: true })}
+              width={64}
+            />
             <Tooltip
               contentStyle={tooltipStyle}
               labelFormatter={(v) => shortDate(String(v))}

@@ -103,7 +103,8 @@ export function AdminPaymentMethods() {
                 {method.feePct === 0 && method.feeFlatCents === 0 && 'None'}
               </Td>
               <Td className="tabular text-xs text-slate-400">
-                {money(method.minDepositCents)} – {method.maxDepositCents > 0 ? money(method.maxDepositCents) : 'no cap'}
+                {money(method.minDepositCents)} –{' '}
+                {method.maxDepositCents > 0 ? money(method.maxDepositCents) : 'no cap'}
               </Td>
               <Td className="tabular text-xs text-slate-400">
                 {money(method.minWithdrawCents)} –{' '}
@@ -200,8 +201,8 @@ function MethodDrawer({
             <p className="text-sm font-semibold">{method.label}</p>
             <p className="text-[11px] text-slate-500">
               {method.currency}
-              {method.network ? ` · ${method.network}` : ''} · {method.provider.toLowerCase()} — identity fields,
-              not editable here
+              {method.network ? ` · ${method.network}` : ''} · {method.provider.toLowerCase()} — identity
+              fields, not editable here
             </p>
           </div>
           <button onClick={onClose} className="btn-ghost !py-1.5">

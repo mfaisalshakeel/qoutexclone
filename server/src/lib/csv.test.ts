@@ -21,7 +21,13 @@ describe('csvCell', () => {
 
 describe('renderCsv', () => {
   it('writes a header row and one row per item, CRLF-terminated', () => {
-    const csv = renderCsv(['A', 'B'], [['1', '2'], ['3', '4']]);
+    const csv = renderCsv(
+      ['A', 'B'],
+      [
+        ['1', '2'],
+        ['3', '4'],
+      ],
+    );
     expect(csv).toBe('A,B\r\n1,2\r\n3,4\r\n');
   });
 

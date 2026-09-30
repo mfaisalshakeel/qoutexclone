@@ -67,7 +67,12 @@ export function BalanceSwitcher() {
     // response is the fresher number, and re-applying this snapshot would undo
     // every stake the moment it was taken.
     if (tournamentName === null || tournamentBalance === null) {
-      setTournament({ id: current.id!, name: current.label, balance: current.balance, allowedAssetIds: current.allowedAssetIds });
+      setTournament({
+        id: current.id!,
+        name: current.label,
+        balance: current.balance,
+        allowedAssetIds: current.allowedAssetIds,
+      });
     }
   }, [listed, options, tournamentId, tournamentBalance, tournamentName, setTournament]);
 
@@ -99,7 +104,12 @@ export function BalanceSwitcher() {
     setOpen(false);
 
     if (option.kind === 'TOURNAMENT') {
-      setTournament({ id: option.id!, name: option.label, balance: option.balance, allowedAssetIds: option.allowedAssetIds });
+      setTournament({
+        id: option.id!,
+        name: option.label,
+        balance: option.balance,
+        allowedAssetIds: option.allowedAssetIds,
+      });
       toast.info(`Trading ${option.label}`, 'Positions are staked in tournament chips');
       return;
     }
@@ -125,8 +135,10 @@ export function BalanceSwitcher() {
 
   const activeTournament = tournaments.find((t) => t.id === tournamentId);
   const rebuysLeft =
-    activeTournament && (activeTournament.rebuyLimit === 0 || activeTournament.myRebuys < activeTournament.rebuyLimit);
-  const canRebuy = inTournament && activeTournament?.rebuyEnabled && (tournamentBalance ?? 0) <= 0 && rebuysLeft;
+    activeTournament &&
+    (activeTournament.rebuyLimit === 0 || activeTournament.myRebuys < activeTournament.rebuyLimit);
+  const canRebuy =
+    inTournament && activeTournament?.rebuyEnabled && (tournamentBalance ?? 0) <= 0 && rebuysLeft;
 
   const rebuy = async () => {
     if (!activeTournament) return;

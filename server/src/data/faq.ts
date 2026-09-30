@@ -34,21 +34,21 @@ export const DEFAULT_FAQ: {
     category: 'Deposits & withdrawals',
     question: 'Why is my withdrawal pending review?',
     answer:
-      "Some withdrawals need identity verification first, especially above a threshold or on a new account. Once your documents are approved, pending withdrawals are released in the order they were requested.",
+      'Some withdrawals need identity verification first, especially above a threshold or on a new account. Once your documents are approved, pending withdrawals are released in the order they were requested.',
     sortOrder: 20,
   },
   {
     category: 'Trading',
     question: 'What happens if the market is closed?',
     answer:
-      "Non-OTC markets (currencies, stocks, indices, commodities) follow real trading-session hours and show a closed state outside them. Their OTC twin, where offered, trades 24/7 on a broker-generated feed.",
+      'Non-OTC markets (currencies, stocks, indices, commodities) follow real trading-session hours and show a closed state outside them. Their OTC twin, where offered, trades 24/7 on a broker-generated feed.',
     sortOrder: 10,
   },
   {
     category: 'Trading',
     question: 'How is the payout percentage decided?',
     answer:
-      "Each market has a base payout, adjusted for time of day, volatility and any active status-level bonus. It never depends on how other traders are positioned.",
+      'Each market has a base payout, adjusted for time of day, volatility and any active status-level bonus. It never depends on how other traders are positioned.',
     sortOrder: 20,
   },
   {
@@ -62,7 +62,7 @@ export const DEFAULT_FAQ: {
     category: 'Account & security',
     question: 'How do I turn on two-factor authentication?',
     answer:
-      "From Account → Security, scan the QR code with an authenticator app and enter the six-digit code to confirm. Save the backup codes somewhere safe — they are the only way back in if you lose the device.",
+      'From Account → Security, scan the QR code with an authenticator app and enter the six-digit code to confirm. Save the backup codes somewhere safe — they are the only way back in if you lose the device.',
     sortOrder: 10,
   },
 ];

@@ -60,7 +60,9 @@ describe('setup wizard', () => {
   });
 
   it('refuses a malformed connection test', async () => {
-    const res = await request(await load()).post('/api/setup/test-db').send({ host: '' });
+    const res = await request(await load())
+      .post('/api/setup/test-db')
+      .send({ host: '' });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('validation_error');
   });
