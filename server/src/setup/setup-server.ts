@@ -86,19 +86,42 @@ async function testConnection(databaseUrl: string): Promise<{ ok: true } | { ok:
   }
 }
 
+/**
+ * Runs a dependency's CLI through this same node binary rather than `npx`.
+ * On Windows `npx` is `npx.cmd`, which `spawn` cannot launch without a shell
+ * (Node refuses `.cmd` without `shell: true` since the CVE-2024-27980 fix),
+ * so the installer died with `spawn npx ENOENT` on every Windows host. The
+ * CLIs are already installed next to us, so call their entry points directly
+ * and keep the argument array shell-free.
+ */
+function localCli(...segments: string[]): string | null {
+  const resolved = path.join(repoRoot, 'node_modules', ...segments);
+  return fs.existsSync(resolved) ? resolved : null;
+}
+
+async function runNodeCli(entry: string, args: string[], cwd: string): Promise<void> {
+  await execFileAsync(process.execPath, [entry, ...args], { cwd, env: process.env });
+}
+
 async function runMigrationsAndSeed(): Promise<void> {
-  await execFileAsync('npx', ['--yes', 'prisma', 'migrate', 'deploy', '--schema', schemaPath], {
-    cwd: serverRoot,
-    env: process.env,
-  });
+  const prismaCli = localCli('prisma', 'build', 'index.js');
+  if (!prismaCli) {
+    throw new Error('Prisma CLI not found — run `npm install` in the project before installing.');
+  }
+  await runNodeCli(prismaCli, ['migrate', 'deploy', '--schema', schemaPath], serverRoot);
 
   const compiledSeed = path.join(serverRoot, 'dist', 'seed.js');
   const sourceSeed = path.join(serverRoot, 'src', 'seed.ts');
   if (fs.existsSync(compiledSeed)) {
-    await execFileAsync('node', [compiledSeed], { cwd: serverRoot, env: process.env });
-  } else {
-    await execFileAsync('npx', ['--yes', 'tsx', sourceSeed], { cwd: repoRoot, env: process.env });
+    await execFileAsync(process.execPath, [compiledSeed], { cwd: serverRoot, env: process.env });
+    return;
   }
+
+  const tsxCli = localCli('tsx', 'dist', 'cli.mjs');
+  if (!tsxCli) {
+    throw new Error('Neither a compiled seed nor tsx was found — run `npm run build` before installing.');
+  }
+  await runNodeCli(tsxCli, [sourceSeed], repoRoot);
 }
 
 /**
@@ -154,11 +177,9 @@ export function createSetupApp(options: { exitAfterInstall?: boolean } = {}): Ex
   app.post('/api/setup/install', async (req, res) => {
     const parsed = installSchema.safeParse(req.body);
     if (!parsed.success) {
-      res
-        .status(400)
-        .json({
-          error: { code: 'validation_error', message: 'Check the form for missing or invalid fields.' },
-        });
+      res.status(400).json({
+        error: { code: 'validation_error', message: 'Check the form for missing or invalid fields.' },
+      });
       return;
     }
 
@@ -167,11 +188,9 @@ export function createSetupApp(options: { exitAfterInstall?: boolean } = {}): Ex
     if (fs.existsSync(envPath)) {
       const existing = fs.readFileSync(envPath, 'utf8');
       if (/^DATABASE_URL=.+$/m.test(existing)) {
-        res
-          .status(409)
-          .json({
-            error: { code: 'already_configured', message: 'This installation is already configured.' },
-          });
+        res.status(409).json({
+          error: { code: 'already_configured', message: 'This installation is already configured.' },
+        });
         return;
       }
     }
