@@ -71,7 +71,7 @@ export function Wallet() {
             key={key}
             onClick={() => setTab(key)}
             className={`flex-1 rounded-lg py-2 text-sm font-semibold capitalize transition ${
-              tab === key ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              tab === key ? 'bg-selected text-selected-fg' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             {key}

@@ -22,6 +22,8 @@
     <link rel="preload" href="/fonts/inter-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/inter-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/inter-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- before the app paints, so a reload never flashes the wrong theme -->
+    <script src="/theme-init.js"></script>
   </head>
   <body class="bg-ink-900 text-slate-100 antialiased">
     <div id="root"></div>

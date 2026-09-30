@@ -179,7 +179,9 @@ export function SupportChat() {
                   key={ticket.id}
                   onClick={() => setActiveId(ticket.id)}
                   className={`shrink-0 rounded-md px-2 py-1 text-[11px] transition ${
-                    ticket.id === activeId ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                    ticket.id === activeId
+                      ? 'bg-selected text-selected-fg'
+                      : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   {ticket.subject.slice(0, 18)}
@@ -211,7 +213,7 @@ export function SupportChat() {
                 >
                   <p className="whitespace-pre-wrap break-words">{message.body}</p>
                   <p
-                    className={`mt-1 text-[9px] ${message.fromSupport ? 'text-slate-500' : 'text-white/70'}`}
+                    className={`mt-1 text-[9px] ${message.fromSupport ? 'text-slate-500' : 'text-slate-100/70'}`}
                   >
                     {message.fromSupport ? 'Support · ' : ''}
                     {dateTime(message.createdAt)}

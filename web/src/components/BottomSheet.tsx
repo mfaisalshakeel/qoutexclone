@@ -101,7 +101,7 @@ export function BottomSheet({ open, onClose, title, hideTitle, children, keepMou
             aria-hidden="true"
             className="absolute inset-x-0 top-1.5 mx-auto h-1 w-10 rounded-full bg-ink-500"
           />
-          {!hideTitle && <h2 className="mt-2 text-sm font-semibold text-white">{title}</h2>}
+          {!hideTitle && <h2 className="mt-2 text-sm font-semibold text-slate-100">{title}</h2>}
           {/* its own word is a better name than a label nobody reads, and it
               keeps this button distinct from the backdrop, which closes too */}
           <button

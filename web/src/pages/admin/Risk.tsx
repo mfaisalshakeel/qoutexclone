@@ -109,7 +109,7 @@ export function AdminRisk() {
           <p>{error}</p>
           <button
             onClick={() => void load()}
-            className="mt-3 rounded-lg bg-ink-600 px-3 py-1.5 text-xs font-semibold text-white"
+            className="mt-3 rounded-lg bg-ink-600 px-3 py-1.5 text-xs font-semibold text-slate-100"
           >
             Try again
           </button>
@@ -161,7 +161,7 @@ export function AdminRisk() {
       )}
 
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-white">Markets</h3>
+        <h3 className="text-sm font-semibold text-slate-100">Markets</h3>
         <label className="flex items-center gap-2 text-xs text-slate-300">
           <input
             type="checkbox"
@@ -183,7 +183,7 @@ export function AdminRisk() {
               <tr key={market.assetId} className="border-t border-ink-700">
                 <Td>
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-white">{market.pair}</p>
+                    <p className="truncate font-medium text-slate-100">{market.pair}</p>
                     <p className="text-xs text-slate-500">
                       {market.openPositions} open · {market.traders} trader
                       {market.traders === 1 ? '' : 's'} · {market.payoutPct}%
@@ -219,7 +219,7 @@ export function AdminRisk() {
                         onChange={(event) =>
                           setDraft({ ...draft, maxExposurePerDirection: Number(event.target.value) })
                         }
-                        className="w-28 rounded-lg border border-ink-500 bg-ink-900 px-2 py-1.5 text-xs text-white"
+                        className="w-28 rounded-lg border border-ink-500 bg-ink-900 px-2 py-1.5 text-xs text-slate-100"
                       />
                     </Td>
                     <Td>
@@ -232,7 +232,7 @@ export function AdminRisk() {
                         onChange={(event) =>
                           setDraft({ ...draft, maxOpenStakePerUser: Number(event.target.value) })
                         }
-                        className="w-28 rounded-lg border border-ink-500 bg-ink-900 px-2 py-1.5 text-xs text-white"
+                        className="w-28 rounded-lg border border-ink-500 bg-ink-900 px-2 py-1.5 text-xs text-slate-100"
                       />
                     </Td>
                     <Td>

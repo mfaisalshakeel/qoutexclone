@@ -240,7 +240,7 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
               <li key={label} className="flex flex-1 items-center gap-2">
                 <span
                   className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-                    i <= step ? 'bg-accent-solid text-white' : 'bg-ink-600 text-slate-400'
+                    i <= step ? 'bg-accent-solid text-slate-100' : 'bg-ink-600 text-slate-400'
                   } ${i === step ? 'animate-ring' : ''}`}
                 >
                   {i + 1}
@@ -384,7 +384,9 @@ export function DepositPanel({ methods, mockChain, deposits, onChanged }: Props)
               key={value}
               onClick={() => setAmount(value)}
               className={`rounded-lg py-2 text-xs font-semibold transition ${
-                amount === value ? 'bg-ink-500 text-white' : 'bg-ink-700 text-slate-300 hover:bg-ink-600'
+                amount === value
+                  ? 'bg-selected text-selected-fg'
+                  : 'bg-ink-700 text-slate-300 hover:bg-ink-600'
               }`}
             >
               ${value}

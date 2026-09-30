@@ -107,7 +107,7 @@ export function NotificationCentre() {
         onClick={openPanel}
         aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
         aria-expanded={open}
-        className="relative flex h-9 w-9 items-center justify-center rounded-lg text-slate-300 transition hover:bg-ink-700 hover:text-white"
+        className="relative flex h-9 w-9 items-center justify-center rounded-lg text-slate-300 transition hover:bg-ink-700 hover:text-slate-100"
       >
         <IconBell />
         {unread > 0 && (
@@ -124,7 +124,7 @@ export function NotificationCentre() {
           className="fixed inset-x-2 top-16 z-40 max-h-[75vh] animate-fade-up overflow-hidden rounded-xl border border-ink-500 bg-ink-800 shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-96"
         >
           <div className="flex items-center gap-2 border-b border-ink-600 px-3 py-2">
-            <h2 className="text-sm font-semibold text-white">Notifications</h2>
+            <h2 className="text-sm font-semibold text-slate-100">Notifications</h2>
             {unread > 0 && (
               <button
                 onClick={() => void markRead()}
@@ -147,7 +147,7 @@ export function NotificationCentre() {
                 <p>{error}</p>
                 <button
                   onClick={() => void load()}
-                  className="mt-3 rounded-lg bg-ink-600 px-3 py-1.5 text-xs font-semibold text-white"
+                  className="mt-3 rounded-lg bg-ink-600 px-3 py-1.5 text-xs font-semibold text-slate-100"
                 >
                   Try again
                 </button>

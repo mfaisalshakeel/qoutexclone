@@ -82,7 +82,7 @@ export function TradeDetail({ trade, precision, onClose, onTradeAgain, canTradeA
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="flex items-center gap-2 text-base font-bold text-white">
+            <h2 className="flex items-center gap-2 text-base font-bold text-slate-100">
               <span
                 className={`rounded px-1.5 py-0.5 text-[11px] ${
                   trade.direction === 'UP' ? 'bg-up/20 text-up' : 'bg-down/20 text-down'
@@ -113,7 +113,7 @@ export function TradeDetail({ trade, precision, onClose, onTradeAgain, canTradeA
               <p>{error}</p>
               <button
                 onClick={() => void load()}
-                className="rounded-lg bg-ink-600 px-3 py-1.5 font-semibold text-white"
+                className="rounded-lg bg-ink-600 px-3 py-1.5 font-semibold text-slate-100"
               >
                 Try again
               </button>

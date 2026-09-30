@@ -45,7 +45,7 @@ export function History() {
               key={type}
               onClick={() => setAccountType(type)}
               className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
-                accountType === type ? 'bg-ink-600 text-white' : 'text-slate-400'
+                accountType === type ? 'bg-selected text-selected-fg' : 'text-slate-400'
               }`}
             >
               {type === 'DEMO' ? 'Practice' : 'Live'}
@@ -74,7 +74,7 @@ export function History() {
             key={key}
             onClick={() => setView(key)}
             className={`flex-1 rounded-lg py-2 text-sm font-semibold capitalize transition ${
-              view === key ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              view === key ? 'bg-selected text-selected-fg' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             {key === 'trades' ? 'Closed trades' : 'Account ledger'}

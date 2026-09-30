@@ -353,7 +353,7 @@ export function Terminal() {
                   onClick={() => setTimeframe(tf)}
                   aria-pressed={timeframe === tf}
                   className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${
-                    timeframe === tf ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                    timeframe === tf ? 'bg-selected text-selected-fg' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   {tf}
@@ -366,7 +366,7 @@ export function Terminal() {
                   className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${
                     QUICK_TIMEFRAMES.includes(timeframe)
                       ? 'text-slate-400 hover:text-slate-200'
-                      : 'bg-ink-600 text-white'
+                      : 'bg-selected text-selected-fg'
                   }`}
                   aria-label="All timeframes"
                 >
@@ -409,7 +409,7 @@ export function Terminal() {
                     aria-label={option.label}
                     className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${
                       layout.kind === option.kind
-                        ? 'bg-ink-600 text-white'
+                        ? 'bg-selected text-selected-fg'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
@@ -437,7 +437,9 @@ export function Terminal() {
                     aria-label={SERIES_LABELS[type]}
                     aria-pressed={chartType === type}
                     className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${
-                      chartType === type ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                      chartType === type
+                        ? 'bg-selected text-selected-fg'
+                        : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
                     {SERIES_GLYPHS[type]}
@@ -450,7 +452,7 @@ export function Terminal() {
                   onClick={() => setSeriesOpen((open) => !open)}
                   aria-label="Series type"
                   aria-expanded={seriesOpen}
-                  className="rounded-md bg-ink-600 px-2 py-1.5 text-xs font-semibold text-white"
+                  className="rounded-md bg-ink-600 px-2 py-1.5 text-xs font-semibold text-slate-100"
                 >
                   {SERIES_GLYPHS[chartType]}
                 </button>
@@ -514,7 +516,7 @@ export function Terminal() {
                 onClick={() => selectSymbol(each.symbol)}
                 className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition ${
                   each.symbol === symbol
-                    ? 'bg-ink-700 text-white'
+                    ? 'bg-selected text-selected-fg'
                     : 'bg-ink-800/60 text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -558,7 +560,7 @@ export function Terminal() {
                         setMarketsOpen(true);
                       }}
                       aria-label={`Change the market in pane ${index + 1}`}
-                      className="truncate text-[11px] font-semibold text-slate-200 hover:text-white"
+                      className="truncate text-[11px] font-semibold text-slate-200 hover:text-slate-100"
                     >
                       {paneAsset?.pair.replace(' (OTC)', '') ?? pane.symbol}
                     </button>

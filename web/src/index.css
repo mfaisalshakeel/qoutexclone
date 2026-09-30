@@ -135,8 +135,87 @@
 @tailwind utilities;
 
 @layer base {
+  /*
+   * The palette, as "R G B" channels so Tailwind can apply its own opacity to
+   * any of them. Dark is the default and lives on :root; `[data-theme='light']`
+   * swaps the same names, so no component has to know which theme is on. The
+   * theme store writes that attribute, and index.html sets it before first
+   * paint so a reload never flashes the wrong theme.
+   */
   :root {
     color-scheme: dark;
+
+    --ink-900: 10 14 23; /* page */
+    --ink-800: 15 20 33; /* card */
+    --ink-700: 21 28 44; /* raised surface, input */
+    --ink-600: 28 36 54; /* border */
+    --ink-500: 39 49 73; /* strong border, scrollbar */
+    --ink-400: 58 71 99; /* hover border */
+
+    --text-strong: 241 245 249;
+    --text: 226 232 240;
+    --text-soft: 203 213 225;
+    --muted-strong: 148 163 184;
+    --muted: 124 141 176;
+
+    --up: 18 184 134;
+    --up-soft: 18 184 134;
+    --up-solid: 4 120 87;
+    --down: 255 92 115;
+    --down-soft: 240 69 94;
+    --down-solid: 190 18 60;
+    --accent: 107 159 255;
+    --accent-soft: 61 123 255;
+    --accent-solid: 37 99 235;
+
+    --focus-ring: 77 136 255;
+    --shadow-strength: 0.45;
+
+    /* the filled pill behind a selected tab/segment, and its text. In the dark
+       theme a lifted surface reads as "selected"; on a light page the same
+       trick is invisible, so light uses the accent instead. */
+    --selected: 28 36 54;
+    --selected-fg: 241 245 249;
+  }
+
+  /*
+   * Light theme. The ink ramp inverts: 900 is the page (lightest), 400 the
+   * heaviest line, so a component written as "card on page, border in 600"
+   * reads correctly in both. Foreground colours are darkened well past their
+   * dark-theme values — #7c8db0 captions that clear 4.5:1 on near-black are
+   * nowhere near it on white.
+   */
+  :root[data-theme='light'] {
+    color-scheme: light;
+
+    --ink-900: 244 246 251; /* page */
+    --ink-800: 255 255 255; /* card */
+    --ink-700: 241 244 250; /* raised surface, input */
+    --ink-600: 224 229 240; /* border */
+    --ink-500: 203 211 228; /* strong border */
+    --ink-400: 160 173 199; /* hover border */
+
+    --text-strong: 12 18 32;
+    --text: 28 37 56;
+    --text-soft: 51 65 92;
+    --muted-strong: 86 101 130;
+    --muted: 95 110 140;
+
+    --up: 4 120 87;
+    --up-soft: 16 150 110;
+    --up-solid: 4 108 78;
+    --down: 190 18 60;
+    --down-soft: 220 38 78;
+    --down-solid: 176 16 55;
+    --accent: 29 78 216;
+    --accent-soft: 37 99 235;
+    --accent-solid: 29 78 216;
+
+    --focus-ring: 29 78 216;
+    --shadow-strength: 0.12;
+
+    --selected: 29 78 216;
+    --selected-fg: 255 255 255;
   }
 
   html,
@@ -155,7 +234,7 @@
     height: 8px;
   }
   ::-webkit-scrollbar-thumb {
-    background: #273149;
+    background: rgb(var(--ink-500));
     border-radius: 999px;
   }
   ::-webkit-scrollbar-track {
@@ -175,7 +254,7 @@
      heuristic is exactly what a trading app's most consequential buttons
      (Higher/Lower) cannot afford to gamble on. */
   :focus {
-    outline: 2px solid #4d88ff;
+    outline: 2px solid rgb(var(--focus-ring));
     outline-offset: 2px;
   }
 }
@@ -190,7 +269,7 @@
     position: absolute;
     inset: 0;
     transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.08), transparent);
+    background: linear-gradient(90deg, transparent, rgb(var(--muted-strong) / 0.12), transparent);
     animation: skeleton-sweep 1.5s ease-in-out infinite;
   }
 

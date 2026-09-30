@@ -72,7 +72,7 @@ export function PublicMarkets() {
                 aria-selected={activeTab === each}
                 onClick={() => setTab(each)}
                 className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-                  activeTab === each ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                  activeTab === each ? 'bg-selected text-selected-fg' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 {TAB_LABEL(each)}

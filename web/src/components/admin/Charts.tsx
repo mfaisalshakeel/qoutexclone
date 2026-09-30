@@ -10,8 +10,22 @@ import {
   YAxis,
 } from 'recharts';
 import { money } from '../../lib/format';
+import { themeColor, useTheme } from '../../store/theme';
 
-const COLORS = { up: '#12b886', down: '#f0455e', accent: '#3d7bff', grid: '#1c2436', axis: '#64748b' };
+/**
+ * Recharts paints to SVG attributes, not CSS, so the palette has to be read
+ * out of the theme rather than written in hex. Resolved per render and keyed
+ * on the active theme below, so a switch repaints every chart.
+ */
+function chartColors() {
+  return {
+    up: themeColor('up'),
+    down: themeColor('down'),
+    accent: themeColor('accent'),
+    grid: themeColor('ink-600'),
+    axis: themeColor('muted'),
+  };
+}
 
 export interface DailyPoint {
   date: string;
@@ -52,9 +66,11 @@ function ChartCard({
     <div className="card min-w-0 p-4">
       <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">{title}</p>
       {empty ? (
-        <div className="flex h-56 items-center justify-center text-xs text-slate-500">
+        // a collapsed card rather than a full-height hole: six of these stacked
+        // made the phone dashboard a 4,400px scroll of nothing
+        <p className="rounded-lg bg-ink-700/60 px-3 py-4 text-center text-xs text-slate-500">
           No data in this window yet
-        </div>
+        </p>
       ) : (
         children
       )}
@@ -62,14 +78,23 @@ function ChartCard({
   );
 }
 
-const tooltipStyle = {
-  background: '#151c2c',
-  border: '1px solid #273149',
-  borderRadius: 8,
-  fontSize: 11,
-};
+function tooltipStyleFor() {
+  return {
+    background: themeColor('ink-700'),
+    border: `1px solid ${themeColor('ink-500')}`,
+    color: themeColor('text'),
+    borderRadius: 8,
+    fontSize: 11,
+  };
+}
 
 export function AdminCharts({ data }: { data: ChartsData }) {
+  // re-reads the palette whenever the theme flips
+  const resolved = useTheme((state) => state.resolved);
+  const COLORS = chartColors();
+  const tooltipStyle = tooltipStyleFor();
+  void resolved;
+
   const hasSeries = data.series.some((p) => p.depositVolume || p.withdrawalVolume || p.housePnl);
   const hasVolume = data.volumeByAssetClass.length > 0;
   const hasTopAssets = data.topAssets.length > 0;
@@ -208,6 +233,11 @@ export function AdminCharts({ data }: { data: ChartsData }) {
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function HourlyHeatmap({ grid, max }: { grid: number[][]; max: number }) {
+  const resolved = useTheme((state) => state.resolved);
+  const cell = themeColor('accent');
+  const emptyCell = themeColor('ink-600');
+  void resolved;
+
   return (
     <div className="overflow-x-auto">
       <div className="inline-grid min-w-[640px] grid-cols-[2.5rem_repeat(24,1fr)] gap-[3px]">
@@ -226,7 +256,7 @@ function HourlyHeatmap({ grid, max }: { grid: number[][]; max: number }) {
                 title={`${WEEKDAYS[day]} ${hour}:00 UTC — ${count} trade${count === 1 ? '' : 's'}`}
                 className="aspect-square rounded-sm"
                 style={{
-                  backgroundColor: count === 0 ? '#1c2436' : COLORS.accent,
+                  backgroundColor: count === 0 ? emptyCell : cell,
                   opacity: count === 0 ? 1 : 0.25 + 0.75 * (count / max),
                 }}
               />

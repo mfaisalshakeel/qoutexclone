@@ -33,7 +33,7 @@ export function PublicHeader() {
               to={link.to}
               aria-current={active ? 'page' : undefined}
               className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
-                active ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+                active ? 'text-slate-100' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               {t(`nav.${link.key}`)}

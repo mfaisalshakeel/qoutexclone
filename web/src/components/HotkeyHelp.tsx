@@ -72,7 +72,7 @@ export function HotkeyHelp({ state, onClose }: Props) {
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold text-white">Keyboard shortcuts</h2>
+            <h2 className="text-base font-bold text-slate-100">Keyboard shortcuts</h2>
             <p className="mt-0.5 text-xs text-slate-400">
               Click a key to change it. Shortcuts never fire while you are typing.
             </p>

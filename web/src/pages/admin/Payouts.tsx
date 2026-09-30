@@ -267,7 +267,7 @@ export function AdminPayouts() {
           <p>{error}</p>
           <button
             onClick={() => void load()}
-            className="mt-3 rounded-lg bg-ink-600 px-3 py-1.5 text-xs font-semibold text-white"
+            className="mt-3 rounded-lg bg-ink-600 px-3 py-1.5 text-xs font-semibold text-slate-100"
           >
             Try again
           </button>
@@ -305,7 +305,7 @@ export function AdminPayouts() {
 
       {draft && (
         <section className="rounded-xl border border-ink-500 bg-ink-800 p-4">
-          <h3 className="text-sm font-semibold text-white">{draft.id ? 'Edit rule' : 'New rule'}</h3>
+          <h3 className="text-sm font-semibold text-slate-100">{draft.id ? 'Edit rule' : 'New rule'}</h3>
           <p className="mt-1 text-xs text-slate-400">{KIND_HELP[draft.kind]}</p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -315,7 +315,7 @@ export function AdminPayouts() {
                 value={draft.name}
                 onChange={(event) => setDraft({ ...draft, name: event.target.value })}
                 placeholder="Quiet Asian session"
-                className="mt-1 w-full rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-slate-100"
               />
             </label>
 
@@ -324,7 +324,7 @@ export function AdminPayouts() {
               <select
                 value={draft.kind}
                 onChange={(event) => setDraft({ ...draft, kind: event.target.value as RuleKind })}
-                className="mt-1 w-full rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-slate-100"
               >
                 {data.kinds.map((kind) => (
                   <option key={kind} value={kind}>
@@ -339,7 +339,7 @@ export function AdminPayouts() {
               <select
                 value={draft.scope}
                 onChange={(event) => setDraft({ ...draft, scope: event.target.value })}
-                className="mt-1 w-full rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-slate-100"
               >
                 <option value="all">Every market</option>
                 {data.assetClasses.map((assetClass) => (
@@ -362,7 +362,7 @@ export function AdminPayouts() {
                 step={1}
                 value={draft.adjustment}
                 onChange={(event) => setDraft({ ...draft, adjustment: Number(event.target.value) })}
-                className="mt-1 w-full rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-slate-100"
               />
             </label>
 
@@ -374,7 +374,7 @@ export function AdminPayouts() {
                 min={0}
                 value={draft.priority}
                 onChange={(event) => setDraft({ ...draft, priority: Number(event.target.value) })}
-                className="mt-1 w-full rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-white"
+                className="mt-1 w-full rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-slate-100"
               />
               <span className="mt-1 block text-[11px] text-slate-500">Lower runs first.</span>
             </label>
@@ -411,7 +411,7 @@ export function AdminPayouts() {
                     type="time"
                     value={toTime(draft.fromMinute)}
                     onChange={(event) => setDraft({ ...draft, fromMinute: fromTime(event.target.value) })}
-                    className="mt-1 rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-white"
+                    className="mt-1 rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-slate-100"
                   />
                 </label>
                 <label className="block">
@@ -420,7 +420,7 @@ export function AdminPayouts() {
                     type="time"
                     value={toTime(draft.toMinute)}
                     onChange={(event) => setDraft({ ...draft, toMinute: fromTime(event.target.value) })}
-                    className="mt-1 rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-white"
+                    className="mt-1 rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-slate-100"
                   />
                 </label>
                 <div className="min-w-0">
@@ -469,7 +469,7 @@ export function AdminPayouts() {
                     max={240}
                     value={draft.windowMinutes}
                     onChange={(event) => setDraft({ ...draft, windowMinutes: Number(event.target.value) })}
-                    className="mt-1 w-32 rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-white"
+                    className="mt-1 w-32 rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-slate-100"
                   />
                 </label>
                 <label className="block">
@@ -480,7 +480,7 @@ export function AdminPayouts() {
                     value={draft.aboveRatio}
                     onChange={(event) => setDraft({ ...draft, aboveRatio: event.target.value })}
                     placeholder="1.5"
-                    className="mt-1 w-32 rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-white"
+                    className="mt-1 w-32 rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-slate-100"
                   />
                 </label>
                 <label className="block">
@@ -491,7 +491,7 @@ export function AdminPayouts() {
                     value={draft.belowRatio}
                     onChange={(event) => setDraft({ ...draft, belowRatio: event.target.value })}
                     placeholder="0.5"
-                    className="mt-1 w-32 rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-white"
+                    className="mt-1 w-32 rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-slate-100"
                   />
                 </label>
               </div>
@@ -512,7 +512,7 @@ export function AdminPayouts() {
                     type="datetime-local"
                     value={draft.from}
                     onChange={(event) => setDraft({ ...draft, from: event.target.value })}
-                    className="mt-1 rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-white"
+                    className="mt-1 rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-slate-100"
                   />
                 </label>
                 <label className="block">
@@ -521,7 +521,7 @@ export function AdminPayouts() {
                     type="datetime-local"
                     value={draft.to}
                     onChange={(event) => setDraft({ ...draft, to: event.target.value })}
-                    className="mt-1 rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-white"
+                    className="mt-1 rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-sm text-slate-100"
                   />
                 </label>
               </div>
@@ -551,7 +551,7 @@ export function AdminPayouts() {
                 value={previewSymbol}
                 onChange={(event) => setPreviewSymbol(event.target.value)}
                 aria-label="Market to preview"
-                className="rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-xs text-white"
+                className="rounded-lg border border-ink-500 bg-ink-900 px-3 py-2 text-xs text-slate-100"
               >
                 {markets.map((market) => (
                   <option key={market.id} value={market.symbol}>
@@ -571,7 +571,7 @@ export function AdminPayouts() {
           {preview && (
             <div className="mt-3 rounded-lg border border-ink-600 bg-ink-900 p-3 text-xs text-slate-300">
               <p>
-                <span className="font-semibold text-white">{preview.pct}%</span> right now (base{' '}
+                <span className="font-semibold text-slate-100">{preview.pct}%</span> right now (base{' '}
                 {preview.basePct}%)
               </p>
               {preview.applied.length === 0 ? (
@@ -595,7 +595,7 @@ export function AdminPayouts() {
       )}
 
       <section>
-        <h3 className="mb-2 text-sm font-semibold text-white">Rules</h3>
+        <h3 className="mb-2 text-sm font-semibold text-slate-100">Rules</h3>
         {data.rules.length === 0 ? (
           <Empty text="No payout rules yet. Every market pays its base payout." />
         ) : (
@@ -604,7 +604,7 @@ export function AdminPayouts() {
               <tr key={rule.id} className="border-t border-ink-700">
                 <Td>
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-white">{rule.name}</p>
+                    <p className="truncate font-medium text-slate-100">{rule.name}</p>
                     <p className="text-xs text-slate-500">
                       {KIND_LABEL[rule.kind]}
                       {rule.exclusive && ' · stops later rules'}
@@ -677,7 +677,7 @@ export function AdminPayouts() {
       </section>
 
       <section>
-        <h3 className="mb-2 text-sm font-semibold text-white">
+        <h3 className="mb-2 text-sm font-semibold text-slate-100">
           Markets paying something other than their base ({adjusted.length})
         </h3>
         {adjusted.length === 0 ? (
@@ -686,7 +686,7 @@ export function AdminPayouts() {
           <Table head={['Market', 'Base', 'Now', 'Why']}>
             {adjusted.map((market) => (
               <tr key={market.id} className="border-t border-ink-700">
-                <Td className="font-medium text-white">{market.pair}</Td>
+                <Td className="font-medium text-slate-100">{market.pair}</Td>
                 <Td>{market.basePct}%</Td>
                 <Td>
                   <span className={market.pct < market.basePct ? 'text-down' : 'text-up'}>{market.pct}%</span>

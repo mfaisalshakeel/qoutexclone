@@ -586,7 +586,7 @@ export function Pager({
             <button
               onClick={() => onPage(n)}
               className={`min-w-[1.75rem] rounded-md px-2 py-1.5 text-xs font-semibold ${
-                n === page ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                n === page ? 'bg-selected text-selected-fg' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               {n}

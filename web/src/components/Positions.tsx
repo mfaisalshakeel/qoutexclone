@@ -98,7 +98,7 @@ export function Positions({ open, closed, pending, onCancel, onRepeat, loading =
             role="tab"
             aria-selected={tab === key}
             className={`min-w-0 flex-1 truncate rounded-lg py-1.5 text-xs font-semibold capitalize transition ${
-              tab === key ? 'bg-ink-700 text-white' : 'text-slate-400 hover:text-slate-200'
+              tab === key ? 'bg-selected text-selected-fg' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             {key === 'open'
@@ -219,7 +219,7 @@ export function Positions({ open, closed, pending, onCancel, onRepeat, loading =
                 <div key={order.id} className="mb-1.5 rounded-lg bg-ink-800/60 p-2 last:mb-0">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                      <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-100">
                         <span
                           className={`rounded px-1 py-0.5 text-[10px] ${
                             order.direction === 'UP' ? 'bg-up/20 text-up' : 'bg-down/20 text-down'

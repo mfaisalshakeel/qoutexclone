@@ -71,7 +71,7 @@ export function Layout() {
                 title={item.label}
                 className={({ isActive }) =>
                   `flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium transition xl:px-3 ${
-                    isActive ? 'bg-ink-700 text-white' : 'text-slate-400 hover:text-slate-100'
+                    isActive ? 'bg-selected text-selected-fg' : 'text-slate-400 hover:text-slate-100'
                   }`
                 }
               >

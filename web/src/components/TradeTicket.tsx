@@ -489,7 +489,7 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
               onClick={() => setOrderType(type)}
               aria-pressed={orderType === type}
               className={`rounded-lg py-1.5 text-[11px] font-semibold uppercase tracking-wide transition ${
-                orderType === type ? 'bg-ink-600 text-white' : 'bg-ink-700/60 text-slate-400'
+                orderType === type ? 'bg-selected text-selected-fg' : 'bg-ink-700/60 text-slate-400'
               }`}
             >
               {type === 'MARKET' ? 'Market' : 'Pending'}
@@ -561,7 +561,7 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
                 onClick={() => setExpiryMode(mode)}
                 aria-pressed={expiryMode === mode}
                 className={`rounded-lg py-1.5 text-[11px] font-semibold uppercase tracking-wide transition ${
-                  expiryMode === mode ? 'bg-ink-600 text-white' : 'bg-ink-700/60 text-slate-400'
+                  expiryMode === mode ? 'bg-selected text-selected-fg' : 'bg-ink-700/60 text-slate-400'
                 }`}
               >
                 {mode === 'DURATION' ? 'Duration' : 'Clock time'}
@@ -602,14 +602,18 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
                     onClick={() => setClockExpiresAt(slot.expiresAt)}
                     aria-pressed={active}
                     className={`rounded-lg px-2 py-2 text-xs font-semibold transition ${
-                      active ? 'bg-accent-solid text-white' : 'bg-ink-700 text-slate-300 hover:bg-ink-600'
+                      active ? 'bg-accent-solid text-slate-100' : 'bg-ink-700 text-slate-300 hover:bg-ink-600'
                     }`}
                   >
                     <span className="tabular">{clockLabel(slot.expiresAt)}</span>
                     {/* time left to buy this boundary, not time to expiry */}
                     <span
                       className={`mt-0.5 block text-[10px] font-normal tabular ${
-                        slot.secondsToClose <= 10 ? 'text-down' : active ? 'text-white/70' : 'text-slate-500'
+                        slot.secondsToClose <= 10
+                          ? 'text-down'
+                          : active
+                            ? 'text-slate-100/70'
+                            : 'text-slate-500'
                       }`}
                     >
                       {countdown(slot.secondsToClose)} to buy
@@ -674,7 +678,9 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
                 onClick={() => setAmount(cents / 100)}
                 aria-pressed={stake === cents}
                 className={`rounded-md py-1.5 text-[11px] font-medium transition ${
-                  stake === cents ? 'bg-ink-500 text-white' : 'bg-ink-700 text-slate-400 hover:text-slate-200'
+                  stake === cents
+                    ? 'bg-selected text-selected-fg'
+                    : 'bg-ink-700 text-slate-400 hover:text-slate-200'
                 }`}
               >
                 {cents % 100 === 0 ? cents / 100 : (cents / 100).toFixed(2)}
@@ -697,7 +703,7 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
                 title={unreachable ? `Below this market's ${money(minCents)} minimum` : undefined}
                 className={`rounded-md py-1.5 text-[11px] font-medium transition ${
                   !unreachable && stake === target
-                    ? 'bg-ink-500 text-white'
+                    ? 'bg-selected text-selected-fg'
                     : 'bg-ink-700/60 text-slate-400 hover:text-slate-200 disabled:opacity-40'
                 }`}
               >

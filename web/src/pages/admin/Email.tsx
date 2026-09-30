@@ -49,7 +49,7 @@ export function AdminEmail() {
             aria-selected={tab === key}
             onClick={() => setTab(key)}
             className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-              tab === key ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              tab === key ? 'bg-selected text-selected-fg' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             {key === 'outbox' ? 'Outbox' : 'Templates'}
@@ -170,7 +170,7 @@ function Outbox() {
               onClick={() => setStatus(value)}
               aria-pressed={status === value}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                status === value ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                status === value ? 'bg-selected text-selected-fg' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               {value || 'All'}

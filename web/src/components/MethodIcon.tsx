@@ -3,11 +3,14 @@
  * Crypto gets a coloured ticker badge; card and e-wallet get a plain
  * pictogram, since neither is a "currency" the same way.
  */
+// each pair is light-theme first, with the dark variant after it: the bright
+// end of these ramps reads on near-black and washes out on white, and the dark
+// end does the reverse, so neither shade can serve both
 const CURRENCY_TONE: Record<string, string> = {
-  BTC: 'bg-orange-500/15 text-orange-400',
-  ETH: 'bg-indigo-500/15 text-indigo-300',
-  USDT: 'bg-emerald-500/15 text-emerald-400',
-  USD: 'bg-sky-500/15 text-sky-300',
+  BTC: 'bg-orange-500/15 text-orange-700 dark:text-orange-400',
+  ETH: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300',
+  USDT: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
+  USD: 'bg-sky-500/15 text-sky-700 dark:text-sky-300',
 };
 
 export function MethodIcon({

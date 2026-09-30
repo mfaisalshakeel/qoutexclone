@@ -7,6 +7,8 @@ import { useRealtime } from '../../hooks/useRealtime';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { Toasts } from '../Toasts';
 import { IconLogo } from '../Icons';
+import { NavIcon } from './NavIcons';
+import { ThemeToggle } from '../ThemeToggle';
 import { hasArea, type PermissionArea } from '../../lib/permissions';
 
 export interface AdminCounts {
@@ -126,15 +128,27 @@ export function AdminLayout() {
     items: section.items.filter((item) => hasArea(user?.permissions, item.area)),
   })).filter((section) => section.items.length > 0);
 
+  // the header names where you are; deriving it from the same table the nav is
+  // built from keeps the two from drifting apart
+  const current = SECTIONS.flatMap((section) =>
+    section.items.map((item) => ({ ...item, section: section.label })),
+  )
+    .filter((item) => location.pathname === item.to || location.pathname.startsWith(item.to + '/'))
+    .sort((a, b) => b.to.length - a.to.length)[0];
+  const currentLabel = current?.label ?? 'Administration';
+  const currentSection = current?.section ?? '';
+
   const nav = (
     <nav className="flex h-full flex-col">
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-ink-700 px-4">
+      <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-ink-700 px-4">
         <IconLogo className="h-7 w-7" />
-        <span className="text-sm font-bold tracking-tight">Quantex</span>
-        <span className="chip ml-auto bg-accent-soft text-accent">admin</span>
+        <span className="min-w-0">
+          <span className="block text-sm font-bold leading-tight tracking-tight">Quantex</span>
+          <span className="block text-[10px] uppercase tracking-[0.14em] text-slate-500">Back office</span>
+        </span>
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto p-3">
+      <div className="flex-1 space-y-5 overflow-y-auto p-3 pb-6">
         {visibleSections.map((section) => (
           <div key={section.label}>
             <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
@@ -155,7 +169,8 @@ export function AdminLayout() {
                     }`
                   }
                 >
-                  <span className="flex-1">{item.label}</span>
+                  <NavIcon to={item.to} />
+                  <span className="flex-1 truncate">{item.label}</span>
                   {badge > 0 && (
                     <span className="rounded-full bg-down-solid px-1.5 text-[10px] font-bold text-white">
                       {badge}
@@ -224,17 +239,38 @@ export function AdminLayout() {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-ink-700 bg-ink-900/95 px-4 backdrop-blur lg:hidden">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-ink-700 bg-ink-900/90 px-4 backdrop-blur sm:px-6">
           <button
             onClick={() => setDrawer(true)}
-            className="btn-ghost !px-2.5 !py-2"
+            className="btn-ghost !px-2.5 !py-2 lg:hidden"
             aria-label="Open navigation"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
             </svg>
           </button>
-          <span className="text-sm font-bold">Administration</span>
+
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-slate-100">{currentLabel}</span>
+            <span className="hidden text-[11px] text-slate-500 sm:block">{currentSection}</span>
+          </span>
+
+          <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle />
+            <Link
+              to="/trade"
+              className="btn-ghost hidden !px-3 !py-2 text-xs sm:inline-flex"
+              title="Open the trading terminal"
+            >
+              Terminal
+            </Link>
+            <span
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold uppercase text-accent"
+              title={`${user?.name ?? ''} · ${user?.email ?? ''}`}
+            >
+              {user?.name?.[0] ?? 'A'}
+            </span>
+          </div>
         </header>
 
         <main className="min-w-0 flex-1 p-4 sm:p-6">

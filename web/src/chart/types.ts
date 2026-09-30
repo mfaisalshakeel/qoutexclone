@@ -1,3 +1,4 @@
+import { themeColor } from '../store/theme';
 import type { Candle, Trade } from '../lib/types';
 import type { SeriesKind } from './series';
 
@@ -41,19 +42,49 @@ export interface ChartTheme {
   labelText: string;
 }
 
+/**
+ * Read from the theme rather than fixed: the canvas paints outside CSS, so a
+ * light theme would otherwise leave a near-black plot on a white page. These
+ * are getters because a frame reads them at draw time, which is exactly when
+ * the answer should reflect the theme that is on.
+ */
 export const THEME: ChartTheme = {
-  background: '#0f1421',
-  grid: '#1a2132',
-  axis: '#273149',
-  text: '#7c8aa5',
-  up: '#12b886',
-  down: '#f0455e',
-  line: '#3d7bff',
-  lineFillTop: 'rgba(61,123,255,0.28)',
-  lineFillBottom: 'rgba(61,123,255,0.01)',
-  crosshair: '#3a4763',
-  label: '#273149',
-  labelText: '#e2e8f0',
+  get background() {
+    return themeColor('ink-800');
+  },
+  get grid() {
+    return themeColor('ink-700');
+  },
+  get axis() {
+    return themeColor('ink-500');
+  },
+  get text() {
+    return themeColor('muted');
+  },
+  get up() {
+    return themeColor('up');
+  },
+  get down() {
+    return themeColor('down');
+  },
+  get line() {
+    return themeColor('accent');
+  },
+  get lineFillTop() {
+    return themeColor('accent', 0.28);
+  },
+  get lineFillBottom() {
+    return themeColor('accent', 0.01);
+  },
+  get crosshair() {
+    return themeColor('ink-400');
+  },
+  get label() {
+    return themeColor('ink-500');
+  },
+  get labelText() {
+    return themeColor('text');
+  },
 };
 
 /** Everything a frame needs, assembled once per paint. */

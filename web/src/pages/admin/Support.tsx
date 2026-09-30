@@ -268,7 +268,7 @@ export function AdminSupport() {
                   >
                     <p className="whitespace-pre-wrap break-words">{message.body}</p>
                     <p
-                      className={`mt-1 text-[9px] ${message.fromSupport ? 'text-white/70' : 'text-slate-500'}`}
+                      className={`mt-1 text-[9px] ${message.fromSupport ? 'text-slate-100/70' : 'text-slate-500'}`}
                     >
                       {message.fromSupport ? 'You' : active.user?.name} · {dateTime(message.createdAt)}
                     </p>

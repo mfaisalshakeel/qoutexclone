@@ -39,7 +39,7 @@ export function MarkdownEditor({
               aria-selected={tab === key}
               onClick={() => setTab(key)}
               className={`rounded px-2 py-0.5 text-[11px] font-semibold transition ${
-                tab === key ? 'bg-ink-600 text-white' : 'text-slate-500 hover:text-slate-300'
+                tab === key ? 'bg-selected text-selected-fg' : 'text-slate-500 hover:text-slate-300'
               }`}
             >
               {key === 'write' ? 'Write' : 'Preview'}

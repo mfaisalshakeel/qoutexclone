@@ -171,7 +171,7 @@ export function Setup() {
           <li key={s} className="flex flex-1 items-center gap-1.5 last:flex-none">
             <span
               className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-                STEP_ORDER.indexOf(step) >= i ? 'bg-accent-solid text-white' : 'bg-ink-600 text-slate-400'
+                STEP_ORDER.indexOf(step) >= i ? 'bg-accent-solid text-slate-100' : 'bg-ink-600 text-slate-400'
               }`}
             >
               {i + 1}

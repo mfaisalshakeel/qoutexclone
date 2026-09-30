@@ -74,7 +74,7 @@ export function Leaderboard() {
   return (
     <div className="mx-auto max-w-2xl p-3 md:p-6">
       <header className="mb-4">
-        <h1 className="text-xl font-bold tracking-tight text-white">Top traders today</h1>
+        <h1 className="text-xl font-bold tracking-tight text-slate-100">Top traders today</h1>
         <p className="mt-1 text-xs text-slate-400">
           Profit on settled live positions since midnight UTC. Names are masked, and practice and tournament
           trading is not counted.
@@ -86,7 +86,7 @@ export function Leaderboard() {
           <p>{error}</p>
           <button
             onClick={() => void load()}
-            className="mt-3 rounded-lg bg-ink-600 px-3 py-1.5 text-xs font-semibold text-white"
+            className="mt-3 rounded-lg bg-ink-600 px-3 py-1.5 text-xs font-semibold text-slate-100"
           >
             Try again
           </button>

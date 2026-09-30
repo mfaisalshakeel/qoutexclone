@@ -54,6 +54,15 @@ export default tseslint.config(
   // the performance harness is a node script that also evaluates code inside
   // the page, so it legitimately mentions both worlds
   {
+    // a plain browser script served as-is from web/public, so it predates the
+    // bundle and cannot use modules or modern syntax guarantees
+    files: ['web/public/*.js'],
+    languageOptions: {
+      sourceType: 'script',
+      globals: { ...globals.browser },
+    },
+  },
+  {
     files: ['scripts/**/*.mjs'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },

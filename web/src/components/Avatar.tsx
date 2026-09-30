@@ -30,7 +30,7 @@ export function Avatar({
   return (
     <span
       aria-hidden="true"
-      className={`flex items-center justify-center rounded-full font-semibold uppercase text-white ${colour} ${className}`}
+      className={`flex items-center justify-center rounded-full font-semibold uppercase text-slate-100 ${colour} ${className}`}
     >
       {name?.[0] ?? '?'}
     </span>

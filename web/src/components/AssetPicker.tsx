@@ -74,7 +74,7 @@ export function AssetPicker({ onPicked }: Props) {
               aria-label={each === 'FAVOURITES' ? 'Favourites' : undefined}
               onClick={() => setTab(each)}
               className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold transition ${
-                activeTab === each ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                activeTab === each ? 'bg-selected text-selected-fg' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               {TAB_LABEL(each)}
@@ -172,7 +172,7 @@ export function AssetPicker({ onPicked }: Props) {
                 aria-pressed={starred}
                 aria-label={`${starred ? 'Unstar' : 'Star'} ${asset.pair}`}
                 className={`shrink-0 px-1.5 py-2 text-sm leading-none transition ${
-                  starred ? 'text-amber-400' : 'text-slate-600 hover:text-slate-400'
+                  starred ? 'text-amber-400' : 'text-slate-500 hover:text-slate-300'
                 }`}
               >
                 {starred ? '★' : '☆'}

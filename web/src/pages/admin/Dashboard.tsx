@@ -327,7 +327,7 @@ export function AdminDashboard() {
               key={d}
               onClick={() => setChartDays(d)}
               className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition ${
-                chartDays === d ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                chartDays === d ? 'bg-selected text-selected-fg' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               Last {d}d
@@ -516,7 +516,7 @@ function PeriodPicker({
             key={p.key}
             onClick={() => onChange(p.key)}
             className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition ${
-              preset === p.key ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              preset === p.key ? 'bg-selected text-selected-fg' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             {p.label}

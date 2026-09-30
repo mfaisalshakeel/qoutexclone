@@ -50,7 +50,7 @@ export function AdminContent() {
             aria-selected={tab === key}
             onClick={() => setTab(key)}
             className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-              tab === key ? 'bg-ink-600 text-white' : 'text-slate-400 hover:text-slate-200'
+              tab === key ? 'bg-selected text-selected-fg' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             {TAB_LABEL[key]}
