@@ -190,7 +190,29 @@ npm run build                    # builds web/dist and server/dist
 ```
 
 Upload `server/dist`, `server/prisma`, `web/dist`, `package.json`,
-`package-lock.json` and `server/package.json`. Then on the host:
+`package-lock.json` and `server/package.json`. Then start it on the host —
+point the cPanel app at `server/dist/index.js` (or run `node server/dist/index.js`
+directly) **without** creating `server/.env` first.
+
+### Web-based setup wizard (recommended here — no SSH needed)
+
+With no `DATABASE_URL` configured, `server/dist/index.js` does not refuse to
+start: it serves a small setup-only server instead of the real API, and
+opening the site's URL in a browser shows a step-by-step installer —
+database connection, admin account, a **Test connection** button before you
+can continue. Submitting the last step writes `server/.env`, runs
+`prisma migrate deploy` and the seed, then the process exits so cPanel's Node
+App Manager restarts it into normal, configured mode. Refresh the page once
+it comes back and log in with the admin account you just created.
+
+This is the same installer either way — cPanel's "Restart" button after the
+wizard's own exit, or your process manager's restart policy — the wizard
+never needs a shell.
+
+### CLI installer (SSH available)
+
+Prefer a shell, or need to script the install (CI, a provisioning tool)?
+Set `server/.env` yourself before first start:
 
 ```bash
 npm ci --omit=dev --workspace=server

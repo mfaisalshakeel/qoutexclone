@@ -24,8 +24,12 @@ export function CookieConsent() {
   const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   // the terminal is full-bleed and suppresses every banner, same as
-  // MaintenanceBanner/AnnouncementBanner in the authenticated shell
-  const isTerminal = useLocation().pathname.startsWith('/trade');
+  // MaintenanceBanner/AnnouncementBanner in the authenticated shell. The
+  // setup wizard runs before there is anyone to consent on behalf of —
+  // there is no session, no cookie worth naming yet, just a bootstrap form.
+  const location = useLocation();
+  const isTerminal = location.pathname.startsWith('/trade');
+  const isSetup = location.pathname.startsWith('/setup');
   // a signed-in trader already accepted this at registration, on the public
   // site — repeating it mid-session is not a second consent, just a fixed
   // banner sitting over the authenticated app's own controls
@@ -44,7 +48,7 @@ export function CookieConsent() {
     setVisible(false);
   };
 
-  if (!visible || isTerminal || signedIn) return null;
+  if (!visible || isTerminal || isSetup || signedIn) return null;
 
   return (
     <div

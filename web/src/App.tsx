@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect } from 'react';
-import { Navigate, Route, BrowserRouter as Router, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, BrowserRouter as Router, Routes, useLocation, useNavigate } from 'react-router-dom';
 import i18n from './i18n';
 import { applyDocumentDirection, isTranslatedRoute } from './i18n/config';
 import { AdminLayout } from './components/admin/AdminLayout';
@@ -9,6 +9,7 @@ import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Landing } from './pages/Landing';
 import { CookieConsent } from './components/home/CookieConsent';
+import { api } from './lib/api';
 import { useAuth } from './store/auth';
 import { useSettings } from './store/settings';
 
@@ -105,6 +106,7 @@ const VerifyEmail = lazy(() => import('./pages/VerifyEmail').then((m) => ({ defa
 const Terminal = lazy(() => import('./pages/Terminal').then((m) => ({ default: m.Terminal })));
 const Tournaments = lazy(() => import('./pages/Tournaments').then((m) => ({ default: m.Tournaments })));
 const Wallet = lazy(() => import('./pages/Wallet').then((m) => ({ default: m.Wallet })));
+const Setup = lazy(() => import('./pages/Setup').then((m) => ({ default: m.Setup })));
 
 /** A route chunk is on its way in; kept blank rather than a spinner so a fast
  *  load never flashes a loading state the eye can barely register. */
@@ -120,6 +122,33 @@ function DirectionSync() {
   useEffect(() => {
     applyDocumentDirection(isTranslatedRoute(location.pathname) ? i18n.language : 'en');
   }, [location.pathname]);
+  return null;
+}
+
+/**
+ * Sends a fresh install straight to the setup wizard, from whatever path it
+ * was reached at. Checked in parallel with everything else `App` bootstraps
+ * (auth, settings) rather than gating first paint on it — the overwhelming
+ * majority of loads are already configured, and this only ever redirects
+ * once, on the one install that isn't.
+ */
+function SetupGuard() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get<{ configured: boolean }>('/setup/status')
+      .then(({ configured }) => {
+        if (!cancelled && !configured && location.pathname !== '/setup') {
+          navigate('/setup', { replace: true });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname, navigate]);
   return null;
 }
 
@@ -145,8 +174,10 @@ export default function App() {
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <ErrorBoundary>
         <DirectionSync />
+        <SetupGuard />
         <Suspense fallback={<RouteFallback />}>
           <Routes>
+            <Route path="/setup" element={<Setup />} />
             <Route path="/" element={ready && user ? <Navigate to="/trade" replace /> : <Landing />} />
             <Route path="/legal/:slug" element={<Legal />} />
             <Route path="/markets" element={<PublicMarkets />} />

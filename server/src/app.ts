@@ -166,6 +166,14 @@ export function createApp() {
     });
   });
 
+  // if this route answers at all, `server/.env` already has a DATABASE_URL —
+  // the setup wizard's own server (server/src/setup/setup-server.ts) is the
+  // only thing that ever answers `false`, and it stops running the moment
+  // that becomes true. The web client polls this one path either way.
+  app.get('/api/setup/status', (_req, res) => {
+    res.json({ configured: true });
+  });
+
   /**
    * Readiness: only true when this instance can actually serve traffic — the
    * database answers and the feed is ticking. Load balancers should gate on

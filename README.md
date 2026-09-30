@@ -81,7 +81,26 @@ are the point.
 Requires **Node 20+** and **MySQL 8** (or MariaDB 10.4+). For a hosted test
 deployment — Railway, a VPS or shared hosting — see [DEPLOY.md](DEPLOY.md).
 
-### Option 1 — Docker (nothing else to install)
+### Option 1 — web-based setup wizard (no shell needed)
+
+Build and start the app with no `server/.env` in place:
+
+```bash
+npm install
+npm run build
+npm start
+```
+
+With `DATABASE_URL` unset, the server does not exit — it serves a setup-only
+API and a step-by-step wizard instead. Open the site in a browser: database
+connection (with a **Test connection** check before you can continue), an
+admin account, then **Install**. That writes `server/.env`, runs the
+migrations and seed, and the process exits so your process manager (pm2,
+systemd, cPanel's Node App Manager, `docker restart`) brings it back up
+already configured. This is the path for shared hosting/cPanel where there
+is no SSH access — see [DEPLOY.md](DEPLOY.md#4-shared-hosting--cpanel--no-docker).
+
+### Option 2 — Docker (nothing else to install)
 
 ```bash
 cp .env.example .env        # edit the passwords and secrets
@@ -90,7 +109,7 @@ docker compose up -d --build
 
 Open <http://localhost:4000>. MySQL, migrations and seeding are handled for you.
 
-### Option 2 — installer script
+### Option 3 — installer script
 
 ```bash
 ./install.sh                # asks for your MySQL details, does everything else
@@ -106,7 +125,7 @@ Non-interactive (provisioning, CI):
 DATABASE_URL="mysql://user:pass@host:3306/quotex" ./install.sh
 ```
 
-### Option 3 — manual
+### Option 4 — manual
 
 ```bash
 npm install
