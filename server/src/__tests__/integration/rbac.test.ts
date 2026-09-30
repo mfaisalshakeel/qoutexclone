@@ -104,6 +104,23 @@ suite('admin access control', () => {
       const err = (await run(requireAdmin, staff.id)) as AppError;
       expect(err.code).toBe('admin_2fa_required');
     });
+
+    it('lets staff in without a second factor once an operator drops the requirement', async () => {
+      const { settings } = await import('../../services/settings.js');
+      const staff = await makeUser({ role: 'ADMIN', adminRole: 'SUPPORT' });
+      expect(((await run(requireAdmin, staff.id)) as AppError).code).toBe('admin_2fa_required');
+
+      await settings.set('security.adminTwoFactorRequired', false);
+      try {
+        // the gate is read live, so the same account gets through on the next
+        // request — an operator locked out of the panel cannot wait for a token
+        expect(await run(requireAdmin, staff.id)).toBeUndefined();
+      } finally {
+        await settings.set('security.adminTwoFactorRequired', true);
+      }
+
+      expect(((await run(requireAdmin, staff.id)) as AppError).code).toBe('admin_2fa_required');
+    });
   });
 
   describe('requirePermission', () => {

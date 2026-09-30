@@ -734,6 +734,13 @@ export const SETTINGS = {
     help: 'Left empty, replies go to the from address.',
   }),
 
+  'security.adminTwoFactorRequired': define({
+    schema: z.boolean(),
+    default: true,
+    group: 'security',
+    label: 'Admin accounts must use two-factor',
+    help: 'Leave this on for anything real: the back office moves money. Turning it off is a way to reach the panel while you have no authenticator to hand. An operator who has locked themselves out can also flip it from a shell with `npm run admin:2fa -- off`, because this switch lives behind the very gate it controls.',
+  }),
   'security.emailVerification': define({
     schema: z.enum(['off', 'optional', 'required']),
     default: 'optional',

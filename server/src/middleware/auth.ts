@@ -76,7 +76,7 @@ export const requireAdmin: RequestHandler = (req, _res, next) => {
     })
     .then((user) => {
       if (!user || user.role !== 'ADMIN') return next(forbidden('Administrator access required'));
-      if (!user.twoFactorEnabledAt) {
+      if (settings.get('security.adminTwoFactorRequired') && !user.twoFactorEnabledAt) {
         return next(
           forbidden(
             'Two-factor authentication is required for admin accounts. Turn it on in Account → Security.',

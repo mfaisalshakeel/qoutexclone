@@ -14,6 +14,7 @@
     "db:migrate:dev": "prisma migrate dev",
     "setup": "prisma generate && prisma migrate deploy && tsx src/seed.ts",
     "seed": "tsx src/seed.ts",
+    "admin:2fa": "tsx src/scripts/admin-2fa.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:generate": "prisma generate"
