@@ -147,7 +147,7 @@ Numbers below are defaults. Every one of them must be admin-configurable.
 - [x] **Scale.** Realtime fan-out through a pub/sub interface (in-memory by default, Redis adapter), settlement safe with multiple API instances, and a load test (k6) of 1,000 concurrent traders placing trades with results recorded.
 - [x] **Observability.** Error tracking hook (Sentry-compatible), metrics endpoint (Prometheus format: trades/s, settlement lag, ws clients, feed staleness), and alerts documented.
 - [x] **Deployment.** Production Docker compose with nginx (TLS, gzip/brotli, caching headers, ws upgrade), migrations on deploy, and a zero-downtime restart procedure. The README is updated and a cPanel/VPS guide is kept.
-- [x] **Final pass.** Every page at 360/390/768/1024/1440 widths, light and dark themes, keyboard-only navigation, and the full e2e suite green. Update screenshots in `docs/screenshots`.
+- [ ] **Final pass.** Every page at 360/390/768/1024/1440 widths, light and dark themes, keyboard-only navigation, and the full e2e suite green. Update screenshots in `docs/screenshots`. **Re-opened on 2026-09-30:** there is no light theme in the codebase at all — `web/src/index.css` sets `color-scheme: dark` and nothing reads a theme preference — so this box was ticked for work that is not there. Phase 9 carries the theme task; tick this again only once both themes exist and the sweep has been re-run against them.
 
 ## Design direction
 
@@ -156,3 +156,89 @@ Soft Pastel App, Neo Brutalist). Build the UI on **design tokens** (CSS variable
 into Tailwind) so a theme preset can be switched from admin settings. Ship the current
 dark theme and a light theme first. Implement additional presets based on the mockups once
 the owner names a favourite (check `docs/PROGRESS.md` → Decisions).
+
+---
+
+## Phase 9 — Interface review (owner walkthrough, 2026-09-30)
+
+The owner walked the built product and rejected how it looks and reads. Everything
+below was measured in a real browser at 1440, 1280, 1024 and 390px against the live
+build, so treat the numbers as facts to fix, not opinions to weigh. Owner's words:
+the admin panel needs a **professional theme with a light mode as well as dark**, and
+**settings must be tabbed** rather than one endless page.
+
+### 9.1 Theme system and admin visual design
+
+- [ ] **Light and dark themes, for real.** There is no light theme today: `index.css`
+  hard-codes `color-scheme: dark`, `tailwind.config.js` has no light tokens and nothing
+  reads a preference. Move every colour to CSS custom properties on `:root`, redefine
+  them under a `[data-theme='light']` root, map them into Tailwind so `bg-ink-800` and
+  friends keep working, and cover both the terminal and the back office. Nothing may
+  keep a hard-coded hex outside the token file.
+- [ ] **Theme switcher.** A control in the header (and in Account → preferences) with
+  three states: system, light, dark. It persists per device, applies with no flash on
+  first paint (inline script before hydration), and an operator default lives in admin
+  settings. Charts, canvas chart, skeletons, toasts and the CMS markdown all follow it.
+- [ ] **Redesign the back office as a product, not a form dump.** A professional shell:
+  card and table density that matches a finance console, a clear type scale, consistent
+  spacing, real empty states with a next action, and a visible hierarchy between page
+  title, section and control. The sidebar needs grouped nav that scrolls independently
+  and never clips its last item (today "Marketplace orders" is cut off at 900px tall).
+  Judge it against the five directions in `mockups/` — the owner has not picked one yet,
+  so ship it on tokens and record the choice in PROGRESS.
+
+### 9.2 Settings must be tabbed
+
+- [ ] **Break the settings page up.** It is a single scroll of **9,243px on desktop and
+  15,022px on a phone** — every group rendered one after another. Give it tabs (or a
+  left rail) per group: General, Trading, Payments, Growth, Security, Email, SEO,
+  Localisation. The chosen tab lives in the URL so it can be linked and survives a
+  refresh, each tab saves on its own, and a dirty tab warns before you leave it.
+- [ ] **Write for an operator, not a developer.** Each row currently prints its raw key
+  (`general.siteName`, `security.passwordMinLength`) under the label. Keep the key for
+  support, but demote it: label and help text lead, key is secondary or on hover.
+- [ ] **Search across settings.** One box that filters every group by label, help text
+  and key, so an operator who knows what they want does not hunt through eight tabs.
+
+### 9.3 Charts and graphs in the back office
+
+- [ ] **Empty charts should not be full-height holes.** On a phone the dashboard is a
+  **4,417px** scroll in which six chart cards each reserve ~350px only to print "No data
+  in this window yet". Collapse an empty chart to a short card with the reason and a
+  link to what would fill it, and keep full height only when there is data.
+- [ ] **Make every chart responsive.** The hourly-activity heatmap runs off the right
+  edge at 390px (hours 12–23 are outside the viewport). Charts need to reflow, not
+  overflow: fewer ticks, rotated or thinned labels, horizontal scroll inside the card
+  with an edge fade where a grid genuinely cannot shrink.
+- [ ] **Chart legibility.** Axis labels, gridlines and series colours must pass contrast
+  in both themes, every series needs a legend and a tooltip with the exact figure, and
+  currency/percent formatting must match the KPI cards above them.
+- [ ] **KPI grid.** The last row leaves a ragged hole (three cards in a four-column
+  grid). Balance the grid or span the last card.
+
+### 9.4 Trading terminal
+
+- [x] **Market rail rows.** Fixed 2026-09-30: the pair was `flex-1 truncate` next to
+  `shrink-0` chips, so every OTC row read "EU…", "GB…", "US…" (34px of space for 54px of
+  text) and the second line clipped the market name to "Euro /…". The pair no longer
+  truncates, the name moved to the row's title, and the line below carries price and move.
+- [ ] **Market rail, the rest.** The class tabs (All/Forex/Crypto/Commodities/Stocks/
+  Indices) overflow with no affordance — at 240px only four are visible and nothing says
+  the row scrolls. The sort control is a raw browser `<select>` that matches nothing else
+  on the page. Row height (~68px) shows barely a dozen of 89 markets; offer a compact
+  density and sticky class headers.
+- [ ] **Chart chrome.** The drawing toolbar floats over the top-left of the plot as an
+  unlabelled icon column with its colour swatches permanently open, and the header packs
+  eight more unlabelled icon buttons. Give every control a tooltip and an accessible
+  name, collapse the swatches behind the tool that uses them, and keep the plot clear.
+- [ ] **Ticket panel rhythm.** Between the stake limits and the Higher/Lower buttons sits
+  a large dead gap while the positions list below is squeezed; the support bubble also
+  overlaps that list. Rebalance the column and move the bubble clear of it.
+- [ ] **Trade toast placement.** A placed trade drops a toast over the ticket's own
+  payout/profit header — the numbers the trader just acted on. Move it clear.
+
+### 9.5 Naming consistency
+
+- [ ] **Show the pair, never the internal symbol.** Positions, toasts and history print
+  `EURUSD_OTC` and `BTCUSDT`; the same market is "EUR/USD (OTC)" and "BTC/USDT"
+  everywhere else. One formatter, used by every surface.

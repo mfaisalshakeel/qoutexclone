@@ -120,38 +120,50 @@ export function AssetPicker({ onPicked }: Props) {
                 // the accessible name carries the full pair — a spot market and
                 // its OTC twin read identically otherwise
                 aria-label={asset.pair}
+                title={asset.name}
                 className="min-w-0 flex-1 px-2.5 py-2 text-left"
               >
                 <span className="flex items-center gap-2">
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-600 text-[9px] font-bold text-slate-300">
                     {asset.icon ?? asset.base}
                   </span>
-                  {/* the pair leads: it is short, unambiguous and how traders scan a list */}
-                  <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-100">
+                  {/* The pair is the row's identity, so it is the one thing that
+                      never truncates: at rail width the chips give way first, and
+                      a rail full of "EU…" and "GB…" tells a trader nothing. */}
+                  <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-slate-100">
                     {asset.pair.replace(' (OTC)', '')}
                   </span>
-                  {asset.isOtc && <span className="chip shrink-0 bg-accent-soft text-accent">OTC</span>}
-                  {!asset.isOpen && <span className="chip shrink-0 bg-ink-600 text-slate-400">closed</span>}
+                  {asset.isOtc && (
+                    <span className="chip shrink-0 bg-accent-soft !px-1.5 text-accent">OTC</span>
+                  )}
                   <span
-                    className={`chip shrink-0 ${asset.isOpen ? 'bg-up-soft text-up' : 'bg-ink-600 text-slate-500'}`}
+                    className={`chip ml-auto shrink-0 !px-1.5 ${asset.isOpen ? 'bg-up-soft text-up' : 'bg-ink-600 text-slate-500'}`}
                   >
                     {asset.payoutPct}%
                   </span>
                 </span>
+                {/* The long name used to sit here and was clipped to a few
+                    characters at rail width; it lives on the button's title
+                    instead, and the line carries what changes: price and move. */}
                 <span className="mt-1 flex items-baseline gap-2 pl-9">
-                  <span className="min-w-0 flex-1 truncate text-[10px] text-slate-500">
-                    {asset.isOpen
-                      ? asset.name.replace(' (OTC)', '')
-                      : asset.nextOpen
-                        ? `Opens ${untilShort(asset.nextOpen)}`
-                        : 'Closed'}
-                  </span>
-                  <span className="tabular text-xs font-semibold text-slate-100">
+                  <span className="tabular shrink-0 text-xs font-semibold text-slate-100">
                     {price(live, asset.precision)}
                   </span>
-                  <span className={`tabular text-[10px] ${asset.changePct >= 0 ? 'text-up' : 'text-down'}`}>
-                    {percent(asset.changePct)}
-                  </span>
+                  {asset.isOpen ? (
+                    <span
+                      className={`tabular ml-auto shrink-0 text-[10px] ${asset.changePct >= 0 ? 'text-up' : 'text-down'}`}
+                    >
+                      {percent(asset.changePct)}
+                    </span>
+                  ) : (
+                    // a closed market's last price still matters; what it needs
+                    // instead of a stale move is when it trades again. This is
+                    // also the only "closed" marker on the row now — a chip on
+                    // the line above said the same thing in less space.
+                    <span className="ml-auto min-w-0 truncate text-[10px] text-slate-500">
+                      {asset.nextOpen ? untilShort(asset.nextOpen) : 'closed'}
+                    </span>
+                  )}
                 </span>
               </button>
 
