@@ -676,8 +676,13 @@ export function Terminal() {
         )}
       </section>
 
+      {/* On a short window the ticket alone is taller than the column, and a
+            `shrink-0` ticket beside a `flex-1` positions panel pushed the whole
+            page into a scroll — header off the top, positions cut off the
+            bottom. The column scrolls itself instead, and the panel keeps a
+            floor so it never collapses to a sliver. */}
       {isDesktop && (
-        <aside className="flex w-72 shrink-0 flex-col gap-2">
+        <aside className="scroll-quiet flex min-h-0 w-72 shrink-0 flex-col gap-2 overflow-y-auto">
           <div className="shrink-0">
             {ticketConfig.hotkeys && (
               <button
@@ -694,7 +699,7 @@ export function Terminal() {
               onOrdered={patchOrder}
             />
           </div>
-          <div className="min-h-0 flex-1">
+          <div className="min-h-[13rem] flex-1">
             <Positions
               open={openTrades}
               closed={closedTrades}

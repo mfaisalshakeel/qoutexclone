@@ -148,10 +148,10 @@ export function AdminLayout() {
         </span>
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto p-3 pb-6">
+      <div className="scroll-quiet flex-1 space-y-6 overflow-y-auto p-3 pb-6">
         {visibleSections.map((section) => (
           <div key={section.label}>
-            <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
               {section.label}
             </p>
             {section.items.map((item) => {
@@ -162,17 +162,23 @@ export function AdminLayout() {
                   to={item.to}
                   end={item.to === '/admin'}
                   className={({ isActive }) =>
-                    `mb-0.5 flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
+                    `group relative mb-0.5 flex items-center gap-2.5 rounded-lg py-2 pl-3 pr-2.5 text-[13px] transition ${
                       isActive
                         ? 'bg-accent-soft font-semibold text-accent'
-                        : 'text-slate-400 hover:bg-ink-700 hover:text-slate-100'
+                        : 'text-slate-400 hover:bg-ink-700/70 hover:text-slate-100'
                     }`
                   }
                 >
+                  {/* the rail reads as "you are here" from the corner of the
+                      eye, where a tint alone does not */}
+                  <span
+                    aria-hidden
+                    className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r bg-accent opacity-0 transition group-aria-[current=page]:opacity-100"
+                  />
                   <NavIcon to={item.to} />
                   <span className="flex-1 truncate">{item.label}</span>
                   {badge > 0 && (
-                    <span className="rounded-full bg-down-solid px-1.5 text-[10px] font-bold text-white">
+                    <span className="min-w-[18px] rounded-full bg-down-solid px-1.5 text-center text-[10px] font-bold leading-[18px] text-white">
                       {badge}
                     </span>
                   )}
@@ -183,9 +189,9 @@ export function AdminLayout() {
         ))}
       </div>
 
-      <div className="shrink-0 border-t border-ink-700 p-3">
-        <div className="mb-2 flex items-center gap-2 px-1">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink-600 text-xs font-semibold uppercase">
+      <div className="shrink-0 border-t border-ink-700 bg-ink-800/60 p-3">
+        <div className="mb-2.5 flex items-center gap-2.5 px-1">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold uppercase text-accent">
             {user?.name?.[0] ?? 'A'}
           </span>
           <span className="min-w-0">
@@ -219,7 +225,7 @@ export function AdminLayout() {
 
   return (
     <div className="flex min-h-dvh bg-ink-900">
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 border-r border-ink-700 bg-ink-800/60 lg:block">
+      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 border-r border-ink-700 bg-ink-800 lg:block">
         {nav}
       </aside>
 
@@ -251,8 +257,12 @@ export function AdminLayout() {
           </button>
 
           <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-slate-100">{currentLabel}</span>
-            <span className="hidden text-[11px] text-slate-500 sm:block">{currentSection}</span>
+            <span className="hidden text-[11px] text-slate-500 sm:block">
+              {currentSection || 'Back office'}
+            </span>
+            <span className="block truncate text-[15px] font-semibold leading-tight text-slate-100">
+              {currentLabel}
+            </span>
           </span>
 
           <div className="ml-auto flex items-center gap-2">
@@ -273,7 +283,7 @@ export function AdminLayout() {
           </div>
         </header>
 
-        <main className="min-w-0 flex-1 p-4 sm:p-6">
+        <main className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 p-4 sm:p-6 lg:p-8">
           <ErrorBoundary resetKey={location.pathname}>
             <Outlet />
           </ErrorBoundary>

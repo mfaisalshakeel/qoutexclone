@@ -5,7 +5,7 @@ import { dateTime, money } from '../../lib/format';
 import { toast } from '../../store/toast';
 import { useAuth } from '../../store/auth';
 import { hasArea } from '../../lib/permissions';
-import { StatusPill } from '../../components/admin/ui';
+import { ACTION_ICONS, RowAction, StatusPill } from '../../components/admin/ui';
 import { DataTable, type DataTableColumn } from '../../components/admin/DataTable';
 import type { User } from '../../lib/types';
 
@@ -153,28 +153,27 @@ export function AdminUsers() {
       label: 'Actions',
       align: 'right',
       render: (user) => (
-        <span className="flex justify-end gap-2">
+        <span className="flex justify-end gap-1.5">
           {canFinance && (
-            <button
+            <RowAction
+              label={`Adjust ${user.email}'s balance`}
+              icon={ACTION_ICONS.adjust}
               onClick={(e) => {
                 e.stopPropagation();
                 void adjustBalance(user, reload);
               }}
-              className="btn-ghost !px-3 !py-1.5 text-xs"
-            >
-              Adjust
-            </button>
+            />
           )}
           {canManage && (
-            <button
+            <RowAction
+              label={user.status === 'ACTIVE' ? `Suspend ${user.email}` : `Activate ${user.email}`}
+              icon={user.status === 'ACTIVE' ? ACTION_ICONS.suspend : ACTION_ICONS.activate}
+              tone={user.status === 'ACTIVE' ? 'danger' : undefined}
               onClick={(e) => {
                 e.stopPropagation();
                 void toggleStatus(user, reload);
               }}
-              className="btn-ghost !px-3 !py-1.5 text-xs"
-            >
-              {user.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
-            </button>
+            />
           )}
         </span>
       ),
@@ -428,6 +427,18 @@ export function AdminKyc() {
               }}
               className="btn-up !px-3 !py-1.5 text-xs"
             >
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                className="h-3.5 w-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M4.5 12.5l4.5 4.5L19.5 6.5" />
+              </svg>
               Approve
             </button>
             <button
@@ -437,6 +448,18 @@ export function AdminKyc() {
               }}
               className="btn-ghost !px-3 !py-1.5 text-xs !text-down"
             >
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                className="h-3.5 w-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
               Reject
             </button>
           </span>

@@ -1,9 +1,10 @@
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -44,6 +45,13 @@ export interface ChartsData {
   hourlyActivity: number[][];
 }
 
+/** Axis styling shared by every chart: hairline ticks, no axis rule, muted labels. */
+const AXIS = {
+  tickLine: false,
+  axisLine: false,
+  fontSize: 11,
+} as const;
+
 const shortDate = (iso: string) =>
   new Intl.DateTimeFormat(undefined, { month: 'numeric', day: 'numeric', timeZone: 'UTC' }).format(
     new Date(`${iso}T00:00:00Z`),
@@ -63,8 +71,8 @@ function ChartCard({
     // min-w-0 stops the grid track from expanding to a chart's SVG intrinsic
     // width — without it, ResponsiveContainer's own shrink-to-fit fights a
     // grid item's default content-based sizing and the column blows out.
-    <div className="card min-w-0 p-4">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">{title}</p>
+    <div className="card min-w-0 p-5">
+      <p className="section-title mb-4">{title}</p>
       {empty ? (
         // a collapsed card rather than a full-height hole: six of these stacked
         // made the phone dashboard a 4,400px scroll of nothing
@@ -104,58 +112,80 @@ export function AdminCharts({ data }: { data: ChartsData }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <ChartCard title={`Deposits vs withdrawals · last ${data.days} days`} empty={!hasSeries}>
-        <ResponsiveContainer width="100%" height={224}>
-          <LineChart data={data.series}>
-            <CartesianGrid stroke={COLORS.grid} vertical={false} />
-            <XAxis
-              dataKey="date"
-              tickFormatter={shortDate}
-              stroke={COLORS.axis}
-              fontSize={10}
-              minTickGap={20}
-            />
-            <YAxis stroke={COLORS.axis} fontSize={10} tickFormatter={(v) => money(v)} width={64} />
+        <ResponsiveContainer width="100%" height={236}>
+          <AreaChart data={data.series} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="qx-deposits" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={COLORS.up} stopOpacity={0.35} />
+                <stop offset="100%" stopColor={COLORS.up} stopOpacity={0.02} />
+              </linearGradient>
+              <linearGradient id="qx-withdrawals" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={COLORS.down} stopOpacity={0.3} />
+                <stop offset="100%" stopColor={COLORS.down} stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke={COLORS.grid} vertical={false} strokeDasharray="4 4" />
+            <XAxis dataKey="date" tickFormatter={shortDate} stroke={COLORS.axis} minTickGap={24} {...AXIS} />
+            <YAxis stroke={COLORS.axis} tickFormatter={(v) => money(v)} width={68} {...AXIS} />
             <Tooltip
               contentStyle={tooltipStyle}
+              cursor={{ stroke: COLORS.axis, strokeDasharray: '3 3' }}
               labelFormatter={(v) => shortDate(String(v))}
               formatter={(v) => money(Number(v))}
             />
-            <Line type="monotone" dataKey="depositVolume" name="Deposits" stroke={COLORS.up} dot={false} />
-            <Line
+            <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+            <Area
+              type="monotone"
+              dataKey="depositVolume"
+              name="Deposits"
+              stroke={COLORS.up}
+              strokeWidth={2}
+              fill="url(#qx-deposits)"
+            />
+            <Area
               type="monotone"
               dataKey="withdrawalVolume"
               name="Withdrawals"
               stroke={COLORS.down}
-              dot={false}
+              strokeWidth={2}
+              fill="url(#qx-withdrawals)"
             />
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       </ChartCard>
 
       <ChartCard title={`House P&L · last ${data.days} days`} empty={!hasSeries}>
-        <ResponsiveContainer width="100%" height={224}>
-          <LineChart data={data.series}>
-            <CartesianGrid stroke={COLORS.grid} vertical={false} />
-            <XAxis
-              dataKey="date"
-              tickFormatter={shortDate}
-              stroke={COLORS.axis}
-              fontSize={10}
-              minTickGap={20}
-            />
+        <ResponsiveContainer width="100%" height={236}>
+          <AreaChart data={data.series} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="qx-pnl" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={COLORS.accent} stopOpacity={0.35} />
+                <stop offset="100%" stopColor={COLORS.accent} stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke={COLORS.grid} vertical={false} strokeDasharray="4 4" />
+            <XAxis dataKey="date" tickFormatter={shortDate} stroke={COLORS.axis} minTickGap={24} {...AXIS} />
             <YAxis
               stroke={COLORS.axis}
-              fontSize={10}
               tickFormatter={(v) => money(v, { sign: true })}
-              width={64}
+              width={68}
+              {...AXIS}
             />
             <Tooltip
               contentStyle={tooltipStyle}
+              cursor={{ stroke: COLORS.axis, strokeDasharray: '3 3' }}
               labelFormatter={(v) => shortDate(String(v))}
               formatter={(v) => money(Number(v), { sign: true })}
             />
-            <Line type="monotone" dataKey="housePnl" name="House P&L" stroke={COLORS.accent} dot={false} />
-          </LineChart>
+            <Area
+              type="monotone"
+              dataKey="housePnl"
+              name="House P&L"
+              stroke={COLORS.accent}
+              strokeWidth={2}
+              fill="url(#qx-pnl)"
+            />
+          </AreaChart>
         </ResponsiveContainer>
       </ChartCard>
 
@@ -170,10 +200,10 @@ export function AdminCharts({ data }: { data: ChartsData }) {
             margin={{ left: 24 }}
           >
             <CartesianGrid stroke={COLORS.grid} horizontal={false} />
-            <XAxis type="number" stroke={COLORS.axis} fontSize={10} />
+            <XAxis type="number" stroke={COLORS.axis} {...AXIS} />
             <YAxis type="category" dataKey="stage" stroke={COLORS.axis} fontSize={11} width={110} />
             <Tooltip contentStyle={tooltipStyle} />
-            <Bar dataKey="value" fill={COLORS.accent} radius={[0, 4, 4, 0]} />
+            <Bar dataKey="value" fill={COLORS.accent} barSize={22} radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
         <p className="mt-2 text-center text-[11px] text-slate-500">
@@ -199,10 +229,10 @@ export function AdminCharts({ data }: { data: ChartsData }) {
         <ResponsiveContainer width="100%" height={280}>
           <BarChart layout="vertical" data={data.topAssets} margin={{ left: 12 }}>
             <CartesianGrid stroke={COLORS.grid} horizontal={false} />
-            <XAxis type="number" stroke={COLORS.axis} fontSize={10} tickFormatter={(v) => money(v)} />
-            <YAxis type="category" dataKey="symbol" stroke={COLORS.axis} fontSize={10} width={100} />
+            <XAxis type="number" stroke={COLORS.axis} {...AXIS} tickFormatter={(v) => money(v)} />
+            <YAxis type="category" dataKey="symbol" stroke={COLORS.axis} {...AXIS} width={100} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v) => money(Number(v))} />
-            <Bar dataKey="volume" fill={COLORS.accent} radius={[0, 4, 4, 0]} />
+            <Bar dataKey="volume" fill={COLORS.accent} radius={[0, 6, 6, 0]} barSize={16} />
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>
@@ -211,11 +241,18 @@ export function AdminCharts({ data }: { data: ChartsData }) {
         <ResponsiveContainer width="100%" height={280}>
           <BarChart layout="vertical" data={data.exposure} margin={{ left: 12 }}>
             <CartesianGrid stroke={COLORS.grid} horizontal={false} />
-            <XAxis type="number" stroke={COLORS.axis} fontSize={10} tickFormatter={(v) => money(v)} />
-            <YAxis type="category" dataKey="symbol" stroke={COLORS.axis} fontSize={10} width={100} />
+            <XAxis type="number" stroke={COLORS.axis} {...AXIS} tickFormatter={(v) => money(v)} />
+            <YAxis type="category" dataKey="symbol" stroke={COLORS.axis} {...AXIS} width={100} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v) => money(Number(v))} />
-            <Bar dataKey="up" name="Up" stackId="a" fill={COLORS.up} />
-            <Bar dataKey="down" name="Down" stackId="a" fill={COLORS.down} radius={[0, 4, 4, 0]} />
+            <Bar dataKey="up" name="Up" stackId="a" fill={COLORS.up} barSize={16} />
+            <Bar
+              dataKey="down"
+              name="Down"
+              stackId="a"
+              fill={COLORS.down}
+              radius={[0, 6, 6, 0]}
+              barSize={16}
+            />
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>

@@ -176,6 +176,10 @@
        trick is invisible, so light uses the accent instead. */
     --selected: 28 36 54;
     --selected-fg: 241 245 249;
+
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-card-hover: 0 8px 24px -12px rgb(0 0 0 / 0.6);
+    --shadow-pop: 0 20px 48px -16px rgb(0 0 0 / 0.65);
   }
 
   /*
@@ -216,6 +220,11 @@
 
     --selected: 29 78 216;
     --selected-fg: 255 255 255;
+
+    /* light surfaces separate by shadow, not by a darker fill */
+    --shadow-card: 0 1px 2px rgb(15 23 42 / 0.06), 0 1px 3px rgb(15 23 42 / 0.04);
+    --shadow-card-hover: 0 10px 28px -12px rgb(15 23 42 / 0.18);
+    --shadow-pop: 0 24px 56px -20px rgb(15 23 42 / 0.28);
   }
 
   html,
@@ -247,15 +256,42 @@
     margin: 0;
   }
 
-  /* a guaranteed, consistent ring on focus, everywhere — rather than
-     however each browser's own default outline happens to render (or not,
-     once a custom background/border is in the way). Plain `:focus` rather
-     than `:focus-visible`: the latter's "was the last input a keyboard"
-     heuristic is exactly what a trading app's most consequential buttons
-     (Higher/Lower) cannot afford to gamble on. */
-  :focus {
+  /* A guaranteed, consistent ring — rather than however each browser's own
+     outline happens to render once a custom background or border is in the
+     way. `:focus-visible`, so a ring answers the keyboard and does not stick
+     to whatever was last clicked: a mouse user who opens a menu item should
+     not be left looking at a box around it. */
+  :focus-visible {
     outline: 2px solid rgb(var(--focus-ring));
     outline-offset: 2px;
+  }
+
+  /* The exception the heuristic cannot be trusted with: the two buttons that
+     commit money keep a ring on plain focus too, so there is never any doubt
+     about which one is armed. */
+  .btn-up:focus,
+  .btn-down:focus {
+    outline: 2px solid rgb(var(--focus-ring));
+    outline-offset: 2px;
+  }
+
+  /* Scrollbars inside panels: present while scrolling, invisible at rest. A
+     permanent grey rail down the side of the sidebar reads as a border that
+     does not belong there. */
+  .scroll-quiet {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .scroll-quiet:hover,
+  .scroll-quiet:focus-within {
+    scrollbar-color: rgb(var(--ink-500)) transparent;
+  }
+  .scroll-quiet::-webkit-scrollbar-thumb {
+    background: transparent;
+  }
+  .scroll-quiet:hover::-webkit-scrollbar-thumb,
+  .scroll-quiet:focus-within::-webkit-scrollbar-thumb {
+    background: rgb(var(--ink-500));
   }
 }
 
@@ -274,7 +310,33 @@
   }
 
   .card {
-    @apply rounded-xl border border-ink-600 bg-ink-800;
+    @apply rounded-2xl border border-ink-600 bg-ink-800;
+    box-shadow: var(--shadow-card);
+  }
+
+  /* a card that is a control surface rather than a container: slightly flatter,
+     and it reacts to the pointer */
+  .card-interactive {
+    @apply card transition;
+  }
+  .card-interactive:hover {
+    @apply border-ink-400;
+    box-shadow: var(--shadow-card-hover);
+  }
+
+  /* square icon button, the size of a touch target, for table row actions */
+  .btn-icon {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-lg border border-ink-600 bg-ink-700/70
+           text-slate-400 transition hover:border-ink-400 hover:text-slate-100
+           disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-icon-danger {
+    @apply btn-icon hover:border-down/60 hover:text-down;
+  }
+
+  /* the heading above a group of fields or a table */
+  .section-title {
+    @apply text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500;
   }
 
   .field {

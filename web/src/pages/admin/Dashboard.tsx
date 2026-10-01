@@ -198,8 +198,8 @@ export function AdminDashboard() {
           <Skeleton className="h-5 w-32" />
           <Skeleton className="h-2.5 w-64 max-w-full" />
         </div>
-        <StatSkeletons count={13} className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4" />
-        <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        <StatSkeletons count={12} className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4" />
+        <div className="mb-6 mt-8 grid gap-4 sm:grid-cols-3">
           {[0, 1, 2].map((i) => (
             <Skeleton key={i} className="h-16 !rounded-xl" />
           ))}
@@ -221,8 +221,8 @@ export function AdminDashboard() {
         action={<PeriodPicker preset={preset} onChange={setPreset} custom={custom} onCustom={setCustom} />}
       />
 
-      <h2 className="mb-2 text-sm font-semibold">This period</h2>
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <h2 className="section-title mb-3">This period</h2>
+      <div className="mb-2 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
           label="New registrations"
           value={String(current.registrations)}
@@ -292,8 +292,8 @@ export function AdminDashboard() {
         />
       </div>
 
-      <h2 className="mb-2 text-sm font-semibold">Right now</h2>
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <h2 className="section-title mb-3 mt-8">Right now</h2>
+      <div className="mb-2 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Total traders" value={String(snapshot.users)} hint="all time" />
         <StatCard
           label="Online now"
@@ -311,7 +311,7 @@ export function AdminDashboard() {
         />
       </div>
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+      <div className="mb-6 mt-8 grid gap-4 sm:grid-cols-3">
         <Queue label="Withdrawals to review" count={snapshot.pendingWithdrawals} to="/admin/withdrawals" />
         <Queue label="Verifications waiting" count={snapshot.pendingKyc} to="/admin/kyc" />
         <Queue label="Unread support" count={snapshot.openTickets} to="/admin/support" />
@@ -403,7 +403,7 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      <h2 className="mb-2 mt-6 text-sm font-semibold">Latest trades</h2>
+      <h2 className="section-title mb-3 mt-8">Latest trades</h2>
       {liveTrades.length === 0 ? (
         <Empty text="Waiting for the first trade…" />
       ) : (
@@ -432,7 +432,7 @@ export function AdminDashboard() {
         </Table>
       )}
 
-      <h2 className="mb-2 mt-6 text-sm font-semibold">Latest withdrawals</h2>
+      <h2 className="section-title mb-3 mt-8">Latest withdrawals</h2>
       {withdrawals.length === 0 ? (
         <Empty text="No withdrawals yet" />
       ) : (
@@ -454,7 +454,7 @@ export function AdminDashboard() {
         </Table>
       )}
 
-      <h2 className="mb-2 mt-6 text-sm font-semibold">Latest deposits</h2>
+      <h2 className="section-title mb-3 mt-8">Latest deposits</h2>
       {deposits.length === 0 ? (
         <Empty text="No deposits yet" />
       ) : (
@@ -566,9 +566,7 @@ function Queue({ label, count, to }: { label: string; count: number; to: string 
   return (
     <Link
       to={to}
-      className={`card flex items-center gap-3 p-4 transition hover:border-ink-500 ${
-        count > 0 ? 'border-accent/40' : ''
-      }`}
+      className={`card-interactive flex items-center gap-4 p-5 ${count > 0 ? '!border-accent/50' : ''}`}
     >
       <span className={`tabular text-2xl font-bold ${count > 0 ? 'text-accent' : 'text-slate-500'}`}>
         {count}
