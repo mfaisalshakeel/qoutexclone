@@ -763,7 +763,10 @@ export const TradeTicket = forwardRef<TicketHandle, Props>(function TradeTicket(
           {orderType === 'PENDING' ? 'Order lower' : 'Lower'}
         </button>
       </div>
-      <p className="text-center text-[10px] text-slate-500">
+      {/* the account this ticket spends from. It sat flush against the card's
+          edge, which read as a line squeezed between the ticket and the
+          positions panel below rather than as a footnote to the buttons. */}
+      <p className="-mb-0.5 border-t border-ink-700 pt-2.5 text-center text-[11px] text-slate-500">
         {tournamentId
           ? `${tournamentName ?? 'Tournament'} chips — prizes pay out in real money`
           : user.activeAccount === 'DEMO'

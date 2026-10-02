@@ -683,7 +683,12 @@ export function Terminal() {
             floor so it never collapses to a sliver. */}
       {isDesktop && (
         <aside className="scroll-quiet flex min-h-0 w-72 shrink-0 flex-col gap-2 overflow-y-auto">
-          <div className="shrink-0">
+          {/* a column, so the ticket's own `h-full` resolves against an auto
+              height. As a plain block it resolved against this wrapper and the
+              Shortcuts button above it pushed the card 24px out of the bottom,
+              onto the positions panel — which is what put the account note
+              under the tabs. */}
+          <div className="flex shrink-0 flex-col">
             {ticketConfig.hotkeys && (
               <button
                 onClick={() => setHelpOpen(true)}
