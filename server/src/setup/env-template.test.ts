@@ -83,7 +83,15 @@ describe('buildEnvFile', () => {
     const env = buildEnvFile(params);
     expect(env).toContain('NODE_ENV=production');
     expect(env).toContain('FEED_PROVIDER=simulated');
-    expect(env).toContain('MOCK_CHAIN_WATCHER=true');
     expect(env).toContain('AUTO_APPROVE_WITHDRAWALS=false');
+  });
+
+  it('installs with the mock chain watcher off, so no deposit is credited without a payment', () => {
+    // It used to install `true`, next to NODE_ENV=production: a fresh install
+    // credited an invoice ~20 seconds after it was raised, with an invented
+    // transaction hash and nothing on a chain behind it. That is a demo, and
+    // it is not what someone setting up a deployment is asking for.
+    expect(buildEnvFile(params)).toContain('MOCK_CHAIN_WATCHER=false');
+    expect(buildEnvFile(params)).not.toContain('MOCK_CHAIN_WATCHER=true');
   });
 });

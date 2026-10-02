@@ -58,7 +58,11 @@ MIN_DEPOSIT_USD=10
 MIN_WITHDRAW_USD=20
 WITHDRAW_FEE_PCT=1
 WITHDRAW_FLAT_FEE_USD=1
-MOCK_CHAIN_WATCHER=true
+# Credits a pending deposit on a timer, with a made-up transaction hash and no
+# chain behind it. That is a demo of the flow, not a payment: leave it off
+# unless you are showing the product to someone. The wizard installs a real
+# deployment, so it writes it off.
+MOCK_CHAIN_WATCHER=false
 AUTO_APPROVE_WITHDRAWALS=false
 
 ADMIN_EMAIL=${admin.email}

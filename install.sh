@@ -50,7 +50,10 @@ JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-$(random_secret)}
 ADMIN_EMAIL=${ADMIN_EMAIL:-admin@quotexclone.dev}
 ADMIN_PASSWORD=${ADMIN_PASSWORD:-Admin123!}
 PORT=${PORT:-4000}
-MOCK_CHAIN_WATCHER=${MOCK_CHAIN_WATCHER:-true}
+# Off by default: on, a deposit is credited by a timer with an invented
+# transaction hash and nothing on a chain behind it. Pass MOCK_CHAIN_WATCHER=1
+# when you want that demo.
+MOCK_CHAIN_WATCHER=${MOCK_CHAIN_WATCHER:-false}
 
 # ------------------------------------------------------------------ write .env
 if [ -f server/.env ] && [ -z "${FORCE_ENV:-}" ]; then
@@ -114,4 +117,7 @@ echo
 if [ "${MOCK_CHAIN_WATCHER}" = "true" ]; then
   warn "MOCK_CHAIN_WATCHER=true auto-credits pending deposits (demo mode)."
   warn "Set it to false in server/.env before taking real money."
+else
+  echo "  Deposits wait for a real confirmation. Set MOCK_CHAIN_WATCHER=true in"
+  echo "  server/.env to have them credited on a timer while you demo."
 fi

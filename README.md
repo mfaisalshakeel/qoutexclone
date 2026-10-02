@@ -79,7 +79,9 @@ are the point.
 ## Install
 
 Requires **Node 20+** and **MySQL 8** (or MariaDB 10.4+). For a hosted test
-deployment — Railway, a VPS or shared hosting — see [DEPLOY.md](DEPLOY.md).
+deployment — Railway, a VPS or shared hosting — see [DEPLOY.md](DEPLOY.md). For
+running the platform once it is up — the back office, and what every setting
+does — see the [operator manual](docs/MANUAL.md).
 
 ### Option 1 — web-based setup wizard (no shell needed)
 
