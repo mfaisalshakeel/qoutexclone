@@ -5,11 +5,22 @@ import { TIMEFRAME_LIST, bucketFor, retentionSeconds, timeframeSeconds } from '.
 import { generateHistory } from '../engine/history.js';
 import type { OtcParams } from '../engine/otc.js';
 
+/** MySQL/MariaDB error 1213: the server rolled one of two transactions back. */
+function isDeadlock(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes('1213') || message.toLowerCase().includes('deadlock');
+}
+
 /** Rows waiting to be written, keyed so a bucket is only queued once. */
 type PendingKey = `${string}|${string}|${number}`;
 
 const FLUSH_MS = 5_000;
 const PRUNE_MS = 10 * 60_000;
+/** Rows per pruning transaction, and how long a whole pass may run for. */
+const PRUNE_CHUNK = 5_000;
+const PRUNE_PAUSE_MS = 50;
+const PRUNE_BUDGET_MS = 60_000;
+const FLUSH_RETRIES = 2;
 const MAX_PAGE = 500;
 
 /** The shortest history a freshly charted market gets. */
@@ -36,7 +47,7 @@ interface BackfillSpec {
  * what "broker-priced" means — and persists it, after which it is simply the
  * market's history.
  */
-class CandleStore {
+export class CandleStore {
   private pending = new Map<PendingKey, { symbol: string; timeframe: string; candle: Candle }>();
   private flushTimer: NodeJS.Timeout | null = null;
   private pruneTimer: NodeJS.Timeout | null = null;
@@ -83,6 +94,16 @@ class CandleStore {
     this.pruneTimer = null;
   }
 
+  /** How many rows are waiting to be written — a failed flush leaves its own behind. */
+  pendingCount(): number {
+    return this.pending.size;
+  }
+
+  /** The queued rows, for tests that check what a failed flush put back. */
+  pendingRows(): { symbol: string; timeframe: string; candle: Candle }[] {
+    return [...this.pending.values()];
+  }
+
   /** Queues a candle. The latest version of a bucket wins. */
   record(symbol: string, timeframe: string, candle: Candle): void {
     this.pending.set(`${symbol}|${timeframe}|${candle.time}`, { symbol, timeframe, candle });
@@ -110,28 +131,66 @@ class CandleStore {
         )
         .join(',');
 
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO \`Candle\` (\`symbol\`,\`timeframe\`,\`time\`,\`open\`,\`high\`,\`low\`,\`close\`) VALUES ${values}
-         ON DUPLICATE KEY UPDATE \`open\`=VALUES(\`open\`),\`high\`=VALUES(\`high\`),\`low\`=VALUES(\`low\`),\`close\`=VALUES(\`close\`)`,
-      );
-      return batch.length;
+      const sql = `INSERT INTO \`Candle\` (\`symbol\`,\`timeframe\`,\`time\`,\`open\`,\`high\`,\`low\`,\`close\`) VALUES ${values}
+         ON DUPLICATE KEY UPDATE \`open\`=VALUES(\`open\`),\`high\`=VALUES(\`high\`),\`low\`=VALUES(\`low\`),\`close\`=VALUES(\`close\`)`;
+
+      // A deadlock here is the database asking for the write again, not a
+      // reason to drop a batch: whatever it lost with the lock is history the
+      // chart never gets back.
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await prisma.$executeRawUnsafe(sql);
+          return batch.length;
+        } catch (err) {
+          if (attempt >= FLUSH_RETRIES || !isDeadlock(err)) throw err;
+          await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
+        }
+      }
     } catch (err) {
-      log.feed.error({ err, rows: batch.length }, 'could not persist candles');
+      // put the batch back so the next flush tries again, unless a newer
+      // version of the same bucket has already been queued
+      for (const row of batch) {
+        const key: PendingKey = `${row.symbol}|${row.timeframe}|${row.candle.time}`;
+        if (!this.pending.has(key)) this.pending.set(key, row);
+      }
+      log.feed.error({ err, rows: batch.length }, 'could not persist candles, requeued');
       return 0;
     }
   }
 
-  /** Drops candles older than their timeframe's retention. */
+  /**
+   * Drops candles older than their timeframe's retention, a slice at a time.
+   *
+   * One `DELETE` for a whole timeframe is a single transaction over every
+   * expired row it owns — after an idle weekend that is hundreds of thousands
+   * of them. Measured on a real database: 97 seconds of held row locks, 18
+   * deadlocks, and every flush in that window lost its batch, so the chart
+   * quietly stopped gaining history. Slicing it keeps each transaction short
+   * enough that a flush can always get in between two of them.
+   */
   async prune(): Promise<number> {
     let removed = 0;
     const now = Math.floor(Date.now() / 1000);
+    const deadline = Date.now() + PRUNE_BUDGET_MS;
+
     for (const spec of TIMEFRAME_LIST) {
       const cutoff = now - retentionSeconds(spec.key);
       try {
-        const result = await prisma.candle.deleteMany({
-          where: { timeframe: spec.key, time: { lt: cutoff } },
-        });
-        removed += result.count;
+        for (;;) {
+          const deleted = await prisma.$executeRaw`
+            DELETE FROM \`Candle\` WHERE \`timeframe\` = ${spec.key} AND \`time\` < ${cutoff}
+            LIMIT ${PRUNE_CHUNK}`;
+          removed += deleted;
+          if (deleted < PRUNE_CHUNK) break;
+          // the backlog outlived its slot; the next pass picks up where this
+          // one stopped, rather than holding the table to finish in one go
+          if (Date.now() > deadline) {
+            log.feed.info({ timeframe: spec.key, removed }, 'pruning paused, resumes next pass');
+            return removed;
+          }
+          // let the flush, and anything else waiting on these rows, through
+          await new Promise((resolve) => setTimeout(resolve, PRUNE_PAUSE_MS));
+        }
       } catch (err) {
         log.feed.error({ err, timeframe: spec.key }, 'candle pruning failed');
       }

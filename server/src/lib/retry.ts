@@ -44,11 +44,43 @@ export async function retryOnConflict<T>(
  * asking again is exactly correct.
  */
 export function isConflict(err: unknown): boolean {
-  if (!(err instanceof Prisma.PrismaClientKnownRequestError)) return false;
-  if (err.code === 'P2034') return true;
-  if (err.code === 'P2010') {
-    const meta = err.meta as { code?: string } | undefined;
-    return meta?.code === '1213' || meta?.code === '1205';
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err.code === 'P2034') return true;
+    if (err.code === 'P2010') {
+      const meta = err.meta as { code?: string } | undefined;
+      return meta?.code === '1213' || meta?.code === '1205';
+    }
+    return false;
   }
+
+  /*
+   * MariaDB does not always get a code attached. A deadlock raised inside an
+   * interactive transaction comes back as `PrismaClientUnknownRequestError`
+   * with the driver's text and no `code` at all, so the typed checks above
+   * miss it: the write was never retried, and it reached the client as a raw
+   * 500 instead of a 409. The text is the only thing the driver gives us
+   * here, and it is the same event — the transaction rolled back whole.
+   */
+  if (err instanceof Prisma.PrismaClientUnknownRequestError) return mentionsLockFailure(err.message);
   return false;
+}
+
+/**
+ * The transient conflicts, by the only marker left when there is no code: the
+ * text. Deadlock (1213) and lock wait timeout (1205) are the MySQL pair;
+ * MariaDB adds 1020, "record has changed since last read", which it raises
+ * instead of a deadlock when two transactions write the same row at once.
+ * All three mean the same thing — this transaction did not commit — and all
+ * three are safe to ask again.
+ */
+function mentionsLockFailure(message: string): boolean {
+  const text = message.toLowerCase();
+  return (
+    text.includes('deadlock') ||
+    text.includes('1213') ||
+    text.includes('lock wait timeout') ||
+    text.includes('1205') ||
+    text.includes('record has changed since last read') ||
+    text.includes('code: 1020')
+  );
 }

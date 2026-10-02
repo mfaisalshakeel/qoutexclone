@@ -3,6 +3,16 @@ import { InMemoryPubSub, RedisPubSub, type PubSub } from './pubsub.js';
 
 const REDIS_URL = process.env.TEST_REDIS_URL ?? 'redis://127.0.0.1:6379';
 
+/**
+ * The Redis adapter needs a Redis to talk to. Where there is none — a laptop,
+ * and CI, which runs a MySQL service and no cache — these used to fail rather
+ * than skip, so a green run was impossible and three permanent failures sat
+ * next to any real one. Opt in with `TEST_REDIS_URL` (or set it to the default
+ * address) when a server is actually there, exactly as the database suites opt
+ * in with `TEST_DATABASE_URL`.
+ */
+const redisSuite = process.env.TEST_REDIS_URL ? describe : describe.skip;
+
 describe('InMemoryPubSub', () => {
   it('delivers a published message to a subscriber on the same channel', async () => {
     const bus = new InMemoryPubSub();
@@ -49,7 +59,7 @@ describe('InMemoryPubSub', () => {
   });
 });
 
-describe('RedisPubSub', () => {
+redisSuite('RedisPubSub', () => {
   const clients: PubSub[] = [];
   afterEach(async () => {
     await Promise.all(clients.splice(0).map((c) => c.close()));
