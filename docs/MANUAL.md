@@ -92,10 +92,10 @@ check yours.
 
 Deposit addresses come from `server/src/services/custody.ts`, which ships as a
 mock: it derives plausible addresses that nobody owns. Until a developer
-implements that interface against your own node, exchange sub-account or
-custody provider (Fireblocks, BitGo, Tatum and so on), **coins sent to those
-addresses are gone.** Nothing else in the platform talks to a wallet, so this is
-the only piece to replace.
+implements that interface against a real wallet, **coins sent to those addresses
+are gone.** Nothing else in the platform talks to a wallet, so this is the only
+piece to replace — [CRYPTO-SELF-HOSTED.md](CRYPTO-SELF-HOSTED.md) is the plan
+for doing it on your own server, with costs and the order of work.
 
 ### Per-method settings — Money → Payment methods
 
